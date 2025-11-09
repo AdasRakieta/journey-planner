@@ -96,12 +96,58 @@ VITE_API_URL=http://localhost:5001/api
 
 ## 🖥️ Development
 
-### Run both frontend and backend together:
+### Option 1: Quick Start (Recommended)
+Run both frontend and backend together:
 ```bash
 npm run dev
 ```
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:5001`
 
-### Or run them separately:
+### Option 2: Python HTTP Server (Frontend Only)
+For quick frontend testing with built application:
+
+**Using Python script:**
+```bash
+# Build first
+npm run build:all
+
+# Serve with Python (Terminal 1)
+python scripts/serve-local.py
+
+# Or with custom port
+python scripts/serve-local.py --port 3000
+
+# Run backend separately (Terminal 2)
+cd server && npm run dev
+```
+
+**Using PowerShell script (Windows):**
+```powershell
+# Build first
+npm run build:all
+
+# Serve with PowerShell (Terminal 1)
+.\scripts\serve-local.ps1
+
+# Or with custom port
+.\scripts\serve-local.ps1 -Port 3000
+
+# Run backend separately (Terminal 2)
+cd server; npm run dev
+```
+
+**Direct Python command:**
+```bash
+cd client/dist
+python -m http.server 8000
+```
+Then open `http://localhost:8000`
+
+> **Note:** When using Python server, backend must run separately on port 5001
+
+### Option 3: Separate Terminals
+Run frontend and backend in separate terminals for better control:
 
 **Backend only:**
 ```bash
@@ -114,6 +160,33 @@ The API will be available at `http://localhost:5001`
 npm run client:dev
 ```
 The UI will be available at `http://localhost:5173`
+
+### 🧪 Testing & Troubleshooting
+
+**Check if backend is running:**
+```bash
+curl http://localhost:5001/api/health
+```
+
+**Check database connection:**
+```bash
+docker ps | grep journey-planner-db
+docker logs journey-planner-db
+```
+
+**Access PostgreSQL:**
+```bash
+docker exec -it journey-planner-db psql -U journey_user -d journey_planner
+```
+
+**Full setup guide:**
+```bash
+# Python
+python scripts/serve-local.py --full-guide
+
+# PowerShell
+.\scripts\serve-local.ps1 -FullGuide
+```
 
 ## 🏭 Production Build
 
