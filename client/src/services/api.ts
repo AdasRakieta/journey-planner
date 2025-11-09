@@ -95,6 +95,16 @@ export const stopService = {
     if (!response.ok) throw new Error('Failed to scrape Booking.com URL');
     return response.json();
   },
+
+  async updatePaymentStatus(stopId: number, isPaid: boolean) {
+    const response = await fetch(`${API_URL}/stops/${stopId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPaid }),
+    });
+    if (!response.ok) throw new Error('Failed to update payment status');
+    return response.json();
+  },
 };
 
 // Attraction Service
@@ -130,6 +140,16 @@ export const attractionService = {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete attraction');
+  },
+
+  async updatePaymentStatus(attractionId: number, isPaid: boolean) {
+    const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPaid }),
+    });
+    if (!response.ok) throw new Error('Failed to update payment status');
+    return response.json();
   },
 };
 
@@ -175,6 +195,16 @@ export const transportService = {
       body: JSON.stringify({ url }),
     });
     if (!response.ok) throw new Error('Failed to scrape ticket');
+    return response.json();
+  },
+
+  async updatePaymentStatus(transportId: number, isPaid: boolean) {
+    const response = await fetch(`${API_URL}/transports/${transportId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPaid }),
+    });
+    if (!response.ok) throw new Error('Failed to update payment status');
     return response.json();
   },
 };
