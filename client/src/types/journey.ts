@@ -32,7 +32,7 @@ export interface Attraction {
   name: string;
   description?: string;
   estimatedCost?: number;
-  duration?: number; // in hours
+  duration?: string; // e.g., "2 hours", "30 minutes"
 }
 
 export interface Journey {

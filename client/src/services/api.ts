@@ -50,3 +50,121 @@ export const journeyService = {
     return response.json();
   },
 };
+
+// Stop Service
+export const stopService = {
+  async getStopsByJourneyId(journeyId: number) {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/stops`);
+    if (!response.ok) throw new Error('Failed to fetch stops');
+    return response.json();
+  },
+
+  async createStop(journeyId: number, stop: any) {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/stops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!response.ok) throw new Error('Failed to create stop');
+    return response.json();
+  },
+
+  async updateStop(stopId: number, stop: any) {
+    const response = await fetch(`${API_URL}/stops/${stopId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stop),
+    });
+    if (!response.ok) throw new Error('Failed to update stop');
+    return response.json();
+  },
+
+  async deleteStop(stopId: number) {
+    const response = await fetch(`${API_URL}/stops/${stopId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete stop');
+  },
+
+  async scrapeBookingUrl(url: string) {
+    const response = await fetch(`${API_URL}/stops/scrape-booking`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) throw new Error('Failed to scrape Booking.com URL');
+    return response.json();
+  },
+};
+
+// Attraction Service
+export const attractionService = {
+  async getAttractionsByStopId(stopId: number) {
+    const response = await fetch(`${API_URL}/stops/${stopId}/attractions`);
+    if (!response.ok) throw new Error('Failed to fetch attractions');
+    return response.json();
+  },
+
+  async createAttraction(stopId: number, attraction: any) {
+    const response = await fetch(`${API_URL}/stops/${stopId}/attractions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(attraction),
+    });
+    if (!response.ok) throw new Error('Failed to create attraction');
+    return response.json();
+  },
+
+  async updateAttraction(attractionId: number, attraction: any) {
+    const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(attraction),
+    });
+    if (!response.ok) throw new Error('Failed to update attraction');
+    return response.json();
+  },
+
+  async deleteAttraction(attractionId: number) {
+    const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete attraction');
+  },
+};
+
+// Transport Service
+export const transportService = {
+  async getTransportsByJourneyId(journeyId: number) {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/transports`);
+    if (!response.ok) throw new Error('Failed to fetch transports');
+    return response.json();
+  },
+
+  async createTransport(journeyId: number, transport: any) {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/transports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transport),
+    });
+    if (!response.ok) throw new Error('Failed to create transport');
+    return response.json();
+  },
+
+  async updateTransport(transportId: number, transport: any) {
+    const response = await fetch(`${API_URL}/transports/${transportId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transport),
+    });
+    if (!response.ok) throw new Error('Failed to update transport');
+    return response.json();
+  },
+
+  async deleteTransport(transportId: number) {
+    const response = await fetch(`${API_URL}/transports/${transportId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete transport');
+  },
+};

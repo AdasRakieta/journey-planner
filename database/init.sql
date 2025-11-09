@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS attractions (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     estimated_cost DECIMAL(10, 2),
-    duration INTEGER -- in hours
+    duration VARCHAR(50) -- e.g., "2 hours", "30 minutes"
 );
 
 -- Create indexes for better query performance

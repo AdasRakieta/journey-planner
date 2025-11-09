@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -8,6 +8,7 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconUrl: markerIcon,
@@ -41,6 +42,16 @@ function LocationMarker({ onMapClick }: { onMapClick?: (lat: number, lng: number
   return null;
 }
 
+function MapCenterUpdater({ center }: { center: [number, number] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  
+  return null;
+}
+
 const JourneyMap: React.FC<JourneyMapProps> = ({
   locations,
   onLocationClick,
@@ -49,6 +60,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   zoom = 6,
 }) => {
   const [mapCenter, setMapCenter] = useState<[number, number]>(center);
+
+  useEffect(() => {
+    // Update center when prop changes
+    setMapCenter(center);
+  }, [center]);
 
   useEffect(() => {
     if (locations.length > 0) {
@@ -68,6 +84,7 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <MapCenterUpdater center={mapCenter} />
       {onMapClick && <LocationMarker onMapClick={onMapClick} />}
       {locations.map((location, index) => (
         <Marker

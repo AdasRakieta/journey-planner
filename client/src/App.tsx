@@ -1,10 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2 } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
-import type { Journey, Stop, Transport } from './types/journey';
-import { journeyService } from './services/api';
+import { ToastContainer, useToast } from './components/Toast';
+import type { Journey, Stop, Transport, Attraction } from './types/journey';
+import { journeyService, stopService, attractionService } from './services/api';
+import { socketService } from './services/socket';
+
+// Helper function to format date to YYYY-MM-DD
+const formatDateForInput = (date: Date | string | undefined): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+};
+
+// Helper function to format date for display
+const formatDateForDisplay = (date: Date | string | undefined): string => {
+  if (!date) return 'Not set';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'Invalid date';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
 
 function App() {
+  const { toasts, closeToast, success, error, warning, info } = useToast();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
   const [showNewJourneyForm, setShowNewJourneyForm] = useState(false);
@@ -12,6 +31,7 @@ function App() {
   const [showTransportForm, setShowTransportForm] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bookingUrl, setBookingUrl] = useState('');
   
   const [newJourney, setNewJourney] = useState<Partial<Journey>>({
     title: '',
@@ -47,18 +67,231 @@ function App() {
     bookingUrl: '',
   });
 
+  const [newAttraction, setNewAttraction] = useState<Partial<Attraction>>({
+    name: '',
+    description: '',
+    estimatedCost: 0,
+    duration: '',
+  });
+
+  const [selectedStopForAttraction, setSelectedStopForAttraction] = useState<number | null>(null);
+  const [showAttractionForm, setShowAttractionForm] = useState(false);
+
+  const [editingStop, setEditingStop] = useState<Stop | null>(null);
+  const [showEditStopForm, setShowEditStopForm] = useState(false);
+  
+  const [editingAttraction, setEditingAttraction] = useState<Attraction | null>(null);
+  const [showEditAttractionForm, setShowEditAttractionForm] = useState(false);
+  const [editingAttractionStopId, setEditingAttractionStopId] = useState<number | null>(null);
+
+  const [editingJourney, setEditingJourney] = useState<Journey | null>(null);
+  const [showEditJourneyForm, setShowEditJourneyForm] = useState(false);
+
   useEffect(() => {
-    loadJourneys();
+    void loadJourneys();
+    
+    // Connect to Socket.IO for real-time updates
+    socketService.connect();
+    
+    // Listen for journey events
+    socketService.on('journey:created', (journey: Journey) => {
+      console.log('Real-time: Journey created', journey);
+      setJourneys(prev => [...prev, journey]);
+      success('New journey added by another user');
+    });
+    
+    socketService.on('journey:updated', (journey: Journey) => {
+      console.log('Real-time: Journey updated', journey);
+      setJourneys(prev => prev.map(j => j.id === journey.id ? journey : j));
+      if (selectedJourney?.id === journey.id) {
+        setSelectedJourney(journey);
+      }
+      info('Journey updated');
+    });
+    
+    socketService.on('journey:deleted', ({ id }: { id: number }) => {
+      console.log('Real-time: Journey deleted', id);
+      setJourneys(prev => prev.filter(j => j.id !== id));
+      if (selectedJourney?.id === id) {
+        setSelectedJourney(null);
+      }
+      warning('Journey deleted by another user');
+    });
+    
+    // Listen for stop events
+    socketService.on('stop:created', (stop: Stop) => {
+      console.log('Real-time: Stop created', stop);
+      setJourneys(prev => prev.map(j => {
+        if (j.id === stop.journeyId) {
+          return { ...j, stops: [...(j.stops || []), stop] };
+        }
+        return j;
+      }));
+      if (selectedJourney?.id === stop.journeyId) {
+        setSelectedJourney(prev => prev ? { ...prev, stops: [...(prev.stops || []), stop] } : null);
+      }
+      success('New stop added');
+    });
+    
+    socketService.on('stop:updated', (stop: Stop) => {
+      console.log('Real-time: Stop updated', stop);
+      setJourneys(prev => prev.map(j => {
+        if (j.id === stop.journeyId) {
+          return { 
+            ...j, 
+            stops: (j.stops || []).map(s => s.id === stop.id ? stop : s) 
+          };
+        }
+        return j;
+      }));
+      if (selectedJourney?.id === stop.journeyId) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s)
+        } : null);
+      }
+      info('Stop updated');
+    });
+    
+    socketService.on('stop:deleted', ({ id }: { id: number }) => {
+      console.log('Real-time: Stop deleted', id);
+      setJourneys(prev => prev.map(j => ({
+        ...j,
+        stops: (j.stops || []).filter(s => s.id !== id)
+      })));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          stops: (prev.stops || []).filter(s => s.id !== id)
+        } : null);
+      }
+      warning('Stop deleted');
+    });
+    
+    // Listen for attraction events
+    socketService.on('attraction:created', (attraction: Attraction) => {
+      console.log('Real-time: Attraction created', attraction);
+      setJourneys(prev => prev.map(j => ({
+        ...j,
+        stops: (j.stops || []).map(s => {
+          if (s.id === attraction.stopId) {
+            return { ...s, attractions: [...(s.attractions || []), attraction] };
+          }
+          return s;
+        })
+      })));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          stops: (prev.stops || []).map(s => {
+            if (s.id === attraction.stopId) {
+              return { ...s, attractions: [...(s.attractions || []), attraction] };
+            }
+            return s;
+          })
+        } : null);
+      }
+      success('New attraction added');
+    });
+    
+    socketService.on('attraction:updated', (attraction: Attraction) => {
+      console.log('Real-time: Attraction updated', attraction);
+      setJourneys(prev => prev.map(j => ({
+        ...j,
+        stops: (j.stops || []).map(s => ({
+          ...s,
+          attractions: (s.attractions || []).map(a => a.id === attraction.id ? attraction : a)
+        }))
+      })));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          stops: (prev.stops || []).map(s => ({
+            ...s,
+            attractions: (s.attractions || []).map(a => a.id === attraction.id ? attraction : a)
+          }))
+        } : null);
+      }
+      info('Attraction updated');
+    });
+    
+    socketService.on('attraction:deleted', ({ id }: { id: number }) => {
+      console.log('Real-time: Attraction deleted', id);
+      setJourneys(prev => prev.map(j => ({
+        ...j,
+        stops: (j.stops || []).map(s => ({
+          ...s,
+          attractions: (s.attractions || []).filter(a => a.id !== id)
+        }))
+      })));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          stops: (prev.stops || []).map(s => ({
+            ...s,
+            attractions: (s.attractions || []).filter(a => a.id !== id)
+          }))
+        } : null);
+      }
+      warning('Attraction deleted');
+    });
+    
+    // Cleanup on unmount
+    return () => {
+      socketService.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-calculate total cost from all sources
+  const costDependency = useMemo(() => {
+    if (!selectedJourney) return '';
+    return JSON.stringify({
+      stops: selectedJourney.stops?.map(s => ({ 
+        id: s.id, 
+        price: s.accommodationPrice,
+        attractions: s.attractions?.map(a => ({ id: a.id, cost: a.estimatedCost }))
+      })),
+      transports: selectedJourney.transports?.map(t => ({ id: t.id, price: t.price }))
+    });
+  }, [selectedJourney]);
+
+  useEffect(() => {
+    if (!selectedJourney) return;
+    
+    // Calculate costs from stops (accommodation)
+    const stopCosts = selectedJourney.stops?.reduce((sum, stop) => {
+      return sum + (stop.accommodationPrice || 0);
+    }, 0) || 0;
+    
+    // Calculate costs from attractions
+    const attractionCosts = selectedJourney.stops?.reduce((sum, stop) => {
+      const attrSum = stop.attractions?.reduce((s, a) => s + (a.estimatedCost || 0), 0) || 0;
+      return sum + attrSum;
+    }, 0) || 0;
+    
+    // Calculate costs from transports
+    const transportCosts = selectedJourney.transports?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
+    
+    const totalCost = stopCosts + attractionCosts + transportCosts;
+    
+    // Only update if changed to avoid infinite loop
+    if (selectedJourney.totalEstimatedCost !== totalCost) {
+      const updatedJourney = { ...selectedJourney, totalEstimatedCost: totalCost };
+      setSelectedJourney(updatedJourney);
+      setJourneys(prevJourneys => prevJourneys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJourney?.id, costDependency]);
 
   const loadJourneys = async () => {
     try {
       setLoading(true);
       const data = await journeyService.getAllJourneys();
       setJourneys(data);
-    } catch (error) {
-      console.error('Failed to load journeys:', error);
-      alert('Failed to load journeys. Please check if the backend is running.');
+    } catch (err) {
+      console.error('Failed to load journeys:', err);
+      error('Failed to load journeys. Please check if the backend is running.');
     } finally {
       setLoading(false);
     }
@@ -66,7 +299,7 @@ function App() {
 
   const handleCreateJourney = async () => {
     if (!newJourney.title || !newJourney.startDate || !newJourney.endDate) {
-      alert('Please fill in all required fields');
+      warning('Please fill in all required fields');
       return;
     }
 
@@ -84,9 +317,10 @@ function App() {
         stops: [],
         transports: [],
       });
-    } catch (error) {
-      console.error('Failed to create journey:', error);
-      alert('Failed to create journey');
+      success('Journey created successfully!');
+    } catch (err) {
+      console.error('Failed to create journey:', err);
+      error('Failed to create journey');
     } finally {
       setLoading(false);
     }
@@ -102,9 +336,35 @@ function App() {
       if (selectedJourney?.id === id) {
         setSelectedJourney(null);
       }
-    } catch (error) {
-      console.error('Failed to delete journey:', error);
-      alert('Failed to delete journey');
+      success('Journey deleted successfully');
+    } catch (err) {
+      console.error('Failed to delete journey:', err);
+      error('Failed to delete journey');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditJourney = async () => {
+    if (!editingJourney?.id || !editingJourney.title) {
+      warning('Please fill in the journey title');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const updated = await journeyService.updateJourney(editingJourney.id, editingJourney);
+      
+      setJourneys(journeys.map(j => j.id === updated.id ? updated : j));
+      if (selectedJourney?.id === updated.id) {
+        setSelectedJourney(updated);
+      }
+      setShowEditJourneyForm(false);
+      setEditingJourney(null);
+      success('Journey updated successfully!');
+    } catch (err) {
+      console.error('Failed to update journey:', err);
+      error('Failed to update journey');
     } finally {
       setLoading(false);
     }
@@ -115,21 +375,105 @@ function App() {
     setShowStopForm(true);
   };
 
-  const handleAddStop = async () => {
-    if (!selectedJourney || !newStop.city || !newStop.country) {
-      alert('Please fill in city and country');
+  const handleGeocodeCity = async (city: string, country: string) => {
+    if (!city || !country) {
+      warning('Please enter both city and country');
       return;
     }
 
     try {
       setLoading(true);
+      const query = `${city}, ${country}`;
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'JourneyPlannerApp/1.0',
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setNewStop({
+          ...newStop,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon),
+        });
+        success('Location found on map!');
+      } else {
+        warning('Location not found. Try a different spelling or click on the map.');
+      }
+    } catch (err) {
+      console.error('Geocoding failed:', err);
+      error('Failed to find location');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBookingUrlPaste = async () => {
+    if (!bookingUrl || !bookingUrl.includes('booking.com')) {
+      warning('Please enter a valid Booking.com URL');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await stopService.scrapeBookingUrl(bookingUrl);
+      
+      if (result.success && result.data) {
+        setNewStop({
+          ...newStop,
+          accommodationName: result.data.accommodationName || newStop.accommodationName,
+          accommodationUrl: result.data.accommodationUrl || newStop.accommodationUrl,
+          city: result.data.city || newStop.city,
+          arrivalDate: result.data.arrivalDate || newStop.arrivalDate,
+          departureDate: result.data.departureDate || newStop.departureDate,
+          accommodationPrice: result.data.accommodationPrice || newStop.accommodationPrice,
+          accommodationCurrency: result.data.accommodationCurrency || newStop.accommodationCurrency,
+        });
+        
+        if (result.data.arrivalDate && result.data.departureDate) {
+          success('Booking details extracted! Please verify and add price.');
+        } else {
+          info('Hotel name extracted. Please fill in dates and price manually.');
+        }
+      } else {
+        warning(result.message || 'Could not extract all details. Please fill manually.');
+      }
+      
+      setBookingUrl('');
+    } catch (err) {
+      console.error('Failed to scrape Booking URL:', err);
+      error('Failed to parse Booking.com URL. Please enter details manually.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddStop = async () => {
+    if (!selectedJourney || !newStop.city || !newStop.country) {
+      warning('Please fill in city and country');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Use the new createStop endpoint
+      const createdStop = await stopService.createStop(selectedJourney.id!, newStop);
+      
+      // Update local state
       const updatedJourney = {
         ...selectedJourney,
-        stops: [...(selectedJourney.stops || []), newStop as Stop],
+        stops: [...(selectedJourney.stops || []), createdStop],
       };
-      const updated = await journeyService.updateJourney(selectedJourney.id!, updatedJourney);
-      setSelectedJourney(updated);
-      setJourneys(journeys.map(j => j.id === updated.id ? updated : j));
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      
       setNewStop({
         city: '',
         country: '',
@@ -143,9 +487,169 @@ function App() {
         accommodationCurrency: 'PLN',
       });
       setShowStopForm(false);
-    } catch (error) {
-      console.error('Failed to add stop:', error);
-      alert('Failed to add stop');
+      setBookingUrl('');
+      success('Stop added successfully!');
+    } catch (err) {
+      console.error('Failed to add stop:', err);
+      error('Failed to add stop');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddAttraction = async () => {
+    if (!selectedStopForAttraction || !newAttraction.name) {
+      warning('Please fill in attraction name');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Create attraction using the new endpoint
+      const createdAttraction = await attractionService.createAttraction(
+        selectedStopForAttraction,
+        newAttraction
+      );
+      
+      // Update local state - find the stop and add the attraction
+      if (selectedJourney) {
+        const updatedStops = selectedJourney.stops?.map(stop => {
+          if (stop.id === selectedStopForAttraction) {
+            return {
+              ...stop,
+              attractions: [...(stop.attractions || []), createdAttraction],
+            };
+          }
+          return stop;
+        });
+        
+        const updatedJourney = {
+          ...selectedJourney,
+          stops: updatedStops,
+        };
+        
+        setSelectedJourney(updatedJourney);
+        setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      }
+      
+      setNewAttraction({
+        name: '',
+        description: '',
+        estimatedCost: 0,
+        duration: '',
+      });
+      setShowAttractionForm(false);
+      setSelectedStopForAttraction(null);
+      success('Attraction added successfully!');
+    } catch (err) {
+      console.error('Failed to add attraction:', err);
+      error('Failed to add attraction');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteStop = async (stopId: number) => {
+    if (!selectedJourney || !confirm('Are you sure you want to delete this stop?')) return;
+
+    try {
+      setLoading(true);
+      await stopService.deleteStop(stopId);
+      
+      const updatedStops = selectedJourney.stops?.filter(s => s.id !== stopId);
+      const updatedJourney = { ...selectedJourney, stops: updatedStops };
+      
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      success('Stop deleted successfully!');
+    } catch (err) {
+      console.error('Failed to delete stop:', err);
+      error('Failed to delete stop');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAttraction = async (stopId: number, attractionId: number) => {
+    if (!selectedJourney || !confirm('Are you sure you want to delete this attraction?')) return;
+
+    try {
+      setLoading(true);
+      await attractionService.deleteAttraction(attractionId);
+      
+      const updatedStops = selectedJourney.stops?.map(stop => {
+        if (stop.id === stopId) {
+          return {
+            ...stop,
+            attractions: stop.attractions?.filter(a => a.id !== attractionId),
+          };
+        }
+        return stop;
+      });
+      
+      const updatedJourney = { ...selectedJourney, stops: updatedStops };
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      success('Attraction deleted successfully!');
+    } catch (err) {
+      console.error('Failed to delete attraction:', err);
+      error('Failed to delete attraction');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditStop = async () => {
+    if (!editingStop?.id || !selectedJourney) return;
+
+    try {
+      setLoading(true);
+      const updated = await stopService.updateStop(editingStop.id, editingStop);
+      
+      const updatedStops = selectedJourney.stops?.map(s => s.id === updated.id ? updated : s);
+      const updatedJourney = { ...selectedJourney, stops: updatedStops };
+      
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      setShowEditStopForm(false);
+      setEditingStop(null);
+      success('Stop updated successfully!');
+    } catch (err) {
+      console.error('Failed to update stop:', err);
+      error('Failed to update stop');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditAttraction = async () => {
+    if (!editingAttraction?.id || !editingAttractionStopId || !selectedJourney) return;
+
+    try {
+      setLoading(true);
+      const updated = await attractionService.updateAttraction(editingAttraction.id, editingAttraction);
+      
+      const updatedStops = selectedJourney.stops?.map(stop => {
+        if (stop.id === editingAttractionStopId) {
+          return {
+            ...stop,
+            attractions: stop.attractions?.map(a => a.id === updated.id ? updated : a),
+          };
+        }
+        return stop;
+      });
+      
+      const updatedJourney = { ...selectedJourney, stops: updatedStops };
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      setShowEditAttractionForm(false);
+      setEditingAttraction(null);
+      setEditingAttractionStopId(null);
+      success('Attraction updated successfully!');
+    } catch (err) {
+      console.error('Failed to update attraction:', err);
+      error('Failed to update attraction');
     } finally {
       setLoading(false);
     }
@@ -153,7 +657,7 @@ function App() {
 
   const handleAddTransport = async () => {
     if (!selectedJourney || !newTransport.fromLocation || !newTransport.toLocation) {
-      alert('Please fill in all required fields');
+      warning('Please fill in all required fields');
       return;
     }
 
@@ -177,27 +681,10 @@ function App() {
         bookingUrl: '',
       });
       setShowTransportForm(false);
-    } catch (error) {
-      console.error('Failed to add transport:', error);
-      alert('Failed to add transport');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCalculateCost = async () => {
-    if (!selectedJourney?.id) return;
-
-    try {
-      setLoading(true);
-      const result = await journeyService.calculateTotalCost(selectedJourney.id);
-      const updated = await journeyService.getJourneyById(selectedJourney.id);
-      setSelectedJourney(updated);
-      setJourneys(journeys.map(j => j.id === updated.id ? updated : j));
-      alert(`Total cost calculated: ${result.totalCost} ${result.currency}`);
-    } catch (error) {
-      console.error('Failed to calculate cost:', error);
-      alert('Failed to calculate cost');
+      success('Transport added successfully!');
+    } catch (err) {
+      console.error('Failed to add transport:', err);
+      error('Failed to add transport');
     } finally {
       setLoading(false);
     }
@@ -319,35 +806,45 @@ function App() {
                         <div className="flex items-center gap-2 mt-2 text-sm text-gh-text-secondary">
                           <Calendar className="w-4 h-4" />
                           <span>
-                            {new Date(journey.startDate).toLocaleDateString()} -{' '}
-                            {new Date(journey.endDate).toLocaleDateString()}
+                            {formatDateForDisplay(journey.startDate)} -{' '}
+                            {formatDateForDisplay(journey.endDate)}
                           </span>
                         </div>
-                        {journey.totalEstimatedCost && (
-                          <div className="flex items-center gap-2 mt-1 text-sm text-gh-text-success">
-                            <DollarSign className="w-4 h-4" />
-                            <span>
-                              {journey.totalEstimatedCost} {journey.currency}
-                            </span>
-                          </div>
-                        )}
                       </div>
+                      
+                      {/* Estimated Cost - Always visible */}
+                      <div className="mt-3 pt-3 border-t border-gh-border-muted">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm font-medium text-gh-text-success">
+                            <DollarSign className="w-4 h-4" />
+                            <span>Estimated Cost:</span>
+                          </div>
+                          <span className="text-sm font-semibold text-gh-text-success">
+                            {journey.totalEstimatedCost || 0} {journey.currency}
+                          </span>
+                        </div>
+                      </div>
+
                       {selectedJourney?.id === journey.id && (
                         <div className="flex gap-2 mt-3 pt-3 border-t border-gh-border-muted">
                           <button
-                            onClick={handleCalculateCost}
-                            className="flex-1 px-3 py-1.5 text-sm gh-btn-secondary"
+                            onClick={() => {
+                              setEditingJourney(journey);
+                              setShowEditJourneyForm(true);
+                            }}
+                            className="flex-1 px-3 py-1.5 text-sm bg-gh-accent-link hover:bg-blue-700 text-white rounded-gh transition-colors flex items-center justify-center gap-2"
                             disabled={loading}
                           >
-                            <DollarSign className="w-4 h-4" />
-                            Calculate Cost
+                            <Edit2 className="w-4 h-4" />
+                            Edit Journey
                           </button>
                           <button
                             onClick={() => handleDeleteJourney(journey.id!)}
-                            className="px-3 py-1.5 text-sm bg-gh-accent-danger hover:bg-red-700 text-white rounded-gh transition-colors"
+                            className="flex-1 px-3 py-1.5 text-sm bg-gh-accent-danger hover:bg-red-700 text-white rounded-gh transition-colors flex items-center justify-center gap-2"
                             disabled={loading}
                           >
                             <Trash2 className="w-4 h-4" />
+                            Delete Journey
                           </button>
                         </div>
                       )}
@@ -373,7 +870,10 @@ function App() {
                 }
                 onMapClick={selectedJourney ? handleMapClick : undefined}
                 center={
-                  selectedJourney?.stops && selectedJourney.stops.length > 0
+                  // Use newStop coordinates if available (for geocoding), otherwise use first stop
+                  newStop.latitude && newStop.longitude
+                    ? [newStop.latitude, newStop.longitude]
+                    : selectedJourney?.stops && selectedJourney.stops.length > 0
                     ? [
                         selectedJourney.stops[0].latitude,
                         selectedJourney.stops[0].longitude,
@@ -415,12 +915,35 @@ function App() {
                           <div className="flex items-start gap-3">
                             <MapPin className="w-5 h-5 text-gh-accent-primary mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-gh-text-primary">
-                                {stop.city}, {stop.country}
-                              </h4>
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-semibold text-gh-text-primary">
+                                  {stop.city}, {stop.country}
+                                </h4>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingStop(stop);
+                                      setShowEditStopForm(true);
+                                    }}
+                                    className="text-gh-text-link hover:text-blue-600 transition-colors p-1"
+                                    disabled={loading}
+                                    title="Edit stop"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteStop(stop.id!)}
+                                    className="text-gh-text-danger hover:text-red-600 transition-colors p-1"
+                                    disabled={loading}
+                                    title="Delete stop"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
                               <p className="text-sm text-gh-text-secondary mt-1">
-                                {new Date(stop.arrivalDate).toLocaleDateString()} -{' '}
-                                {new Date(stop.departureDate).toLocaleDateString()}
+                                {formatDateForDisplay(stop.arrivalDate)} -{' '}
+                                {formatDateForDisplay(stop.departureDate)}
                               </p>
                               {stop.accommodationName && (
                                 <div className="mt-2 text-sm">
@@ -448,14 +971,48 @@ function App() {
                                   <p className="text-sm font-medium text-gh-text-primary">Attractions:</p>
                                   <ul className="text-sm space-y-1 mt-1">
                                     {stop.attractions.map((attr, i) => (
-                                      <li key={i} className="text-gh-text-secondary">
-                                        • {attr.name}
-                                        {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
+                                      <li key={i} className="text-gh-text-secondary flex justify-between items-center group">
+                                        <span>
+                                          • {attr.name}
+                                          {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
+                                        </span>
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button
+                                            onClick={() => {
+                                              setEditingAttraction(attr);
+                                              setEditingAttractionStopId(stop.id!);
+                                              setShowEditAttractionForm(true);
+                                            }}
+                                            className="text-gh-text-link hover:text-blue-600 p-1"
+                                            disabled={loading}
+                                            title="Edit attraction"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
+                                            className="text-gh-text-danger hover:text-red-600 p-1"
+                                            disabled={loading}
+                                            title="Delete attraction"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
                                       </li>
                                     ))}
                                   </ul>
                                 </div>
                               )}
+                              <button
+                                onClick={() => {
+                                  setSelectedStopForAttraction(stop.id!);
+                                  setShowAttractionForm(true);
+                                }}
+                                className="mt-3 text-sm text-gh-text-link hover:underline flex items-center gap-1"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add Attraction
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -630,6 +1187,101 @@ function App() {
         </div>
       )}
 
+      {/* Edit Journey Modal */}
+      {showEditJourneyForm && editingJourney && (
+        <div className="gh-modal-overlay" onClick={() => setShowEditJourneyForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Edit Journey</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Journey Title *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Summer Europe Trip 2024"
+                    value={editingJourney.title}
+                    onChange={(e) => setEditingJourney({ ...editingJourney, title: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    placeholder="Describe your journey..."
+                    value={editingJourney.description || ''}
+                    onChange={(e) => setEditingJourney({ ...editingJourney, description: e.target.value })}
+                    className="gh-textarea"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(editingJourney.startDate)}
+                      onChange={(e) => setEditingJourney({ ...editingJourney, startDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      End Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(editingJourney.endDate)}
+                      onChange={(e) => setEditingJourney({ ...editingJourney, endDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Currency
+                  </label>
+                  <select
+                    value={editingJourney.currency}
+                    onChange={(e) => setEditingJourney({ ...editingJourney, currency: e.target.value })}
+                    className="gh-select"
+                  >
+                    <option value="PLN">PLN (Polish Złoty)</option>
+                    <option value="USD">USD (US Dollar)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="GBP">GBP (British Pound)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditJourneyForm(false);
+                    setEditingJourney(null);
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditJourney}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Journey'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Stop Modal */}
       {showStopForm && (
         <div className="gh-modal-overlay" onClick={() => setShowStopForm(false)}>
@@ -663,6 +1315,19 @@ function App() {
                     />
                   </div>
                 </div>
+                
+                {/* Geocode Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleGeocodeCity(newStop.city || '', newStop.country || '')}
+                    disabled={loading || !newStop.city || !newStop.country}
+                    className="gh-btn-secondary text-sm flex items-center gap-2"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Locate on Map
+                  </button>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gh-text-primary mb-2">
@@ -687,6 +1352,33 @@ function App() {
                     />
                   </div>
                 </div>
+                
+                {/* Booking.com URL Auto-fill */}
+                <div className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-gh">
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    📎 Quick Fill from Booking.com
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste Booking.com URL here..."
+                      value={bookingUrl}
+                      onChange={(e) => setBookingUrl(e.target.value)}
+                      className="gh-input flex-1"
+                    />
+                    <button
+                      onClick={handleBookingUrlPaste}
+                      disabled={loading || !bookingUrl}
+                      className="gh-btn-primary whitespace-nowrap"
+                    >
+                      Auto-fill
+                    </button>
+                  </div>
+                  <p className="text-xs text-gh-text-muted mt-2">
+                    💡 Paste a Booking.com link to automatically extract hotel name, location, and dates
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gh-text-primary mb-2">
                     Accommodation Name
@@ -763,6 +1455,141 @@ function App() {
                   disabled={loading}
                 >
                   {loading ? 'Adding...' : 'Add Stop'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Stop Modal */}
+      {showEditStopForm && editingStop && (
+        <div className="gh-modal-overlay" onClick={() => setShowEditStopForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Edit Stop</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Paris"
+                      value={editingStop.city}
+                      onChange={(e) => setEditingStop({ ...editingStop, city: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Country *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., France"
+                      value={editingStop.country}
+                      onChange={(e) => setEditingStop({ ...editingStop, country: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Arrival Date
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(editingStop.arrivalDate)}
+                      onChange={(e) => setEditingStop({ ...editingStop, arrivalDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Departure Date
+                    </label>
+                    <input
+                      type="date"
+                      value={formatDateForInput(editingStop.departureDate)}
+                      onChange={(e) => setEditingStop({ ...editingStop, departureDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Accommodation Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Hotel Name"
+                    value={editingStop.accommodationName || ''}
+                    onChange={(e) => setEditingStop({ ...editingStop, accommodationName: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Accommodation URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={editingStop.accommodationUrl || ''}
+                    onChange={(e) => setEditingStop({ ...editingStop, accommodationUrl: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Accommodation Price
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={editingStop.accommodationPrice || ''}
+                      onChange={(e) => setEditingStop({ ...editingStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={editingStop.accommodationCurrency || 'PLN'}
+                      onChange={(e) => setEditingStop({ ...editingStop, accommodationCurrency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditStopForm(false);
+                    setEditingStop(null);
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditStop}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Stop'}
                 </button>
               </div>
             </div>
@@ -905,6 +1732,205 @@ function App() {
           </div>
         </div>
       )}
+      
+      {/* Add Attraction Modal */}
+      {showAttractionForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gh-bg-primary rounded-gh max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gh-text-primary">Add Attraction</h2>
+                <button
+                  onClick={() => {
+                    setShowAttractionForm(false);
+                    setSelectedStopForAttraction(null);
+                  }}
+                  className="text-gh-text-secondary hover:text-gh-text-primary"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Attraction Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Eiffel Tower"
+                    value={newAttraction.name}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, name: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    placeholder="Details about the attraction..."
+                    value={newAttraction.description}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, description: e.target.value })}
+                    className="gh-input h-24 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Estimated Cost
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newAttraction.estimatedCost || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Duration
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 2 hours"
+                      value={newAttraction.duration}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, duration: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAttractionForm(false);
+                    setSelectedStopForAttraction(null);
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddAttraction}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Adding...' : 'Add Attraction'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Attraction Modal */}
+      {showEditAttractionForm && editingAttraction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gh-bg-primary rounded-gh max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gh-text-primary">Edit Attraction</h2>
+                <button
+                  onClick={() => {
+                    setShowEditAttractionForm(false);
+                    setEditingAttraction(null);
+                    setEditingAttractionStopId(null);
+                  }}
+                  className="text-gh-text-secondary hover:text-gh-text-primary"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Attraction Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Eiffel Tower"
+                    value={editingAttraction.name}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, name: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    placeholder="Details about the attraction..."
+                    value={editingAttraction.description || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, description: e.target.value })}
+                    className="gh-input h-24 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Estimated Cost
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={editingAttraction.estimatedCost || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Duration
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 2 hours"
+                      value={editingAttraction.duration || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, duration: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditAttractionForm(false);
+                    setEditingAttraction(null);
+                    setEditingAttractionStopId(null);
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditAttraction}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Attraction'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onClose={closeToast} />
     </div>
   );
 }
