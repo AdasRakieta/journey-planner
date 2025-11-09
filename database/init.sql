@@ -1,0 +1,119 @@
+-- Journey Planner Database Schema
+-- PostgreSQL initialization script
+
+-- Create database (run as postgres user)
+-- CREATE DATABASE journey_planner;
+-- CREATE USER journey_user WITH PASSWORD 'your_secure_password';
+-- GRANT ALL PRIVILEGES ON DATABASE journey_planner TO journey_user;
+
+-- Connect to journey_planner database before running the following
+
+-- Journeys table
+CREATE TABLE IF NOT EXISTS journeys (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    total_estimated_cost DECIMAL(10, 2) DEFAULT 0,
+    currency VARCHAR(3) DEFAULT 'USD',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Stops table
+CREATE TABLE IF NOT EXISTS stops (
+    id SERIAL PRIMARY KEY,
+    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    city VARCHAR(255) NOT NULL,
+    country VARCHAR(255) NOT NULL,
+    latitude DECIMAL(10, 8) NOT NULL,
+    longitude DECIMAL(11, 8) NOT NULL,
+    arrival_date TIMESTAMP NOT NULL,
+    departure_date TIMESTAMP NOT NULL,
+    accommodation_name VARCHAR(255),
+    accommodation_url TEXT,
+    accommodation_price DECIMAL(10, 2),
+    accommodation_currency VARCHAR(3),
+    notes TEXT
+);
+
+-- Transports table
+CREATE TABLE IF NOT EXISTS transports (
+    id SERIAL PRIMARY KEY,
+    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('flight', 'train', 'bus', 'car', 'other')),
+    from_location VARCHAR(255) NOT NULL,
+    to_location VARCHAR(255) NOT NULL,
+    departure_date TIMESTAMP NOT NULL,
+    arrival_date TIMESTAMP NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'USD',
+    booking_url TEXT,
+    notes TEXT
+);
+
+-- Attractions table
+CREATE TABLE IF NOT EXISTS attractions (
+    id SERIAL PRIMARY KEY,
+    stop_id INTEGER NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    estimated_cost DECIMAL(10, 2),
+    duration INTEGER -- in hours
+);
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_stops_journey_id ON stops(journey_id);
+CREATE INDEX IF NOT EXISTS idx_transports_journey_id ON transports(journey_id);
+CREATE INDEX IF NOT EXISTS idx_attractions_stop_id ON attractions(stop_id);
+CREATE INDEX IF NOT EXISTS idx_journeys_created_at ON journeys(created_at);
+
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create trigger for journeys table
+DROP TRIGGER IF EXISTS update_journeys_updated_at ON journeys;
+CREATE TRIGGER update_journeys_updated_at
+    BEFORE UPDATE ON journeys
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Grant permissions to journey_user
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO journey_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO journey_user;
+
+-- Insert sample data (optional, for testing)
+-- Uncomment the following lines to insert sample data
+
+/*
+INSERT INTO journeys (title, description, start_date, end_date, currency) VALUES
+('European Adventure', 'Exploring the best of Europe', '2024-06-01', '2024-06-15', 'EUR');
+
+INSERT INTO stops (journey_id, city, country, latitude, longitude, arrival_date, departure_date, accommodation_name, accommodation_price, accommodation_currency) VALUES
+(1, 'Paris', 'France', 48.8566, 2.3522, '2024-06-01', '2024-06-05', 'Hotel de Paris', 150, 'EUR'),
+(1, 'Rome', 'Italy', 41.9028, 12.4964, '2024-06-05', '2024-06-10', 'Roman Holiday Inn', 120, 'EUR'),
+(1, 'Barcelona', 'Spain', 41.3851, 2.1734, '2024-06-10', '2024-06-15', 'Barcelona Beach Hotel', 130, 'EUR');
+
+INSERT INTO transports (journey_id, type, from_location, to_location, departure_date, arrival_date, price, currency) VALUES
+(1, 'flight', 'New York', 'Paris', '2024-06-01 10:00:00', '2024-06-01 22:00:00', 450, 'EUR'),
+(1, 'train', 'Paris', 'Rome', '2024-06-05 09:00:00', '2024-06-05 19:00:00', 200, 'EUR'),
+(1, 'flight', 'Rome', 'Barcelona', '2024-06-10 14:00:00', '2024-06-10 16:00:00', 80, 'EUR');
+
+INSERT INTO attractions (stop_id, name, description, estimated_cost, duration) VALUES
+(1, 'Eiffel Tower', 'Visit the iconic Eiffel Tower', 25, 3),
+(1, 'Louvre Museum', 'Explore the world-famous art museum', 17, 4),
+(2, 'Colosseum', 'Ancient Roman amphitheater', 16, 2),
+(2, 'Vatican Museums', 'Vatican art and history', 17, 4),
+(3, 'Sagrada Familia', 'Gaudi''s masterpiece', 26, 3),
+(3, 'Park Güell', 'Colorful park by Gaudi', 10, 2);
+*/
+
+-- Display table information
+\dt
