@@ -8,6 +8,9 @@ import journeyRoutes from './routes/journeys';
 import stopRoutes from './routes/stops';
 import attractionRoutes from './routes/attractions';
 import transportRoutes from './routes/transports';
+import authRoutes from './routes/auth';
+import adminRoutes from './routes/admin';
+import userRoutes from './routes/user';
 
 dotenv.config();
 
@@ -42,6 +45,9 @@ io.on('connection', (socket) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/journeys', journeyRoutes);
 app.use('/api/stops', stopRoutes);
 app.use('/api/attractions', attractionRoutes);
@@ -55,8 +61,13 @@ httpServer.listen(PORT, () => {
   console.log(`\n🚀 Server is running on port ${PORT}`);
   console.log(`📡 API endpoints:`);
   console.log(`   - GET    http://localhost:${PORT}/api/health`);
+  console.log(`   - POST   http://localhost:${PORT}/api/auth/login`);
+  console.log(`   - POST   http://localhost:${PORT}/api/auth/register`);
   console.log(`   - GET    http://localhost:${PORT}/api/journeys`);
   console.log(`   - POST   http://localhost:${PORT}/api/journeys`);
+  console.log(`🔐 Authentication endpoints available at /api/auth`);
+  console.log(`👤 User endpoints available at /api/user`);
+  console.log(`👑 Admin endpoints available at /api/admin`);
   console.log(`🔌 WebSocket ready for real-time updates`);
   console.log(``);
 });

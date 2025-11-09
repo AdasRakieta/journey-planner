@@ -55,19 +55,18 @@ export const getAttractionsByStopId = async (req: Request, res: Response) => {
 export const createAttraction = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.stopId);
-    const { name, description, estimatedCost, duration } = req.body;
-    
+    let { name, description, estimatedCost, duration } = req.body;
+    // Fix: convert empty string to null for integer fields
+    if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
+    if (duration === '' || duration === undefined) duration = null;
     const result = await query(
       'INSERT INTO attractions (stop_id, name, description, estimated_cost, duration) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [stopId, name, description, estimatedCost, duration]
     );
-    
     const attraction = toCamelCase(result.rows[0]);
-    
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('attraction:created', attraction);
-    
     res.status(201).json(attraction);
   } catch (error) {
     console.error('Error creating attraction:', error);
@@ -79,23 +78,40 @@ export const createAttraction = async (req: Request, res: Response) => {
 export const updateAttraction = async (req: Request, res: Response) => {
   try {
     const attractionId = parseInt(req.params.id);
-    const { name, description, estimatedCost, duration } = req.body;
-    
+    // Allow lightweight payment status toggle
+    if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
+      console.log(`✅ Updating attraction ${attractionId} payment status to:`, req.body.isPaid);
+      const { isPaid } = req.body;
+      const paidResult = await query(
+        'UPDATE attractions SET is_paid=$1 WHERE id=$2 RETURNING *',
+        [isPaid, attractionId]
+      );
+      if (!paidResult.rows[0]) {
+        console.error(`❌ Attraction ${attractionId} not found`);
+        return res.status(404).json({ message: 'Attraction not found' });
+      }
+      const updated = toCamelCase(paidResult.rows[0]);
+      console.log(`✅ Attraction ${attractionId} updated successfully, is_paid=${updated.isPaid}`);
+      const io = req.app.get('io');
+      io.emit('attraction:updated', updated);
+      return res.json(updated);
+    }
+
+    let { name, description, estimatedCost, duration } = req.body;
+    // Fix: convert empty string or undefined for integer fields to null
+    if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
+    if (duration === '' || duration === undefined) duration = null;
     const result = await query(
       'UPDATE attractions SET name=$1, description=$2, estimated_cost=$3, duration=$4 WHERE id=$5 RETURNING *',
       [name, description, estimatedCost, duration, attractionId]
     );
-    
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'Attraction not found' });
     }
-    
     const attraction = toCamelCase(result.rows[0]);
-    
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('attraction:updated', attraction);
-    
     res.json(attraction);
   } catch (error) {
     console.error('Error updating attraction:', error);

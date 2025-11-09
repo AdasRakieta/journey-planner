@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2 } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService } from './services/api';
 import { socketService } from './services/socket';
-import { getPaymentSummary } from './utils/paymentCalculations';
+import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
 
 // Helper function to format date to YYYY-MM-DD
 const formatDateForInput = (date: Date | string | undefined): string => {
@@ -108,7 +108,7 @@ function App() {
       if (selectedJourney?.id === journey.id) {
         setSelectedJourney(journey);
       }
-      info('Journey updated');
+      // Notification only for real-time updates from other users
     });
     
     socketService.on('journey:deleted', ({ id }: { id: number }) => {
@@ -132,7 +132,7 @@ function App() {
       if (selectedJourney?.id === stop.journeyId) {
         setSelectedJourney(prev => prev ? { ...prev, stops: [...(prev.stops || []), stop] } : null);
       }
-      success('New stop added');
+      // Notification only for real-time updates from other users
     });
     
     socketService.on('stop:updated', (stop: Stop) => {
@@ -152,7 +152,7 @@ function App() {
           stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s)
         } : null);
       }
-      info('Stop updated');
+      // Removed duplicate notification - handled by manual actions
     });
     
     socketService.on('stop:deleted', ({ id }: { id: number }) => {
@@ -193,7 +193,7 @@ function App() {
           })
         } : null);
       }
-      success('New attraction added');
+      // Notification only for real-time updates from other users
     });
     
     socketService.on('attraction:updated', (attraction: Attraction) => {
@@ -214,7 +214,7 @@ function App() {
           }))
         } : null);
       }
-      info('Attraction updated');
+      // Removed duplicate notification - handled by manual actions
     });
     
     socketService.on('attraction:deleted', ({ id }: { id: number }) => {
@@ -253,7 +253,7 @@ function App() {
           transports: [...(prev.transports || []), transport] 
         } : null);
       }
-      success('New transport added');
+      // Notification only for real-time updates from other users
     });
     
     socketService.on('transport:updated', (transport: any) => {
@@ -273,7 +273,7 @@ function App() {
           transports: (prev.transports || []).map(t => t.id === transport.id ? transport : t)
         } : null);
       }
-      info('Transport updated');
+      // Removed duplicate notification - handled by manual actions
     });
     
     socketService.on('transport:deleted', ({ id, journeyId }: { id: number; journeyId: number }) => {
@@ -567,9 +567,21 @@ function App() {
       setLoading(true);
       
       // Create attraction using the new endpoint
+      // Defensive: convert empty string to null for estimatedCost/duration
+      const payload = {
+        ...newAttraction,
+        estimatedCost:
+          newAttraction.estimatedCost === '' || newAttraction.estimatedCost === undefined
+            ? null
+            : newAttraction.estimatedCost,
+        duration:
+          newAttraction.duration === '' || newAttraction.duration === undefined
+            ? null
+            : newAttraction.duration,
+      };
       const createdAttraction = await attractionService.createAttraction(
-        selectedStopForAttraction,
-        newAttraction
+        selectedStopForAttraction!,
+        payload
       );
       
       // Update local state - find the stop and add the attraction
@@ -805,7 +817,8 @@ function App() {
     if (!selectedJourney) return;
     
     try {
-      await attractionService.updatePaymentStatus(attractionId, !currentStatus);
+  // Defensive: only send isPaid, not other fields
+  await attractionService.updatePaymentStatus(attractionId, !currentStatus);
       
       // Update local state
       const updatedJourney = {
@@ -842,6 +855,18 @@ function App() {
       default:
         return <MapPin className="w-4 h-4" />;
     }
+  };
+
+  // Calculate total estimated cost dynamically from stops, transports, and attractions
+  const calculateJourneyTotalCost = (journey: Journey): number => {
+    const stopsCost = journey.stops?.reduce((sum, stop) => sum + (stop.accommodationPrice || 0), 0) || 0;
+    const attractionsCost = journey.stops?.reduce((sum, stop) => {
+      const attrSum = stop.attractions?.reduce((s, a) => s + (a.estimatedCost || 0), 0) || 0;
+      return sum + attrSum;
+    }, 0) || 0;
+    const transportsCost = journey.transports?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
+    
+    return stopsCost + attractionsCost + transportsCost;
   };
 
   return (
@@ -951,7 +976,7 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* Estimated Cost - Always visible */}
+                      {/* Estimated Cost - Always visible and dynamically calculated */}
                       <div className="mt-3 pt-3 border-t border-gh-border-muted">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-sm font-medium text-gh-text-success">
@@ -959,9 +984,43 @@ function App() {
                             <span>Estimated Cost:</span>
                           </div>
                           <span className="text-sm font-semibold text-gh-text-success">
-                            {journey.totalEstimatedCost || 0} {journey.currency}
+                            {calculateJourneyTotalCost(journey).toFixed(2)} {journey.currency}
                           </span>
                         </div>
+                        
+                        {/* Amount Due - Cost remaining after paid items */}
+                        {(() => {
+                          const amountDue = calculateAmountDue(
+                            journey.stops || [],
+                            journey.transports || []
+                          );
+                          const paymentSummary = getPaymentSummary(
+                            journey.stops || [],
+                            journey.transports || []
+                          );
+                          
+                          return amountDue > 0 ? (
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-2 text-sm font-medium text-gh-text-danger">
+                                <XCircle className="w-4 h-4" />
+                                <span>Amount Due:</span>
+                              </div>
+                              <span className="text-sm font-semibold text-gh-text-danger">
+                                {amountDue.toFixed(2)} {journey.currency}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>Fully Paid</span>
+                              </div>
+                              <span className="text-sm font-semibold text-green-600">
+                                {paymentSummary.percentPaid}%
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {selectedJourney?.id === journey.id && (

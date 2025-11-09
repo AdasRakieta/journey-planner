@@ -14,7 +14,7 @@ export const PaymentCheckbox: React.FC<PaymentCheckboxProps> = ({
   checked,
   onChange,
   disabled = false,
-  label = 'Opłacono'
+  label = 'Paid'
 }) => {
   return (
     <label

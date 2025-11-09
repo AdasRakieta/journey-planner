@@ -101,6 +101,25 @@ export const createStop = async (req: Request, res: Response) => {
 export const updateStop = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.id);
+    // Support partial update for payment status toggle
+    if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
+      console.log(`✅ Updating stop ${stopId} payment status to:`, req.body.isPaid);
+      const { isPaid } = req.body;
+      const paidResult = await query(
+        `UPDATE stops SET is_paid=$1 WHERE id=$2 RETURNING *`,
+        [isPaid, stopId]
+      );
+      if (!paidResult.rows[0]) {
+        console.error(`❌ Stop ${stopId} not found`);
+        return res.status(404).json({ message: 'Stop not found' });
+      }
+      const updated = toCamelCase(paidResult.rows[0]);
+      console.log(`✅ Stop ${stopId} updated successfully, is_paid=${updated.isPaid}`);
+      const io = req.app.get('io');
+      io.emit('stop:updated', updated);
+      return res.json(updated);
+    }
+
     const {
       city,
       country,

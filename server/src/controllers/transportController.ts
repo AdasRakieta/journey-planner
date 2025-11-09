@@ -100,6 +100,25 @@ export const createTransport = async (req: Request, res: Response) => {
 export const updateTransport = async (req: Request, res: Response) => {
   try {
     const transportId = parseInt(req.params.id);
+    // Handle payment status toggle as a lightweight partial update
+    if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
+      console.log(`✅ Updating transport ${transportId} payment status to:`, req.body.isPaid);
+      const { isPaid } = req.body;
+      const paidResult = await query(
+        `UPDATE transports SET is_paid=$1 WHERE id=$2 RETURNING *`,
+        [isPaid, transportId]
+      );
+      if (!paidResult.rows[0]) {
+        console.error(`❌ Transport ${transportId} not found`);
+        return res.status(404).json({ message: 'Transport not found' });
+      }
+      const updated = toCamelCase(paidResult.rows[0]);
+      console.log(`✅ Transport ${transportId} updated successfully, is_paid=${updated.isPaid}`);
+      const io = req.app.get('io');
+      io.emit('transport:updated', updated);
+      return res.json(updated);
+    }
+
     const {
       type,
       fromLocation,
