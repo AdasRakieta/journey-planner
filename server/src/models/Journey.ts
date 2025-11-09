@@ -87,24 +87,28 @@ Journey.init(
     startDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'start_date', // Map to snake_case column
     },
     endDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'end_date', // Map to snake_case column
     },
     totalEstimatedCost: {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
+      field: 'total_estimated_cost', // Map to snake_case column
     },
     currency: {
       type: DataTypes.STRING(3),
-      defaultValue: 'USD',
+      defaultValue: 'PLN',
     },
   },
   {
     sequelize,
     tableName: 'journeys',
     timestamps: true,
+    underscored: true, // Automatically convert camelCase to snake_case
   }
 );
 
@@ -139,6 +143,7 @@ Stop.init(
         key: 'id',
       },
       onDelete: 'CASCADE',
+      field: 'journey_id', // Map to snake_case column
     },
     city: {
       type: DataTypes.STRING,
@@ -159,22 +164,28 @@ Stop.init(
     arrivalDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'arrival_date', // Map to snake_case column
     },
     departureDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'departure_date', // Map to snake_case column
     },
     accommodationName: {
       type: DataTypes.STRING,
+      field: 'accommodation_name', // Map to snake_case column
     },
     accommodationUrl: {
       type: DataTypes.TEXT,
+      field: 'accommodation_url', // Map to snake_case column
     },
     accommodationPrice: {
       type: DataTypes.DECIMAL(10, 2),
+      field: 'accommodation_price', // Map to snake_case column
     },
     accommodationCurrency: {
       type: DataTypes.STRING(3),
+      field: 'accommodation_currency', // Map to snake_case column
     },
     notes: {
       type: DataTypes.TEXT,
@@ -184,6 +195,7 @@ Stop.init(
     sequelize,
     tableName: 'stops',
     timestamps: false,
+    underscored: true, // Automatically convert camelCase to snake_case
   }
 );
 
@@ -216,6 +228,7 @@ Transport.init(
         key: 'id',
       },
       onDelete: 'CASCADE',
+      field: 'journey_id', // Map to snake_case column
     },
     type: {
       type: DataTypes.ENUM('flight', 'train', 'bus', 'car', 'other'),
@@ -224,18 +237,22 @@ Transport.init(
     fromLocation: {
       type: DataTypes.STRING,
       allowNull: false,
+      field: 'from_location', // Map to snake_case column
     },
     toLocation: {
       type: DataTypes.STRING,
       allowNull: false,
+      field: 'to_location', // Map to snake_case column
     },
     departureDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'departure_date', // Map to snake_case column
     },
     arrivalDate: {
       type: DataTypes.DATE,
       allowNull: false,
+      field: 'arrival_date', // Map to snake_case column
     },
     price: {
       type: DataTypes.DECIMAL(10, 2),
@@ -243,10 +260,11 @@ Transport.init(
     },
     currency: {
       type: DataTypes.STRING(3),
-      defaultValue: 'USD',
+      defaultValue: 'PLN',
     },
     bookingUrl: {
       type: DataTypes.TEXT,
+      field: 'booking_url', // Map to snake_case column
     },
     notes: {
       type: DataTypes.TEXT,
@@ -256,6 +274,7 @@ Transport.init(
     sequelize,
     tableName: 'transports',
     timestamps: false,
+    underscored: true, // Automatically convert camelCase to snake_case
   }
 );
 
@@ -283,6 +302,7 @@ Attraction.init(
         key: 'id',
       },
       onDelete: 'CASCADE',
+      field: 'stop_id', // Map to snake_case column
     },
     name: {
       type: DataTypes.STRING,
@@ -293,6 +313,7 @@ Attraction.init(
     },
     estimatedCost: {
       type: DataTypes.DECIMAL(10, 2),
+      field: 'estimated_cost', // Map to snake_case column
     },
     duration: {
       type: DataTypes.INTEGER, // in hours
@@ -302,6 +323,7 @@ Attraction.init(
     sequelize,
     tableName: 'attractions',
     timestamps: false,
+    underscored: true, // Automatically convert camelCase to snake_case
   }
 );
 

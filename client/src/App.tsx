@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit, Save } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2 } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import type { Journey, Stop, Transport } from './types/journey';
 import { journeyService } from './services/api';
@@ -537,160 +537,94 @@ function App() {
           </div>
         </div>
       </main>
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {selectedJourney.stops?.map((stop, index) => (
-                      <div key={index} className="bg-ios-gray-50 p-4 rounded-ios">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="w-5 h-5 text-ios-blue mt-1" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold">
-                              {stop.city}, {stop.country}
-                            </h4>
-                            <p className="text-sm text-ios-gray-600 mt-1">
-                              {new Date(stop.arrivalDate).toLocaleDateString()} -{' '}
-                              {new Date(stop.departureDate).toLocaleDateString()}
-                            </p>
-                            {stop.accommodationName && (
-                              <div className="mt-2 text-sm">
-                                <p className="font-medium">Accommodation:</p>
-                                <p>{stop.accommodationName}</p>
-                                {stop.accommodationPrice && (
-                                  <p className="text-ios-gray-600">
-                                    {stop.accommodationPrice} {stop.accommodationCurrency}
-                                  </p>
-                                )}
-                                {stop.accommodationUrl && (
-                                  <a
-                                    href={stop.accommodationUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-ios-blue underline"
-                                  >
-                                    View booking
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                            {stop.attractions && stop.attractions.length > 0 && (
-                              <div className="mt-2">
-                                <p className="text-sm font-medium">Attractions:</p>
-                                <ul className="text-sm space-y-1 mt-1">
-                                  {stop.attractions.map((attr, i) => (
-                                    <li key={i} className="text-ios-gray-600">
-                                      • {attr.name}
-                                      {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Transports */}
-                {selectedJourney.transports && selectedJourney.transports.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Transportation</h3>
-                    <div className="space-y-3">
-                      {selectedJourney.transports.map((transport, index) => (
-                        <div key={index} className="bg-ios-gray-50 p-4 rounded-ios">
-                          <div className="flex items-start gap-3">
-                            <div className="text-ios-blue mt-1">
-                              {getTransportIcon(transport.type)}
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-semibold capitalize">{transport.type}</h4>
-                              <p className="text-sm text-ios-gray-600">
-                                {transport.fromLocation} → {transport.toLocation}
-                              </p>
-                              <p className="text-sm text-ios-gray-600 mt-1">
-                                {new Date(transport.departureDate).toLocaleString()} -{' '}
-                                {new Date(transport.arrivalDate).toLocaleString()}
-                              </p>
-                              <p className="text-sm font-medium mt-1">
-                                {transport.price} {transport.currency}
-                              </p>
-                              {transport.bookingUrl && (
-                                <a
-                                  href={transport.bookingUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-ios-blue underline"
-                                >
-                                  View booking
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
 
       {/* New Journey Modal */}
       {showNewJourneyForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-ios-lg max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">Create New Journey</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Journey Title"
-                value={newJourney.title}
-                onChange={(e) => setNewJourney({ ...newJourney, title: e.target.value })}
-                className="ios-input"
-              />
-              <textarea
-                placeholder="Description (optional)"
-                value={newJourney.description}
-                onChange={(e) => setNewJourney({ ...newJourney, description: e.target.value })}
-                className="ios-input"
-                rows={3}
-              />
-              <input
-                type="date"
-                placeholder="Start Date"
-                value={newJourney.startDate as string}
-                onChange={(e) => setNewJourney({ ...newJourney, startDate: e.target.value })}
-                className="ios-input"
-              />
-              <input
-                type="date"
-                placeholder="End Date"
-                value={newJourney.endDate as string}
-                onChange={(e) => setNewJourney({ ...newJourney, endDate: e.target.value })}
-                className="ios-input"
-              />
-              <select
-                value={newJourney.currency}
-                onChange={(e) => setNewJourney({ ...newJourney, currency: e.target.value })}
-                className="ios-input"
-              >
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="PLN">PLN</option>
-              </select>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowNewJourneyForm(false)} className="ios-button-secondary flex-1">
-                Cancel
-              </button>
-              <button onClick={handleCreateJourney} className="ios-button flex-1">
-                Create
-              </button>
+        <div className="gh-modal-overlay" onClick={() => setShowNewJourneyForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Create New Journey</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Journey Title *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Summer Europe Trip 2024"
+                    value={newJourney.title}
+                    onChange={(e) => setNewJourney({ ...newJourney, title: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    placeholder="Describe your journey..."
+                    value={newJourney.description}
+                    onChange={(e) => setNewJourney({ ...newJourney, description: e.target.value })}
+                    className="gh-textarea"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={newJourney.startDate as string}
+                      onChange={(e) => setNewJourney({ ...newJourney, startDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      End Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={newJourney.endDate as string}
+                      onChange={(e) => setNewJourney({ ...newJourney, endDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Currency
+                  </label>
+                  <select
+                    value={newJourney.currency}
+                    onChange={(e) => setNewJourney({ ...newJourney, currency: e.target.value })}
+                    className="gh-select"
+                  >
+                    <option value="PLN">PLN (Polish Złoty)</option>
+                    <option value="USD">USD (US Dollar)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="GBP">GBP (British Pound)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowNewJourneyForm(false)}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateJourney}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Creating...' : 'Create Journey'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -698,49 +632,275 @@ function App() {
 
       {/* Add Stop Modal */}
       {showStopForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-ios-lg max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">Add Stop</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="City"
-                value={newStop.city}
-                onChange={(e) => setNewStop({ ...newStop, city: e.target.value })}
-                className="ios-input"
-              />
-              <input
-                type="text"
-                placeholder="Country"
-                value={newStop.country}
-                onChange={(e) => setNewStop({ ...newStop, country: e.target.value })}
-                className="ios-input"
-              />
-              <input
-                type="date"
-                placeholder="Arrival Date"
-                value={newStop.arrivalDate as string}
-                onChange={(e) => setNewStop({ ...newStop, arrivalDate: e.target.value })}
-                className="ios-input"
-              />
-              <input
-                type="date"
-                placeholder="Departure Date"
-                value={newStop.departureDate as string}
-                onChange={(e) => setNewStop({ ...newStop, departureDate: e.target.value })}
-                className="ios-input"
-              />
-              <p className="text-sm text-ios-gray-600">
-                Coordinates: {newStop.latitude?.toFixed(4)}, {newStop.longitude?.toFixed(4)}
-              </p>
+        <div className="gh-modal-overlay" onClick={() => setShowStopForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Add Stop</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Paris"
+                      value={newStop.city}
+                      onChange={(e) => setNewStop({ ...newStop, city: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Country *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., France"
+                      value={newStop.country}
+                      onChange={(e) => setNewStop({ ...newStop, country: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Arrival Date
+                    </label>
+                    <input
+                      type="date"
+                      value={newStop.arrivalDate as string}
+                      onChange={(e) => setNewStop({ ...newStop, arrivalDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Departure Date
+                    </label>
+                    <input
+                      type="date"
+                      value={newStop.departureDate as string}
+                      onChange={(e) => setNewStop({ ...newStop, departureDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Accommodation Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Hotel Name"
+                    value={newStop.accommodationName}
+                    onChange={(e) => setNewStop({ ...newStop, accommodationName: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Accommodation URL (Booking.com, Airbnb, etc.)
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newStop.accommodationUrl}
+                    onChange={(e) => setNewStop({ ...newStop, accommodationUrl: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Accommodation Price
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newStop.accommodationPrice || ''}
+                      onChange={(e) => setNewStop({ ...newStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={newStop.accommodationCurrency}
+                      onChange={(e) => setNewStop({ ...newStop, accommodationCurrency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="bg-gh-bg-tertiary p-3 rounded-gh border border-gh-border-muted">
+                  <p className="text-sm text-gh-text-secondary">
+                    📍 Coordinates: {newStop.latitude?.toFixed(4)}, {newStop.longitude?.toFixed(4)}
+                  </p>
+                  <p className="text-xs text-gh-text-secondary mt-1">
+                    Click on the map to update coordinates
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowStopForm(false)}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddStop}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Adding...' : 'Add Stop'}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowStopForm(false)} className="ios-button-secondary flex-1">
-                Cancel
-              </button>
-              <button onClick={handleAddStop} className="ios-button flex-1">
-                Add Stop
-              </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Transport Modal */}
+      {showTransportForm && (
+        <div className="gh-modal-overlay" onClick={() => setShowTransportForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Add Transportation</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Transport Type *
+                  </label>
+                  <select
+                    value={newTransport.type}
+                    onChange={(e) => setNewTransport({ ...newTransport, type: e.target.value as Transport['type'] })}
+                    className="gh-select"
+                  >
+                    <option value="flight">✈️ Flight</option>
+                    <option value="train">🚆 Train</option>
+                    <option value="bus">🚌 Bus</option>
+                    <option value="car">🚗 Car</option>
+                    <option value="other">🚢 Other</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      From *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Warsaw"
+                      value={newTransport.fromLocation}
+                      onChange={(e) => setNewTransport({ ...newTransport, fromLocation: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      To *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Paris"
+                      value={newTransport.toLocation}
+                      onChange={(e) => setNewTransport({ ...newTransport, toLocation: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Departure *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newTransport.departureDate as string}
+                      onChange={(e) => setNewTransport({ ...newTransport, departureDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Arrival *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newTransport.arrivalDate as string}
+                      onChange={(e) => setNewTransport({ ...newTransport, arrivalDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newTransport.price || ''}
+                      onChange={(e) => setNewTransport({ ...newTransport, price: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={newTransport.currency}
+                      onChange={(e) => setNewTransport({ ...newTransport, currency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    Booking URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={newTransport.bookingUrl}
+                    onChange={(e) => setNewTransport({ ...newTransport, bookingUrl: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowTransportForm(false)}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddTransport}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Adding...' : 'Add Transport'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

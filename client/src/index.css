@@ -38,46 +38,42 @@
 @layer components {
   /* GitHub Button Styles */
   .gh-btn-primary {
-    @apply px-4 py-2 bg-gh-button-primary-bg hover:bg-gh-button-primary-hover text-white font-medium rounded-gh border border-gh-button-primary-border transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-medium rounded-[6px] border border-[#2ea043] transition-colors duration-150 flex items-center gap-2;
   }
 
   .gh-btn-secondary {
-    @apply px-4 py-2 bg-gh-button-secondary-bg hover:bg-gh-button-secondary-hover text-gh-text-primary font-medium rounded-gh border border-gh-border-default transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium rounded-[6px] border border-[#30363d] transition-colors duration-150 flex items-center gap-2;
   }
 
   .gh-btn-danger {
-    @apply px-4 py-2 bg-gh-accent-danger hover:bg-red-700 text-white font-medium rounded-gh border border-gh-accent-danger transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#da3633] hover:bg-red-700 text-white font-medium rounded-[6px] border border-[#da3633] transition-colors duration-150 flex items-center gap-2;
   }
 
   /* GitHub Card Styles */
   .gh-card {
-    @apply bg-gh-bg-secondary rounded-gh border border-gh-border-default p-6 shadow-sm;
-  }
-
-  .gh-card-hover {
-    @apply gh-card hover:bg-gh-bg-tertiary transition-colors duration-150 cursor-pointer;
+    @apply bg-[#161b22] rounded-[6px] border border-[#30363d] p-6 shadow-sm;
   }
 
   /* GitHub Input Styles */
   .gh-input {
-    @apply w-full px-3 py-2 bg-gh-bg-primary text-gh-text-primary rounded-gh border border-gh-border-default focus:border-gh-accent-primary focus:outline-none focus:ring-2 focus:ring-gh-accent-primary focus:ring-opacity-30 transition-colors duration-150;
+    @apply w-full px-3 py-2 bg-[#0d1117] text-[#e6edf3] rounded-[6px] border border-[#30363d] focus:border-[#58a6ff] focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition-colors duration-150;
   }
 
   .gh-textarea {
-    @apply gh-input resize-none;
+    @apply w-full px-3 py-2 bg-[#0d1117] text-[#e6edf3] rounded-[6px] border border-[#30363d] focus:border-[#58a6ff] focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition-colors duration-150 resize-none;
   }
 
   .gh-select {
-    @apply gh-input cursor-pointer;
+    @apply w-full px-3 py-2 bg-[#0d1117] text-[#e6edf3] rounded-[6px] border border-[#30363d] focus:border-[#58a6ff] focus:outline-none focus:ring-2 focus:ring-[#58a6ff] transition-colors duration-150 cursor-pointer;
   }
 
   /* GitHub Modal Styles */
   .gh-modal-overlay {
-    @apply fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4;
+    @apply fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4;
   }
 
   .gh-modal {
-    @apply bg-gh-bg-overlay rounded-gh-lg border border-gh-border-default shadow-gh-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto;
+    @apply bg-[#1c2128] rounded-[12px] border border-[#30363d] max-w-2xl w-full max-h-[90vh] overflow-y-auto;
   }
 }
 
