@@ -11,21 +11,21 @@ import {
 const router = express.Router();
 
 // Get all stops for a journey
-router.get('/journeys/:journeyId/stops', getStopsByJourneyId);
+router.get('/journey/:journeyId', getStopsByJourneyId);
 
-// Create stop
-router.post('/journeys/:journeyId/stops', createStop);
+// Create stop for a journey
+router.post('/journey/:journeyId', createStop);
 
 // Update stop
-router.put('/stops/:id', updateStop);
+router.put('/:id', updateStop);
 
 // Delete stop
-router.delete('/stops/:id', deleteStop);
+router.delete('/:id', deleteStop);
 
 // Reverse geocoding - coordinates to address
-router.post('/stops/reverse-geocode', reverseGeocode);
+router.post('/reverse-geocode', reverseGeocode);
 
 // Scrape Booking.com URL
-router.post('/stops/scrape-booking', scrapeBookingUrl);
+router.post('/scrape-booking', scrapeBookingUrl);
 
 export default router;

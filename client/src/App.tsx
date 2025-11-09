@@ -3,7 +3,7 @@ import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Tr
 import JourneyMap from './components/JourneyMap';
 import { ToastContainer, useToast } from './components/Toast';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
-import { journeyService, stopService, attractionService } from './services/api';
+import { journeyService, stopService, attractionService, transportService } from './services/api';
 import { socketService } from './services/socket';
 
 // Helper function to format date to YYYY-MM-DD
@@ -234,6 +234,64 @@ function App() {
         } : null);
       }
       warning('Attraction deleted');
+    });
+    
+    // Listen for transport events
+    socketService.on('transport:created', (transport: any) => {
+      console.log('Real-time: Transport created', transport);
+      setJourneys(prev => prev.map(j => {
+        if (j.id === transport.journeyId) {
+          return { ...j, transports: [...(j.transports || []), transport] };
+        }
+        return j;
+      }));
+      if (selectedJourney?.id === transport.journeyId) {
+        setSelectedJourney(prev => prev ? { 
+          ...prev, 
+          transports: [...(prev.transports || []), transport] 
+        } : null);
+      }
+      success('New transport added');
+    });
+    
+    socketService.on('transport:updated', (transport: any) => {
+      console.log('Real-time: Transport updated', transport);
+      setJourneys(prev => prev.map(j => {
+        if (j.id === transport.journeyId) {
+          return { 
+            ...j, 
+            transports: (j.transports || []).map(t => t.id === transport.id ? transport : t)
+          };
+        }
+        return j;
+      }));
+      if (selectedJourney?.id === transport.journeyId) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          transports: (prev.transports || []).map(t => t.id === transport.id ? transport : t)
+        } : null);
+      }
+      info('Transport updated');
+    });
+    
+    socketService.on('transport:deleted', ({ id, journeyId }: { id: number; journeyId: number }) => {
+      console.log('Real-time: Transport deleted', id);
+      setJourneys(prev => prev.map(j => {
+        if (j.id === journeyId) {
+          return {
+            ...j,
+            transports: (j.transports || []).filter(t => t.id !== id)
+          };
+        }
+        return j;
+      }));
+      if (selectedJourney?.id === journeyId) {
+        setSelectedJourney(prev => prev ? {
+          ...prev,
+          transports: (prev.transports || []).filter(t => t.id !== id)
+        } : null);
+      }
+      warning('Transport deleted');
     });
     
     // Cleanup on unmount
@@ -663,13 +721,17 @@ function App() {
 
     try {
       setLoading(true);
+      // Use transportService instead of updating journey directly
+      const createdTransport = await transportService.createTransport(selectedJourney.id!, newTransport);
+      
+      // Update local state
       const updatedJourney = {
         ...selectedJourney,
-        transports: [...(selectedJourney.transports || []), newTransport as Transport],
+        transports: [...(selectedJourney.transports || []), createdTransport],
       };
-      const updated = await journeyService.updateJourney(selectedJourney.id!, updatedJourney);
-      setSelectedJourney(updated);
-      setJourneys(journeys.map(j => j.id === updated.id ? updated : j));
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      
       setNewTransport({
         type: 'flight',
         fromLocation: '',
@@ -1701,15 +1763,52 @@ function App() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gh-text-primary mb-2">
-                    Booking URL
+                    Ticket URL/Attachment
+                    <span className="text-xs text-gray-500 ml-2">(Flight, train, or bus ticket link)</span>
                   </label>
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={newTransport.bookingUrl}
-                    onChange={(e) => setNewTransport({ ...newTransport, bookingUrl: e.target.value })}
-                    className="gh-input"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://ryanair.com/... or Booking.com link"
+                      value={newTransport.bookingUrl}
+                      onChange={(e) => setNewTransport({ ...newTransport, bookingUrl: e.target.value })}
+                      className="gh-input flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!newTransport.bookingUrl) {
+                          warning('Please enter a ticket URL first');
+                          return;
+                        }
+                        try {
+                          setLoading(true);
+                          const data = await transportService.scrapeTicket(newTransport.bookingUrl);
+                          setNewTransport({
+                            ...newTransport,
+                            fromLocation: data.fromLocation || newTransport.fromLocation,
+                            toLocation: data.toLocation || newTransport.toLocation,
+                            departureDate: data.departureDate || newTransport.departureDate,
+                            arrivalDate: data.arrivalDate || newTransport.arrivalDate,
+                            price: data.price || newTransport.price,
+                            currency: data.currency || newTransport.currency,
+                          });
+                          success('Ticket data scraped successfully!');
+                        } catch (err) {
+                          error('Failed to scrape ticket data');
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      className="gh-btn-secondary px-4"
+                      disabled={loading || !newTransport.bookingUrl}
+                    >
+                      {loading ? '🔍' : '🎫 Auto-fill'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Paste a link from Ryanair, Wizz Air, LOT, PKP Intercity, or Booking.com to auto-fill flight/train details
+                  </p>
                 </div>
               </div>
               <div className="flex gap-3 mt-6">

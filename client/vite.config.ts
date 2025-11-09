@@ -13,6 +13,6 @@ export default defineConfig({
       }
     }
   },
-  // Uncomment the line below when deploying with path-based routing (e.g., /journey/)
-  // base: '/journey/',
+  // Production: use path-based routing behind Nginx reverse proxy
+  base: process.env.NODE_ENV === 'production' ? '/journey/' : '/',
 })

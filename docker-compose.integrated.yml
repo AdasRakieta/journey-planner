@@ -1,0 +1,115 @@
+# Przykład integracji z istniejącym SmartHome stack
+# 
+# INSTRUKCJA:
+# 1. Otwórz istniejący stack SmartHome w Portainer
+# 2. Dodaj poniższe services do swojego docker-compose.yml
+# 3. Dodaj journey-network do sekcji networks
+# 4. Zaktualizuj nginx service by używał obu networks
+# 5. Dodaj zmienne środowiskowe (DB_PASSWORD, DOCKERHUB_USERNAME)
+# 6. Update stack
+
+version: '3.8'
+
+services:
+  # ========================================
+  # ISTNIEJĄCY NGINX - ZMODYFIKUJ
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - smarthome-network   # istniejąca
+      - journey-network     # DODAJ TĘ LINIĘ
+    restart: unless-stopped
+    depends_on:
+      - journey-planner-server
+      - journey-planner-client
+
+  # ========================================
+  # NOWE SERVICES - JOURNEY PLANNER
+  # ========================================
+  
+  journey-planner-db:
+    image: postgres:17-alpine
+    container_name: journey-planner-db
+    environment:
+      POSTGRES_DB: journey_planner
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - journey-db-data:/var/lib/postgresql/data
+    networks:
+      - journey-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d journey_planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  journey-planner-server:
+    image: ${DOCKERHUB_USERNAME}/journey-planner-server:latest
+    container_name: journey-planner-server
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      DB_HOST: journey-planner-db
+      DB_PORT: 5432
+      DB_NAME: journey_planner
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FRONTEND_URL: ${BASE_URL:-http://localhost}/journey/
+    networks:
+      - journey-network
+    depends_on:
+      journey-planner-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  journey-planner-client:
+    image: ${DOCKERHUB_USERNAME}/journey-planner-client:latest
+    container_name: journey-planner-client
+    environment:
+      VITE_API_URL: ${BASE_URL:-http://localhost}/journey/api
+    networks:
+      - journey-network
+    depends_on:
+      journey-planner-server:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+# ========================================
+# NETWORKS
+# ========================================
+networks:
+  smarthome-network:
+    # Jeśli już istnieje jako external:
+    external: true
+    # LUB jeśli nie:
+    # driver: bridge
+  
+  journey-network:  # NOWA SIEĆ
+    driver: bridge
+
+# ========================================
+# VOLUMES
+# ========================================
+volumes:
+  journey-db-data:  # NOWY VOLUME
+    driver: local

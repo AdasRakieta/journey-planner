@@ -9,15 +9,15 @@ import {
 const router = express.Router();
 
 // Get all attractions for a stop
-router.get('/stops/:stopId/attractions', getAttractionsByStopId);
+router.get('/stop/:stopId', getAttractionsByStopId);
 
-// Create attraction
-router.post('/stops/:stopId/attractions', createAttraction);
+// Create attraction for a stop
+router.post('/stop/:stopId', createAttraction);
 
 // Update attraction
-router.put('/attractions/:id', updateAttraction);
+router.put('/:id', updateAttraction);
 
 // Delete attraction
-router.delete('/attractions/:id', deleteAttraction);
+router.delete('/:id', deleteAttraction);
 
 export default router;

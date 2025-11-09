@@ -43,9 +43,9 @@ io.on('connection', (socket) => {
 
 // Routes
 app.use('/api/journeys', journeyRoutes);
-app.use('/api', stopRoutes);
-app.use('/api', attractionRoutes);
-app.use('/api', transportRoutes);
+app.use('/api/stops', stopRoutes);
+app.use('/api/attractions', attractionRoutes);
+app.use('/api/transports', transportRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Journey Planner API is running' });

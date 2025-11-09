@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { query } from '../config/db';
+import { scrapeTicketData } from '../services/ticketScraper';
 
-// Helper: Convert snake_case to camelCase recursively
+// Convert snake_case to camelCase and handle Date objects
 const toCamelCase = (obj: any): any => {
   if (Array.isArray(obj)) {
     return obj.map(item => toCamelCase(item));
@@ -67,6 +68,10 @@ export const createTransport = async (req: Request, res: Response) => {
       notes
     } = req.body;
     
+    // Convert empty strings to null for optional date fields
+    const cleanArrivalDate = arrivalDate && arrivalDate.trim() !== '' ? arrivalDate : null;
+    const cleanDepartureDate = departureDate && departureDate.trim() !== '' ? departureDate : null;
+    
     const result = await query(
       `INSERT INTO transports (
         journey_id, type, from_location, to_location,
@@ -74,7 +79,7 @@ export const createTransport = async (req: Request, res: Response) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         journeyId, type, fromLocation, toLocation,
-        departureDate, arrivalDate, price, currency, bookingUrl, notes
+        cleanDepartureDate, cleanArrivalDate, price, currency, bookingUrl, notes
       ]
     );
     
@@ -107,6 +112,10 @@ export const updateTransport = async (req: Request, res: Response) => {
       notes
     } = req.body;
     
+    // Convert empty strings to null for optional date fields
+    const cleanArrivalDate = arrivalDate && arrivalDate.trim() !== '' ? arrivalDate : null;
+    const cleanDepartureDate = departureDate && departureDate.trim() !== '' ? departureDate : null;
+    
     const result = await query(
       `UPDATE transports SET
         type=$1, from_location=$2, to_location=$3,
@@ -115,7 +124,7 @@ export const updateTransport = async (req: Request, res: Response) => {
       WHERE id=$10 RETURNING *`,
       [
         type, fromLocation, toLocation,
-        departureDate, arrivalDate, price,
+        cleanDepartureDate, cleanArrivalDate, price,
         currency, bookingUrl, notes, transportId
       ]
     );
@@ -141,15 +150,53 @@ export const updateTransport = async (req: Request, res: Response) => {
 export const deleteTransport = async (req: Request, res: Response) => {
   try {
     const transportId = parseInt(req.params.id);
+    
+    // Get journeyId before deleting
+    const transportResult = await query('SELECT journey_id FROM transports WHERE id = $1', [transportId]);
+    const journeyId = transportResult.rows[0]?.journey_id;
+    
     await query('DELETE FROM transports WHERE id = $1', [transportId]);
     
-    // Emit Socket.IO event
+    // Emit Socket.IO event with journeyId for proper filtering
     const io = req.app.get('io');
-    io.emit('transport:deleted', { id: transportId });
+    io.emit('transport:deleted', { id: transportId, journeyId });
     
     res.json({ message: 'Transport deleted successfully' });
   } catch (error) {
     console.error('Error deleting transport:', error);
     res.status(500).json({ message: 'Failed to delete transport' });
+  }
+};
+
+/**
+ * Scrape ticket data from URL (flight, train, etc.)
+ */
+export const scrapeTicket = async (req: Request, res: Response) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ message: 'URL is required' });
+    }
+    
+    console.log(`🔍 Scraping ticket data from: ${url}`);
+    const scrapedData = await scrapeTicketData(url);
+    
+    if (!scrapedData.success) {
+      return res.status(400).json({ 
+        message: 'Failed to scrape ticket data',
+        error: scrapedData.error 
+      });
+    }
+    
+    console.log('✅ Scraped data:', scrapedData);
+    res.json(scrapedData);
+    
+  } catch (error: any) {
+    console.error('Error scraping ticket:', error);
+    res.status(500).json({ 
+      message: 'Failed to scrape ticket data',
+      error: error.message 
+    });
   }
 };

@@ -136,13 +136,13 @@ export const attractionService = {
 // Transport Service
 export const transportService = {
   async getTransportsByJourneyId(journeyId: number) {
-    const response = await fetch(`${API_URL}/journeys/${journeyId}/transports`);
+    const response = await fetch(`${API_URL}/transports/journey/${journeyId}`);
     if (!response.ok) throw new Error('Failed to fetch transports');
     return response.json();
   },
 
   async createTransport(journeyId: number, transport: any) {
-    const response = await fetch(`${API_URL}/journeys/${journeyId}/transports`, {
+    const response = await fetch(`${API_URL}/transports/journey/${journeyId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(transport),
@@ -166,5 +166,15 @@ export const transportService = {
       method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete transport');
+  },
+
+  async scrapeTicket(url: string) {
+    const response = await fetch(`${API_URL}/transports/scrape-ticket`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) throw new Error('Failed to scrape ticket');
+    return response.json();
   },
 };

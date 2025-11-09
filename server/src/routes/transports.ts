@@ -4,13 +4,16 @@ import {
   createTransport,
   updateTransport,
   deleteTransport,
+  scrapeTicket,
 } from '../controllers/transportController';
 
 const router = express.Router();
 
-router.get('/journeys/:journeyId/transports', getTransportsByJourneyId);
-router.post('/journeys/:journeyId/transports', createTransport);
-router.put('/transports/:id', updateTransport);
-router.delete('/transports/:id', deleteTransport);
+// Routes are mounted at /api/transports
+router.get('/journey/:journeyId', getTransportsByJourneyId);
+router.post('/journey/:journeyId', createTransport);
+router.put('/:id', updateTransport);
+router.delete('/:id', deleteTransport);
+router.post('/scrape-ticket', scrapeTicket);
 
 export default router;
