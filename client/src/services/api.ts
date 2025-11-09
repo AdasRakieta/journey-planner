@@ -54,13 +54,13 @@ export const journeyService = {
 // Stop Service
 export const stopService = {
   async getStopsByJourneyId(journeyId: number) {
-    const response = await fetch(`${API_URL}/journeys/${journeyId}/stops`);
+    const response = await fetch(`${API_URL}/stops/journey/${journeyId}`);
     if (!response.ok) throw new Error('Failed to fetch stops');
     return response.json();
   },
 
   async createStop(journeyId: number, stop: any) {
-    const response = await fetch(`${API_URL}/journeys/${journeyId}/stops`, {
+    const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stop),
@@ -100,13 +100,13 @@ export const stopService = {
 // Attraction Service
 export const attractionService = {
   async getAttractionsByStopId(stopId: number) {
-    const response = await fetch(`${API_URL}/stops/${stopId}/attractions`);
+    const response = await fetch(`${API_URL}/attractions/stop/${stopId}`);
     if (!response.ok) throw new Error('Failed to fetch attractions');
     return response.json();
   },
 
   async createAttraction(stopId: number, attraction: any) {
-    const response = await fetch(`${API_URL}/stops/${stopId}/attractions`, {
+    const response = await fetch(`${API_URL}/attractions/stop/${stopId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(attraction),

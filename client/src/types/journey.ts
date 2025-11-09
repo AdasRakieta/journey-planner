@@ -12,6 +12,7 @@ export interface Stop {
   accommodationCurrency?: string;
   notes?: string;
   attractions?: Attraction[];
+  isPaid?: boolean;
 }
 
 export interface Transport {
@@ -25,6 +26,7 @@ export interface Transport {
   currency: string;
   bookingUrl?: string;
   notes?: string;
+  isPaid?: boolean;
 }
 
 export interface Attraction {
@@ -33,6 +35,7 @@ export interface Attraction {
   description?: string;
   estimatedCost?: number;
   duration?: string; // e.g., "2 hours", "30 minutes"
+  isPaid?: boolean;
 }
 
 export interface Journey {

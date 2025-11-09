@@ -209,9 +209,20 @@ npm run client:build
 
 ## 🍓 Deployment on Raspberry Pi
 
-For detailed deployment instructions including nginx configuration for running alongside other applications (like SmartHome), see [NGINX_SETUP.md](./NGINX_SETUP.md).
+Journey Planner can be deployed alongside existing applications (like SmartHome) using shared Nginx.
 
-### Quick deployment steps:
+### 📚 Deployment Options:
+
+1. **Docker + Portainer + GitHub Actions** (Recommended)
+   - See [PORTAINER_DEPLOY.md](./PORTAINER_DEPLOY.md) - Full CI/CD pipeline with auto-builds
+   
+2. **Integration with Existing Nginx**
+   - See [NGINX_CONFIG_FOR_SMARTHOME.md](./NGINX_CONFIG_FOR_SMARTHOME.md) - Add to existing SmartHome stack
+   
+3. **Standalone Nginx Setup**
+   - See [NGINX_INTEGRATION.md](./NGINX_INTEGRATION.md) - Complete multi-app configuration
+
+### Quick Manual Deployment:
 
 1. **Build the applications:**
 ```bash
@@ -227,11 +238,11 @@ pm2 save
 pm2 startup
 ```
 
-3. **Configure nginx** (see NGINX_SETUP.md for details)
+3. **Configure nginx** (see documentation files above)
 
 4. **Access your application:**
    - Local: `http://raspberry-pi-ip:5001`
-   - Via nginx: `https://your-domain.ts.net/journey/`
+   - Via nginx: `http://your-domain/journey/`
 
 ## 📡 API Endpoints
 

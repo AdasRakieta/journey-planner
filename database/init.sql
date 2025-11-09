@@ -8,6 +8,22 @@
 
 -- Connect to journey_planner database before running the following
 
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    is_active BOOLEAN DEFAULT TRUE,
+    email_verified BOOLEAN DEFAULT FALSE,
+    verification_token TEXT,
+    reset_token TEXT,
+    reset_token_expires TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Journeys table
 CREATE TABLE IF NOT EXISTS journeys (
     id SERIAL PRIMARY KEY,
@@ -17,6 +33,7 @@ CREATE TABLE IF NOT EXISTS journeys (
     end_date TIMESTAMP NOT NULL,
     total_estimated_cost DECIMAL(10, 2) DEFAULT 0,
     currency VARCHAR(3) DEFAULT 'USD',
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -35,7 +52,8 @@ CREATE TABLE IF NOT EXISTS stops (
     accommodation_url TEXT,
     accommodation_price DECIMAL(10, 2),
     accommodation_currency VARCHAR(3),
-    notes TEXT
+    notes TEXT,
+    is_paid BOOLEAN DEFAULT FALSE
 );
 
 -- Transports table
@@ -50,7 +68,8 @@ CREATE TABLE IF NOT EXISTS transports (
     price DECIMAL(10, 2) NOT NULL,
     currency VARCHAR(3) DEFAULT 'USD',
     booking_url TEXT,
-    notes TEXT
+    notes TEXT,
+    is_paid BOOLEAN DEFAULT FALSE
 );
 
 -- Attractions table
@@ -60,14 +79,32 @@ CREATE TABLE IF NOT EXISTS attractions (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     estimated_cost DECIMAL(10, 2),
-    duration VARCHAR(50) -- e.g., "2 hours", "30 minutes"
+    duration VARCHAR(50), -- e.g., "2 hours", "30 minutes"
+    is_paid BOOLEAN DEFAULT FALSE
+);
+
+-- Transport attachments table
+CREATE TABLE IF NOT EXISTS transport_attachments (
+    id SERIAL PRIMARY KEY,
+    transport_id INTEGER NOT NULL REFERENCES transports(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_stops_journey_id ON stops(journey_id);
 CREATE INDEX IF NOT EXISTS idx_transports_journey_id ON transports(journey_id);
 CREATE INDEX IF NOT EXISTS idx_attractions_stop_id ON attractions(stop_id);
+CREATE INDEX IF NOT EXISTS idx_transport_attachments_transport_id ON transport_attachments(transport_id);
+CREATE INDEX IF NOT EXISTS idx_transport_attachments_uploaded_by ON transport_attachments(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_journeys_created_at ON journeys(created_at);
+CREATE INDEX IF NOT EXISTS idx_journeys_created_by ON journeys(created_by);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -82,6 +119,13 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_journeys_updated_at ON journeys;
 CREATE TRIGGER update_journeys_updated_at
     BEFORE UPDATE ON journeys
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger for users table
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
