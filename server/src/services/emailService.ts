@@ -1,15 +1,39 @@
 import nodemailer from 'nodemailer';
 
+// Check if email is configured (both username and password must be set)
+// Updated configuration
+const isEmailConfigured = !!(
+  process.env.SMTP_USERNAME && 
+  process.env.SMTP_PASSWORD &&
+  process.env.SMTP_USERNAME.trim() !== '' &&
+  process.env.SMTP_PASSWORD.trim() !== ''
+);
+
+console.log('📧 Email configuration status:', isEmailConfigured ? '✅ CONFIGURED' : '⚠️  NOT CONFIGURED');
+if (isEmailConfigured) {
+  console.log('📧 SMTP Server:', process.env.SMTP_SERVER);
+  console.log('📧 SMTP Port:', process.env.SMTP_PORT);
+  console.log('📧 SMTP User:', process.env.SMTP_USERNAME);
+}
+
+
 // Email configuration from environment variables
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_SERVER || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USERNAME,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+const transporter = isEmailConfigured 
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_SERVER || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false, // true for 465, false for other ports (587 = STARTTLS)
+      auth: {
+        user: process.env.SMTP_USERNAME,
+        pass: process.env.SMTP_PASSWORD,
+      },
+      // Gmail specific settings
+      tls: {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2'
+      }
+    })
+  : null;
 
 export interface EmailOptions {
   to: string;
@@ -22,18 +46,43 @@ export interface EmailOptions {
  * Send an email
  */
 export async function sendEmail(options: EmailOptions): Promise<void> {
+  // If email is not configured, log to console (development mode)
+  if (!isEmailConfigured || !transporter) {
+    console.log('\n📧 [DEV MODE] Email would be sent:');
+    console.log('   To:', options.to);
+    console.log('   Subject:', options.subject);
+    console.log('   Content:', options.text || options.html.substring(0, 200) + '...');
+    console.log('⚠️  Email not sent (SMTP not configured). Set SMTP_USERNAME and SMTP_PASSWORD in .env\n');
+    return;
+  }
+
   try {
-    await transporter.sendMail({
+    console.log(`📧 Sending email to ${options.to}...`);
+    
+    const info = await transporter.sendMail({
       from: `"Journey Planner" <${process.env.SMTP_USERNAME}>`,
       to: options.to,
       subject: options.subject,
       text: options.text,
       html: options.html,
     });
-    console.log(`✅ Email sent to ${options.to}`);
-  } catch (error) {
-    console.error('❌ Email sending failed:', error);
-    throw new Error('Failed to send email');
+    
+    console.log(`✅ Email sent successfully to ${options.to}`);
+    console.log(`   Message ID: ${info.messageId}`);
+  } catch (error: any) {
+    console.error('❌ Email sending failed:', error.message);
+    
+    // Detailed error logging for debugging
+    if (error.code === 'EAUTH') {
+      console.error('   Authentication failed. Check SMTP_USERNAME and SMTP_PASSWORD');
+    } else if (error.code === 'ECONNECTION') {
+      console.error('   Connection failed. Check SMTP_SERVER and SMTP_PORT');
+    } else if (error.responseCode) {
+      console.error(`   SMTP Error Code: ${error.responseCode}`);
+      console.error(`   Response: ${error.response}`);
+    }
+    
+    throw new Error(`Failed to send email: ${error.message}`);
   }
 }
 

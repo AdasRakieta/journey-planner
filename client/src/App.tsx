@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
@@ -7,6 +8,7 @@ import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService } from './services/api';
 import { socketService } from './services/socket';
 import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
+import { useAuth } from './contexts/AuthContext';
 
 // Helper function to format date to YYYY-MM-DD
 const formatDateForInput = (date: Date | string | undefined): string => {
@@ -25,6 +27,7 @@ const formatDateForDisplay = (date: Date | string | undefined): string => {
 };
 
 function App() {
+  const { user, logout } = useAuth();
   const { toasts, closeToast, success, error, warning, info } = useToast();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
@@ -895,6 +898,29 @@ function App() {
 
             {/* Desktop Actions */}
             <div className="hidden lg:flex items-center gap-3">
+              {/* User Info */}
+              {user && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gh-bg-tertiary rounded-gh border border-gh-border-default">
+                  <User className="w-4 h-4 text-gh-text-secondary" />
+                  <span className="text-sm text-gh-text-primary font-medium">{user.username}</span>
+                  {user.role === 'admin' && (
+                    <span className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium">
+                      Admin
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* Settings Button */}
+              <Link
+                to="/settings"
+                className="gh-btn-secondary"
+              >
+                <Settings className="w-5 h-5" />
+                Settings
+              </Link>
+              
+              {/* New Journey Button */}
               <button
                 onClick={() => setShowNewJourneyForm(true)}
                 className="gh-btn-primary"
@@ -902,6 +928,20 @@ function App() {
               >
                 <Plus className="w-5 h-5" />
                 New Journey
+              </button>
+              
+              {/* Logout Button */}
+              <button
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to logout?')) {
+                    logout();
+                  }
+                }}
+                className="gh-btn-danger"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+                Logout
               </button>
             </div>
 
@@ -920,6 +960,30 @@ function App() {
         {isMobileMenuOpen && (
           <div className="lg:hidden border-t border-gh-border-default bg-gh-bg-secondary">
             <div className="px-4 py-3 space-y-2">
+              {/* User Info */}
+              {user && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gh-bg-tertiary rounded-gh border border-gh-border-default mb-3">
+                  <User className="w-4 h-4 text-gh-text-secondary" />
+                  <span className="text-sm text-gh-text-primary font-medium">{user.username}</span>
+                  {user.role === 'admin' && (
+                    <span className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium">
+                      Admin
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* Settings Link */}
+              <Link
+                to="/settings"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-full gh-btn-secondary justify-center"
+              >
+                <Settings className="w-5 h-5" />
+                Settings
+              </Link>
+              
+              {/* New Journey Button */}
               <button
                 onClick={() => {
                   setShowNewJourneyForm(true);
@@ -930,6 +994,19 @@ function App() {
               >
                 <Plus className="w-5 h-5" />
                 New Journey
+              </button>
+              
+              {/* Logout Button */}
+              <button
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to logout?')) {
+                    logout();
+                  }
+                }}
+                className="w-full gh-btn-danger justify-center"
+              >
+                <LogOut className="w-5 h-5" />
+                Logout
               </button>
             </div>
           </div>

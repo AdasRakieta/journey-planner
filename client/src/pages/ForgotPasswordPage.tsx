@@ -76,7 +76,7 @@ const ForgotPasswordPage: React.FC = () => {
         <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d]">
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-6 font-medium transition-colors"
+            className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-6 font-medium transition-all duration-300 ease-in-out"
           >
             <ArrowLeft size={20} />
             Back to Login
@@ -212,7 +212,7 @@ const ForgotPasswordPage: React.FC = () => {
                   setConfirmPassword('');
                   setError('');
                 }}
-                className="w-full text-blue-400 hover:text-blue-300 font-medium py-2 transition-colors"
+                className="w-full text-blue-400 hover:text-blue-300 font-medium py-2 transition-all duration-300 ease-in-out"
               >
                 Resend Code
               </button>

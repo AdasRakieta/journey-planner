@@ -38,15 +38,15 @@
 @layer components {
   /* GitHub Button Styles */
   .gh-btn-primary {
-    @apply px-4 py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-medium rounded-[6px] border border-[#2ea043] transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-medium rounded-[6px] border border-[#2ea043] transition-all duration-300 ease-in-out hover:shadow-lg flex items-center gap-2;
   }
 
   .gh-btn-secondary {
-    @apply px-4 py-2 bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium rounded-[6px] border border-[#30363d] transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium rounded-[6px] border border-[#30363d] transition-all duration-300 ease-in-out hover:shadow-lg flex items-center gap-2;
   }
 
   .gh-btn-danger {
-    @apply px-4 py-2 bg-[#da3633] hover:bg-red-700 text-white font-medium rounded-[6px] border border-[#da3633] transition-colors duration-150 flex items-center gap-2;
+    @apply px-4 py-2 bg-[#da3633] hover:bg-red-700 text-white font-medium rounded-[6px] border border-[#da3633] transition-all duration-300 ease-in-out hover:shadow-lg flex items-center gap-2;
   }
 
   /* GitHub Card Styles */

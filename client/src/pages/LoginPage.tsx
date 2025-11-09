@@ -98,7 +98,7 @@ const LoginPage: React.FC = () => {
             <div className="text-right">
               <Link
                 to="/forgot-password"
-                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-all duration-300 ease-in-out"
               >
                 Forgot Password?
               </Link>
@@ -135,7 +135,7 @@ const LoginPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-[#0d1117] border border-[#30363d] rounded-xl hover:bg-[#1c2128] transition-colors font-medium text-gray-300"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-[#0d1117] border border-[#30363d] rounded-xl hover:bg-[#1c2128] transition-all duration-300 ease-in-out hover:shadow-lg font-medium text-gray-300"
               onClick={() => alert('Google OAuth coming soon!')}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -161,7 +161,7 @@ const LoginPage: React.FC = () => {
 
             <button
               type="button"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-100 transition-colors font-medium"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-100 transition-all duration-300 ease-in-out hover:shadow-lg font-medium"
               onClick={() => alert('Apple OAuth coming soon!')}
             >
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">

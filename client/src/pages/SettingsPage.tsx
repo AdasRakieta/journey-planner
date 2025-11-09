@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Settings, 
@@ -13,13 +14,14 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
-  X
+  X,
+  ArrowLeft
 } from 'lucide-react';
 import { userAPI, adminAPI } from '../services/authApi';
 import type { User as UserType, Invitation } from '../types/auth';
 
 const SettingsPage: React.FC = () => {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, refreshUser } = useAuth();
   
   // User Profile State
   const [username, setUsername] = useState(user?.username || '');
@@ -42,6 +44,18 @@ const SettingsPage: React.FC = () => {
   const [adminError, setAdminError] = useState('');
   const [adminSuccess, setAdminSuccess] = useState('');
 
+  // Refresh user data from database on mount
+  useEffect(() => {
+    refreshUser();
+  }, []);
+
+  // Update username when user changes
+  useEffect(() => {
+    if (user?.username) {
+      setUsername(user.username);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminData();
@@ -51,12 +65,12 @@ const SettingsPage: React.FC = () => {
   const loadAdminData = async () => {
     setAdminLoading(true);
     try {
-      const [usersData, invitationsData] = await Promise.all([
+      const [usersResponse, invitationsResponse] = await Promise.all([
         adminAPI.getAllUsers(),
         adminAPI.getPendingInvitations()
       ]);
-      setUsers(usersData);
-      setInvitations(invitationsData);
+      setUsers(usersResponse.data.users);
+      setInvitations(invitationsResponse.data.invitations);
     } catch (error: any) {
       setAdminError('Failed to load admin data');
     } finally {
@@ -71,8 +85,8 @@ const SettingsPage: React.FC = () => {
     setProfileLoading(true);
 
     try {
-      const updatedUser = await userAPI.updateProfile(username);
-      updateUser(updatedUser);
+      const response = await userAPI.updateProfile(username);
+      updateUser(response.data.user);
       setProfileSuccess('Profile updated successfully!');
     } catch (error: any) {
       setProfileError(error.response?.data?.error || 'Failed to update profile');
@@ -176,13 +190,22 @@ const SettingsPage: React.FC = () => {
             <Settings size={32} className="text-blue-500" />
             <h1 className="text-3xl font-bold text-white">Settings</h1>
           </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            <LogOut size={20} />
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="gh-btn-secondary"
+            >
+              <ArrowLeft size={20} />
+              Back to Home
+            </Link>
+            <button
+              onClick={logout}
+              className="gh-btn-danger"
+            >
+              <LogOut size={20} />
+              Logout
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -257,7 +280,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={profileLoading || username === user.username}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {profileLoading ? (
                     <>
@@ -339,7 +362,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {passwordLoading ? (
                     <>
@@ -407,7 +430,7 @@ const SettingsPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={inviteLoading}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {inviteLoading ? (
                       <>
@@ -437,12 +460,16 @@ const SettingsPage: React.FC = () => {
                         <div>
                           <div className="text-white font-medium">{invitation.email}</div>
                           <div className="text-xs text-gray-400">
-                            Expires: {new Date(invitation.expiresAt).toLocaleDateString()}
+                            Expires: {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            }) : 'N/A'}
                           </div>
                         </div>
                         <button
                           onClick={() => handleCancelInvitation(invitation.id!, invitation.email)}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
                           title="Cancel invitation"
                         >
                           <X size={20} />
@@ -490,13 +517,13 @@ const SettingsPage: React.FC = () => {
                                 u.username,
                                 u.role === 'admin' ? 'user' : 'admin'
                               )}
-                              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
                             >
                               {u.role === 'admin' ? 'Make User' : 'Make Admin'}
                             </button>
                             <button
                               onClick={() => handleDeleteUser(u.id!, u.username)}
-                              className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
+                              className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
                               title="Delete user"
                             >
                               <Trash2 size={20} />

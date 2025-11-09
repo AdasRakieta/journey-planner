@@ -83,7 +83,7 @@ const RegisterPage: React.FC = () => {
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                className="text-blue-400 hover:text-blue-300 font-medium transition-all duration-300 ease-in-out"
               >
                 Go to Login
               </button>

@@ -91,7 +91,19 @@ export async function getAllUsers(req: Request, res: Response) {
        ORDER BY created_at DESC`
     );
 
-    res.json({ users: result.rows });
+    // Convert snake_case to camelCase for frontend
+    const users = result.rows.map(row => ({
+      id: row.id,
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      isActive: row.is_active,
+      emailVerified: row.email_verified,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+
+    res.json({ users });
   } catch (error) {
     console.error('Get all users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -231,7 +243,16 @@ export async function getPendingInvitations(req: Request, res: Response) {
        ORDER BY it.created_at DESC`
     );
 
-    res.json({ invitations: result.rows });
+    // Convert snake_case to camelCase for frontend
+    const invitations = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      invitedByUsername: row.invited_by_username
+    }));
+
+    res.json({ invitations });
   } catch (error) {
     console.error('Get pending invitations error:', error);
     res.status(500).json({ error: 'Failed to fetch invitations' });
