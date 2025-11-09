@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: journey-planner-db
+    environment:
+      POSTGRES_DB: journey_planner
+      POSTGRES_USER: journey_user
+      POSTGRES_PASSWORD: journey_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U journey_user -d journey_planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Uncomment to run the backend in Docker
+  # backend:
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile
+  #   container_name: journey-planner-api
+  #   environment:
+  #     PORT: 5001
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: journey_planner
+  #     DB_USER: journey_user
+  #     DB_PASSWORD: journey_password
+  #     NODE_ENV: development
+  #   ports:
+  #     - "5001:5001"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./server:/app
+  #     - /app/node_modules
+
+volumes:
+  postgres_data:
