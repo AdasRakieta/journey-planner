@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2 } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
+import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService } from './services/api';
 import { socketService } from './services/socket';
+import { getPaymentSummary } from './utils/paymentCalculations';
 
 // Helper function to format date to YYYY-MM-DD
 const formatDateForInput = (date: Date | string | undefined): string => {
@@ -752,6 +754,81 @@ function App() {
     }
   };
 
+  // Payment status handlers
+  const handleToggleStopPayment = async (stopId: number, currentStatus: boolean) => {
+    if (!selectedJourney) return;
+    
+    try {
+      await stopService.updatePaymentStatus(stopId, !currentStatus);
+      
+      // Update local state
+      const updatedJourney = {
+        ...selectedJourney,
+        stops: selectedJourney.stops?.map(s => 
+          s.id === stopId ? { ...s, isPaid: !currentStatus } : s
+        ),
+      };
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      
+      success(`Payment status updated`);
+    } catch (err) {
+      console.error('Failed to update payment status:', err);
+      error('Failed to update payment status');
+    }
+  };
+
+  const handleToggleTransportPayment = async (transportId: number, currentStatus: boolean) => {
+    if (!selectedJourney) return;
+    
+    try {
+      await transportService.updatePaymentStatus(transportId, !currentStatus);
+      
+      // Update local state
+      const updatedJourney = {
+        ...selectedJourney,
+        transports: selectedJourney.transports?.map(t => 
+          t.id === transportId ? { ...t, isPaid: !currentStatus } : t
+        ),
+      };
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      
+      success(`Payment status updated`);
+    } catch (err) {
+      console.error('Failed to update payment status:', err);
+      error('Failed to update payment status');
+    }
+  };
+
+  const handleToggleAttractionPayment = async (stopId: number, attractionId: number, currentStatus: boolean) => {
+    if (!selectedJourney) return;
+    
+    try {
+      await attractionService.updatePaymentStatus(attractionId, !currentStatus);
+      
+      // Update local state
+      const updatedJourney = {
+        ...selectedJourney,
+        stops: selectedJourney.stops?.map(s => 
+          s.id === stopId ? {
+            ...s,
+            attractions: s.attractions?.map(a =>
+              a.id === attractionId ? { ...a, isPaid: !currentStatus } : a
+            )
+          } : s
+        ),
+      };
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      
+      success(`Payment status updated`);
+    } catch (err) {
+      console.error('Failed to update payment status:', err);
+      error('Failed to update payment status');
+    }
+  };
+
   const getTransportIcon = (type: string) => {
     switch (type) {
       case 'flight':
@@ -1012,9 +1089,17 @@ function App() {
                                   <p className="font-medium text-gh-text-primary">Accommodation:</p>
                                   <p className="text-gh-text-secondary">{stop.accommodationName}</p>
                                   {stop.accommodationPrice && (
-                                    <p className="text-gh-text-success">
-                                      {stop.accommodationPrice} {stop.accommodationCurrency}
-                                    </p>
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-gh-text-success">
+                                        {stop.accommodationPrice} {stop.accommodationCurrency}
+                                      </p>
+                                      <PaymentCheckbox
+                                        id={`stop-payment-${stop.id}`}
+                                        checked={stop.isPaid || false}
+                                        onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)}
+                                        disabled={loading}
+                                      />
+                                    </div>
                                   )}
                                   {stop.accommodationUrl && (
                                     <a
@@ -1033,32 +1118,46 @@ function App() {
                                   <p className="text-sm font-medium text-gh-text-primary">Attractions:</p>
                                   <ul className="text-sm space-y-1 mt-1">
                                     {stop.attractions.map((attr, i) => (
-                                      <li key={i} className="text-gh-text-secondary flex justify-between items-center group">
-                                        <span>
-                                          • {attr.name}
-                                          {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
-                                        </span>
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button
-                                            onClick={() => {
-                                              setEditingAttraction(attr);
-                                              setEditingAttractionStopId(stop.id!);
-                                              setShowEditAttractionForm(true);
-                                            }}
-                                            className="text-gh-text-link hover:text-blue-600 p-1"
-                                            disabled={loading}
-                                            title="Edit attraction"
-                                          >
-                                            <Edit2 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
-                                            className="text-gh-text-danger hover:text-red-600 p-1"
-                                            disabled={loading}
-                                            title="Delete attraction"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
+                                      <li key={i} className="text-gh-text-secondary flex justify-between items-start group gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <span className="flex-1">
+                                              • {attr.name}
+                                              {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
+                                            </span>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                              <button
+                                                onClick={() => {
+                                                  setEditingAttraction(attr);
+                                                  setEditingAttractionStopId(stop.id!);
+                                                  setShowEditAttractionForm(true);
+                                                }}
+                                                className="text-gh-text-link hover:text-blue-600 p-1"
+                                                disabled={loading}
+                                                title="Edit attraction"
+                                              >
+                                                <Edit2 className="w-3 h-3" />
+                                              </button>
+                                              <button
+                                                onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
+                                                className="text-gh-text-danger hover:text-red-600 p-1"
+                                                disabled={loading}
+                                                title="Delete attraction"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          {attr.estimatedCost && (
+                                            <div className="mt-1 ml-4">
+                                              <PaymentCheckbox
+                                                id={`attraction-payment-${attr.id}`}
+                                                checked={attr.isPaid || false}
+                                                onChange={() => handleToggleAttractionPayment(stop.id!, attr.id!, attr.isPaid || false)}
+                                                disabled={loading}
+                                              />
+                                            </div>
+                                          )}
                                         </div>
                                       </li>
                                     ))}
@@ -1117,9 +1216,17 @@ function App() {
                                 {new Date(transport.departureDate).toLocaleString()} -{' '}
                                 {new Date(transport.arrivalDate).toLocaleString()}
                               </p>
-                              <p className="text-sm font-medium text-gh-text-success mt-1">
-                                {transport.price} {transport.currency}
-                              </p>
+                              <div className="text-sm mt-1 flex items-center justify-between">
+                                <p className="font-medium text-gh-text-success">
+                                  {transport.price} {transport.currency}
+                                </p>
+                                <PaymentCheckbox
+                                  id={`transport-payment-${transport.id}`}
+                                  checked={transport.isPaid || false}
+                                  onChange={() => handleToggleTransportPayment(transport.id!, transport.isPaid || false)}
+                                  disabled={loading}
+                                />
+                              </div>
                               {transport.bookingUrl && (
                                 <a
                                   href={transport.bookingUrl}
