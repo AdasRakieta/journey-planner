@@ -56,34 +56,34 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-lg mb-4">
             <MapPin size={40} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-          <p className="text-gray-600">Welcome to Journey Planner!</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+          <p className="text-gray-400">Welcome to Journey Planner!</p>
         </div>
 
         {/* Register Card */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl p-8 border border-gray-200">
+        <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d]">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-              <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-xl flex items-start gap-3">
+              <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
 
           {!token ? (
             <div className="text-center">
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-400 mb-4">
                 You need an invitation to create an account.
               </p>
               <button
                 onClick={() => navigate('/login')}
-                className="text-blue-600 hover:text-blue-700 font-medium"
+                className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
               >
                 Go to Login
               </button>
@@ -91,17 +91,17 @@ const RegisterPage: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
                   Username
                 </label>
                 <div className="relative">
-                  <User size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <User size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="username"
                     type="text"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Choose a username"
                     required
                     minLength={3}
@@ -111,39 +111,39 @@ const RegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="password"
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Create a password"
                     required
                     minLength={8}
                   />
                 </div>
-                <p className="mt-2 text-xs text-gray-600">
+                <p className="mt-2 text-xs text-gray-400">
                   Must be at least 8 characters with uppercase, lowercase, and numbers
                 </p>
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="confirmPassword"
                     type="password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Confirm your password"
                     required
                   />
@@ -153,7 +153,7 @@ const RegisterPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -169,7 +169,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-gray-600 text-sm mt-6">
+        <p className="text-center text-gray-500 text-sm mt-6">
           © {new Date().getFullYear()} Journey Planner. All rights reserved.
         </p>
       </div>

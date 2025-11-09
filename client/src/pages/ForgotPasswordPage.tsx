@@ -99,17 +99,17 @@ const ForgotPasswordPage: React.FC = () => {
           {step === 'email' ? (
             <form onSubmit={handleRequestCode} className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Mail size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Enter your email"
                     required
                   />
@@ -119,7 +119,7 @@ const ForgotPasswordPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -134,7 +134,7 @@ const ForgotPasswordPage: React.FC = () => {
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="code" className="block text-sm font-medium text-gray-300 mb-2">
                   Verification Code
                 </label>
                 <input
@@ -142,28 +142,28 @@ const ForgotPasswordPage: React.FC = () => {
                   type="text"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all text-center text-2xl font-mono tracking-widest"
+                  className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center text-2xl font-mono tracking-widest"
                   placeholder="000000"
                   maxLength={6}
                   required
                 />
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-400">
                   Check your email for the 6-digit verification code
                 </p>
               </div>
 
               <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-2">
                   New Password
                 </label>
                 <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="newPassword"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Enter new password"
                     required
                   />
@@ -171,17 +171,17 @@ const ForgotPasswordPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     id="confirmPassword"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Confirm new password"
                     required
                   />
@@ -191,7 +191,7 @@ const ForgotPasswordPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -212,7 +212,7 @@ const ForgotPasswordPage: React.FC = () => {
                   setConfirmPassword('');
                   setError('');
                 }}
-                className="w-full text-blue-600 hover:text-blue-700 font-medium py-2"
+                className="w-full text-blue-400 hover:text-blue-300 font-medium py-2 transition-colors"
               >
                 Resend Code
               </button>
