@@ -3,8 +3,111 @@
 
 @layer base {
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', 'Helvetica', 'Arial', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #0d1117;
+    color: #e6edf3;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #30363d #0d1117;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: #0d1117;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #30363d;
+    border-radius: 4px;
+    border: 2px solid #0d1117;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #484f58;
   }
 }
+
+@layer components {
+  /* GitHub Button Styles */
+  .gh-btn-primary {
+    @apply px-4 py-2 bg-gh-button-primary-bg hover:bg-gh-button-primary-hover text-white font-medium rounded-gh border border-gh-button-primary-border transition-colors duration-150 flex items-center gap-2;
+  }
+
+  .gh-btn-secondary {
+    @apply px-4 py-2 bg-gh-button-secondary-bg hover:bg-gh-button-secondary-hover text-gh-text-primary font-medium rounded-gh border border-gh-border-default transition-colors duration-150 flex items-center gap-2;
+  }
+
+  .gh-btn-danger {
+    @apply px-4 py-2 bg-gh-accent-danger hover:bg-red-700 text-white font-medium rounded-gh border border-gh-accent-danger transition-colors duration-150 flex items-center gap-2;
+  }
+
+  /* GitHub Card Styles */
+  .gh-card {
+    @apply bg-gh-bg-secondary rounded-gh border border-gh-border-default p-6 shadow-sm;
+  }
+
+  .gh-card-hover {
+    @apply gh-card hover:bg-gh-bg-tertiary transition-colors duration-150 cursor-pointer;
+  }
+
+  /* GitHub Input Styles */
+  .gh-input {
+    @apply w-full px-3 py-2 bg-gh-bg-primary text-gh-text-primary rounded-gh border border-gh-border-default focus:border-gh-accent-primary focus:outline-none focus:ring-2 focus:ring-gh-accent-primary focus:ring-opacity-30 transition-colors duration-150;
+  }
+
+  .gh-textarea {
+    @apply gh-input resize-none;
+  }
+
+  .gh-select {
+    @apply gh-input cursor-pointer;
+  }
+
+  /* GitHub Modal Styles */
+  .gh-modal-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4;
+  }
+
+  .gh-modal {
+    @apply bg-gh-bg-overlay rounded-gh-lg border border-gh-border-default shadow-gh-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto;
+  }
+}
+
+/* Leaflet Dark Mode Overrides */
+.leaflet-container {
+  background: #161b22 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #21262d !important;
+  color: #e6edf3 !important;
+  border: 1px solid #30363d !important;
+}
+
+.leaflet-popup-tip {
+  background: #21262d !important;
+  border: 1px solid #30363d !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: #21262d !important;
+  color: #e6edf3 !important;
+  border: 1px solid #30363d !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #30363d !important;
+}
+
+.leaflet-bar {
+  border: 1px solid #30363d !important;
+}
+
