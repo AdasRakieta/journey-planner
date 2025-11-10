@@ -338,6 +338,33 @@ kill -9 <PID>
 
 For issues and questions, please open an issue on GitHub.
 
+## 📚 Documentation
+
+### Quick Start Guides
+- **[QUICK_START.md](QUICK_START.md)** - ✅ 5-step checklist for GitHub Actions setup
+- **[NGINX_QUICK_COPY.md](NGINX_QUICK_COPY.md)** - 📋 Copy-paste Nginx configuration
+
+### Deployment & Configuration
+- **[NGINX_INTEGRATION.md](NGINX_INTEGRATION.md)** - 🔗 Complete Nginx setup for SmartHome + Journey Planner
+- **[GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)** - 🚀 Automated Docker builds with GitHub Actions
+- **[NGINX_SETUP.md](NGINX_SETUP.md)** - 📝 Detailed Nginx reverse proxy configuration
+
+### Debugging & Troubleshooting
+- **[DEBUG_404.md](DEBUG_404.md)** - 🔍 Comprehensive guide for fixing 404 errors
+- **[QUICKSTART.md](QUICKSTART.md)** - 🏃 Fast local development setup
+- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - 📖 Project overview and architecture
+
+### Contributing
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - 🤝 How to contribute to the project
+- **[USER_GUIDE.md](USER_GUIDE.md)** - 📱 End-user documentation
+
+### Helper Scripts
+- `validate-env.sh` - Validate environment variables
+- `find-postgres-ip.sh` - Find existing PostgreSQL container
+- `build-on-pi.sh` - Build ARM64 images on Raspberry Pi
+- `deploy-on-pi.sh` - Automated deployment script
+- `switch-env-mode.sh` - Switch between direct/Nginx modes
+
 ---
 
 Made with ❤️ for travel enthusiasts
