@@ -43,7 +43,6 @@ CORS_ORIGIN=http://IP_TWOJEGO_PI:5173
 
 BACKEND_PORT=5001
 FRONTEND_PORT=5173
-IMAGE_TAG=arm64
 NODE_ENV=production
 ```
 
@@ -53,6 +52,7 @@ NODE_ENV=production
 - Wygeneruj `JWT_SECRET`: `openssl rand -base64 32`
 - Zamień `IP_TWOJEGO_PI` na IP Raspberry Pi (np. `192.168.1.100`)
 - `SMTP_PASSWORD` - to NIE jest zwykłe hasło Gmail, ale App Password!
+- **NIE TRZEBA** ustawiać `IMAGE_TAG` - Portainer sam zbuduje obrazy z kodu!
 
 ### Krok 3: Deploy w Portainer
 
@@ -68,6 +68,14 @@ NODE_ENV=production
 4. **Environment variables**: Wklej zmienne z Kroku 2
 
 5. **Deploy the stack** ✅
+
+**📦 Portainer automatycznie:**
+- Sklonuje repo z GitHub
+- Zbuduje backend (Node.js) lokalnie na Pi
+- Zbuduje frontend (React + Vite) lokalnie na Pi
+- Wystartuje oba kontenery
+
+⏱️ **Pierwszy build może zająć 5-10 minut** (npm install na Pi jest wolny)
 
 ## 📋 Alternatywna metoda - Web Editor
 
@@ -103,16 +111,46 @@ Otwórz w przeglądarce:
 
 ### ❌ Backend nie startuje - "Cannot connect to database"
 
-**Problem**: Zły IP PostgreSQL
+**Problem**: Zły IP PostgreSQL lub baza nie działa
 
 **Rozwiązanie**:
 ```bash
 # SSH do Pi
 docker ps | grep postgres
+
+# Jeśli kontener istnieje, sprawdź IP:
 docker inspect <postgres-container> | grep IPAddress
+
+# Jeśli kontener nie działa:
+docker start <postgres-container>
 ```
 
-Zaktualizuj `DB_HOST` w Portainer → Stack → Environment variables → Update
+Zaktualizuj `DB_HOST` w Portainer → Stack → Environment variables → Update the stack
+
+---
+
+### ❌ "Build failed" lub "npm install" error
+
+**Problem**: Build timeout lub brak pamięci na Pi
+
+**Rozwiązanie 1** - Zwiększ timeout:
+- W Portainer nie możesz zmienić timeoutu
+- Musisz zbudować ręcznie przez SSH:
+
+```bash
+cd /tmp
+git clone https://github.com/AdasRakieta/journey-planner.git
+cd journey-planner
+docker-compose build --no-cache
+```
+
+Potem w Portainer redeploy stack (użyje lokalnych obrazów)
+
+**Rozwiązanie 2** - Buduj na mocniejszej maszynie:
+- Zbuduj na PC z Windows/Linux
+- Wyeksportuj: `docker save journey-planner-backend > backend.tar`
+- Skopiuj do Pi: `scp backend.tar pi@raspberry:/tmp/`
+- Na Pi: `docker load < /tmp/backend.tar`
 
 ---
 
@@ -143,43 +181,65 @@ Dodaj do Environment variables w Portainer
 
 ### ❌ Port 5432 already in use
 
-**Problem**: Próbujesz utworzyć nowy kontener PostgreSQL
+**Problem**: `docker-compose.yml` NIE tworzy własnej bazy - to normalne!
 
 **Rozwiązanie**: 
-- `docker-compose.yml` NIE tworzy własnego Postgres
-- Upewnij się że `DB_HOST` wskazuje na istniejący kontener (jego IP)
-- Nie dodawaj serwisu `postgres` w compose file
+- Używamy istniejącej bazy PostgreSQL
+- Upewnij się że `DB_HOST` w env variables wskazuje na IP istniejącego kontenera
+- Error jest OK - po prostu ignoruj lub usuń stary stack i stwórz nowy
 
 ---
 
-### ❌ Cannot pull image - "manifest unknown"
+### ❌ "Container is unhealthy" - Backend
 
-**Problem**: Obrazy ARM64 nie są w registry (trzeba zbudować lokalnie)
+**Problem**: Backend nie odpowiada na health check
 
-**Rozwiązanie**:
-```bash
-# SSH do Pi
-cd ~
-git clone https://github.com/AdasRakieta/journey-planner.git
-cd journey-planner
-chmod +x build-on-pi.sh
-./build-on-pi.sh
-```
+**Możliwe przyczyny:**
 
-Potem w Portainer zmień `IMAGE_TAG=arm64` i redeploy.
+1. **Backend się buduje (pierwsze uruchomienie)**
+   - Pierwszy build trwa **5-10 minut** na Raspberry Pi
+   - Sprawdź progress: Portainer → Containers → journey-planner-api → Logs
+   - Poczekaj aż zobaczysz: `Server running on port 5001`
+
+2. **Źle ustawione zmienne środowiskowe**
+   ```bash
+   # Sprawdź logi backend:
+   docker logs journey-planner-api
+   
+   # Szukaj errors:
+   # "DB_HOST is required"
+   # "Cannot connect to database"  
+   # "JWT_SECRET is required"
+   ```
+   Napraw w: Portainer → Stack → Environment variables → Update
+
+3. **Baza danych nie odpowiada**
+   ```bash
+   # Test połączenia:
+   docker exec journey-planner-api wget -q -O- http://localhost:5001/api/health
+   ```
+
+**Dobra wiadomość:** Frontend **nie czeka** na backend health - oba startują niezależnie!
+
+---
 
 ## 🔄 Update aplikacji
 
-```bash
-# SSH do Pi
-cd ~/journey-planner
-git pull origin main
-./build-on-pi.sh
-```
-
 W Portainer:
 1. Stacks → journey-planner
-2. **Redeploy** ✅
+2. **Pull and redeploy** ✅
+
+Portainer automatycznie:
+- Pobierze najnowszy kod z GitHub
+- Przebuduje obrazy (jeśli Dockerfile się zmienił)
+- Zrestartuje kontenery
+
+**Lub przez SSH:**
+```bash
+ssh pi@raspberry
+docker-compose pull   # Pobierz nowy kod
+docker-compose up -d --build  # Przebuduj i restart
+```
 
 ## 📚 Więcej informacji
 

@@ -23,11 +23,14 @@ version: '3.8'
 services:
   # Backend API (Node.js + Express + TypeScript)
   backend:
-    image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-arm64}
+    # Portainer will BUILD this locally if image doesn't exist
+    image: journey-planner-backend:${IMAGE_TAG:-local}
     container_name: journey-planner-api
     build:
       context: ./server
       dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
     environment:
       # Server Configuration
       - PORT=${BACKEND_PORT:-5001}
@@ -83,7 +86,8 @@ services:
 
   # Frontend (React + Vite + Nginx)
   frontend:
-    image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-arm64}
+    # Portainer will BUILD this locally if image doesn't exist
+    image: journey-planner-frontend:${IMAGE_TAG:-local}
     container_name: journey-planner-web
     build:
       context: ./client
@@ -106,9 +110,9 @@ services:
     networks:
       - journey-planner-net
     
+    # Don't wait for backend health - start anyway and let it retry
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
 
 networks:
   journey-planner-net:
