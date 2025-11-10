@@ -6,6 +6,18 @@ A modern web application for planning trips with interactive map integration, ac
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 
+---
+
+## 🚀 Quick Start
+
+**New to this project?** ➡️ **[START HERE - START_HERE.md](START_HERE.md)**
+
+**Need Nginx config?** ➡️ **[NGINX_QUICK_COPY.md](NGINX_QUICK_COPY.md)** (5 minutes)
+
+**Have 404 error?** ➡️ **[DEBUG_404.md](DEBUG_404.md)** (8 common causes + fixes)
+
+---
+
 ## ✨ Features
 
 - 🗺️ **Interactive Map**: Click on the map to add stops to your journey using OpenStreetMap
