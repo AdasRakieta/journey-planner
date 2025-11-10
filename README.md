@@ -358,6 +358,7 @@ For issues and questions, please open an issue on GitHub.
 - **[NGINX_QUICK_COPY.md](NGINX_QUICK_COPY.md)** - 📋 Copy-paste Nginx configuration
 
 ### Deployment & Configuration
+- **[NGINX_STANDALONE_SETUP.md](NGINX_STANDALONE_SETUP.md)** - 🏗️ Nginx jako osobny stack (REKOMENDOWANE dla 2+ projektów)
 - **[PORTAINER_LOCAL_BUILD.md](PORTAINER_LOCAL_BUILD.md)** - 🔧 Build lokalny w Portainerze (FIX dla localhost!)
 - **[FRONTEND_BUILD_CRITICAL.md](FRONTEND_BUILD_CRITICAL.md)** - 🚨 VITE_API_URL i compile-time config
 - **[URL_CONFIGURATION_GUIDE.md](URL_CONFIGURATION_GUIDE.md)** - 🌐 Kiedy używać `/journey/` w URL (Nginx vs Direct)
