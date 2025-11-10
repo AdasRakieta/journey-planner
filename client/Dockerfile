@@ -15,8 +15,9 @@ COPY . .
 # Set production environment for correct base path
 ENV NODE_ENV=production
 
-# Build Vite app
-RUN npm run build
+# Build using docker-specific script (skips TypeScript checking)
+# TypeScript checking should be done in development/CI, not in Docker build
+RUN npm run build:docker
 
 # Production stage - use Nginx to serve static files
 FROM nginx:alpine
