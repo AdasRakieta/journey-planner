@@ -22,12 +22,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Krok 2: Setup Docker Buildx (removed QEMU - build AMD64 only)
-      # ARM64 build will be done natively on Raspberry Pi to avoid QEMU issues
+      # Krok 2: Setup QEMU for ARM64 emulation
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      # Krok 3: Setup Docker Buildx for multi-platform builds
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Krok 3: Automatyczne logowanie do GHCR
+      # Krok 4: Automatyczne logowanie do GHCR
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -35,7 +40,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}  # Automatyczny token
 
-      # Krok 4: Metadata dla backend image
+      # Krok 5: Metadata dla backend image
       - name: Extract metadata (backend)
         id: meta_backend
         uses: docker/metadata-action@v5
@@ -50,7 +55,7 @@ jobs:
             org.opencontainers.image.description=Node.js + Express + TypeScript API for Journey Planner
             org.opencontainers.image.vendor=AdasRakieta
 
-      # Krok 5: Metadata dla frontend image
+      # Krok 6: Metadata dla frontend image
       - name: Extract metadata (frontend)
         id: meta_frontend
         uses: docker/metadata-action@v5
@@ -65,14 +70,14 @@ jobs:
             org.opencontainers.image.description=React + Vite + TypeScript frontend for Journey Planner
             org.opencontainers.image.vendor=AdasRakieta
 
-      # Krok 6: Build i push backend image
+      # Krok 7: Build i push backend image (AMD64 + ARM64)
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ./server
           file: ./server/Dockerfile
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta_backend.outputs.tags }}
           labels: ${{ steps.meta_backend.outputs.labels }}
           cache-from: type=gha
@@ -80,14 +85,14 @@ jobs:
           build-args: |
             NODE_ENV=production
 
-      # Krok 7: Build i push frontend image
+      # Krok 8: Build i push frontend image (AMD64 + ARM64)
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./client
           file: ./client/Dockerfile
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta_frontend.outputs.tags }}
           labels: ${{ steps.meta_frontend.outputs.labels }}
           cache-from: type=gha
@@ -95,7 +100,7 @@ jobs:
           build-args: |
             VITE_API_URL=http://localhost:5001/api
 
-      # Krok 8: Podsumowanie
+      # Krok 9: Podsumowanie
       - name: Image summary
         run: |
           echo "### 🎉 Docker images built successfully!" >> $GITHUB_STEP_SUMMARY

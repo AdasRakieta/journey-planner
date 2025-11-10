@@ -23,14 +23,17 @@ version: '3.8'
 services:
   # Backend API (Node.js + Express + TypeScript)
   backend:
-    # Portainer will BUILD this locally if image doesn't exist
-    image: journey-planner-backend:${IMAGE_TAG:-local}
+    # Pull from GitHub Container Registry (ghcr.io)
+    # Images are built automatically by GitHub Actions on every push to main
+    # Both AMD64 and ARM64 architectures supported
+    image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
     container_name: journey-planner-api
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-      args:
-        - NODE_ENV=production
+    # Uncomment 'build' section below for local development builds
+    # build:
+    #   context: ./server
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - NODE_ENV=production
     environment:
       # Server Configuration
       - PORT=${BACKEND_PORT:-5001}
@@ -86,14 +89,17 @@ services:
 
   # Frontend (React + Vite + Nginx)
   frontend:
-    # Portainer will BUILD this locally if image doesn't exist
-    image: journey-planner-frontend:${IMAGE_TAG:-local}
+    # Pull from GitHub Container Registry (ghcr.io)
+    # Images are built automatically by GitHub Actions on every push to main
+    # Both AMD64 and ARM64 architectures supported
+    image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
     container_name: journey-planner-web
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+    # Uncomment 'build' section below for local development builds
+    # build:
+    #   context: ./client
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
     
     ports:
       - "${FRONTEND_PORT:-5173}:80"
