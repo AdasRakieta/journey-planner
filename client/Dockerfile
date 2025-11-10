@@ -15,6 +15,10 @@ COPY . .
 # Set production environment for correct base path
 ENV NODE_ENV=production
 
+# Accept VITE_API_URL as build argument
+ARG VITE_API_URL=http://localhost:5001/api
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build using docker-specific script (skips TypeScript checking)
 # TypeScript checking should be done in development/CI, not in Docker build
 RUN npm run build:docker

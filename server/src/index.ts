@@ -102,8 +102,10 @@ httpServer.listen(PORT, () => {
   // Wyświetl rzeczywiste adresy z ENV zamiast localhost
   const backendUrl = process.env.VITE_API_URL?.replace('/api', '') || 
                      process.env.FRONTEND_URL?.replace(/:\d+$/, `:${PORT}`) ||
-                     `http://localhost:${PORT}`;
-  const apiBase = process.env.VITE_API_URL || `http://localhost:${PORT}/api`;
+                     (process.env.DB_HOST ? `http://${process.env.DB_HOST}:${PORT}` : `http://localhost:${PORT}`);
+  
+  const apiBase = process.env.VITE_API_URL || 
+                  (process.env.DB_HOST ? `http://${process.env.DB_HOST}:${PORT}/api` : `http://localhost:${PORT}/api`);
   
   console.log(`\n🚀 Server is running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);

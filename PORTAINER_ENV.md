@@ -20,7 +20,8 @@ Dzięki temu możesz:
 3. Dodaj zmienne bezpośrednio w UI:
 
 ```env
-FRONTEND_URL=https://malina.tail384b18.ts.net
+# WAŻNE: Z Nginx dodaj /journey do FRONTEND_URL i VITE_API_URL!
+FRONTEND_URL=https://malina.tail384b18.ts.net/journey
 VITE_API_URL=https://malina.tail384b18.ts.net/journey/api
 CORS_ORIGIN=https://malina.tail384b18.ts.net
 NODE_ENV=production
@@ -77,23 +78,26 @@ docker logs journey-planner-api
 
 | Zmienna | Opis | Przykład |
 |---------|------|----------|
-| `FRONTEND_URL` | URL frontendu | `https://malina.tail384b18.ts.net` |
-| `VITE_API_URL` | URL API dla frontendu | `https://malina.tail384b18.ts.net/journey/api` |
-| `CORS_ORIGIN` | Dozwolone źródło CORS | `https://malina.tail384b18.ts.net` |
+| `FRONTEND_URL` | URL frontendu (Z `/journey` dla Nginx!) | `https://malina.tail384b18.ts.net/journey` |
+| `VITE_API_URL` | URL API dla frontendu (Z `/journey/api` dla Nginx!) | `https://malina.tail384b18.ts.net/journey/api` |
+| `CORS_ORIGIN` | Dozwolone źródło CORS (BEZ `/journey`!) | `https://malina.tail384b18.ts.net` |
 | `NODE_ENV` | Środowisko | `production` |
 | `IMAGE_TAG` | Tag obrazu Docker | `latest` |
 
 ## ⚠️ Ważne
 
-### Dla Nginx deployment:
+### Dla Nginx deployment (Z reverse proxy):
 ```env
-FRONTEND_URL=https://malina.tail384b18.ts.net
+# FRONTEND_URL i VITE_API_URL MUSZĄ mieć /journey!
+FRONTEND_URL=https://malina.tail384b18.ts.net/journey
 VITE_API_URL=https://malina.tail384b18.ts.net/journey/api
+# CORS_ORIGIN BEZ /journey (tylko domena!)
 CORS_ORIGIN=https://malina.tail384b18.ts.net
 ```
 
-### Dla direct access (bez Nginx):
+### Dla direct access (BEZ Nginx, przez porty):
 ```env
+# BEZ /journey, z portami
 FRONTEND_URL=http://100.103.184.90:5173
 VITE_API_URL=http://100.103.184.90:5001/api
 CORS_ORIGIN=http://100.103.184.90:5173
@@ -116,9 +120,14 @@ CORS_ORIGIN=http://100.103.184.90:5173
 
 **Rozwiązanie:**
 ```env
+# ✅ POPRAWNIE - tylko domena, BEZ /journey
 CORS_ORIGIN=https://malina.tail384b18.ts.net
-# BEZ /journey/ na końcu!
+
+# ❌ BŁĘDNIE - z /journey nie zadziała!
+CORS_ORIGIN=https://malina.tail384b18.ts.net/journey
 ```
+
+**Wyjaśnienie:** Przeglądarka wysyła Origin header jako `https://malina.tail384b18.ts.net` (bez ścieżki), więc CORS_ORIGIN musi być identyczny!
 
 ### Frontend nadal używa localhost
 

@@ -63,6 +63,7 @@ services:
       # Frontend URL (for CORS and email links)
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
       
       # File Upload Configuration
       - UPLOAD_DIR=/app/uploads/attachments
@@ -95,11 +96,15 @@ services:
     image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
     container_name: journey-planner-web
     # Uncomment 'build' section below for local development builds
-    # build:
-    #   context: ./client
-    #   dockerfile: Dockerfile
-    #   args:
-    #     - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+    
+    environment:
+      # Frontend needs VITE_API_URL for build time
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
     
     ports:
       - "${FRONTEND_PORT:-5173}:80"

@@ -27,7 +27,7 @@
 ### 2. Nowe pliki
 
 #### `stack.env.example`
-Template dla environment variables w Portainerze/Docker.
+Template dla environment variables w Portainerze/Docker z poprawnymi przykładami dla Nginx i Direct Access.
 
 #### `PORTAINER_ENV.md`
 Kompletna dokumentacja:
@@ -35,7 +35,16 @@ Kompletna dokumentacja:
 - Setup w Portainer UI (Environment Variables)
 - Alternatywnie: użycie pliku `stack.env`
 - Weryfikacja i troubleshooting
-- Przykłady dla różnych środowisk (Nginx, direct access)
+- **Poprawione przykłady** z `/journey` dla Nginx
+
+#### `URL_CONFIGURATION_GUIDE.md` ⭐ NOWY
+**Kompletny przewodnik po konfiguracji URL:**
+- Kiedy używać `/journey/` w URL?
+- Porównanie: Nginx vs Direct Access
+- Szczegółowe wyjaśnienie CORS_ORIGIN (BEZ `/journey`!)
+- Wizualizacje jak działają różne tryby
+- Troubleshooting CORS i URL problems
+- Quick checklists dla każdego trybu
 
 ### 3. Aktualizacje dokumentacji
 
