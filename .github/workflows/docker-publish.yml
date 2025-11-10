@@ -22,10 +22,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Krok 2: Setup multi-arch (ARM64 dla Raspberry Pi + AMD64)
-      - name: Set up QEMU (for multi-arch builds)
-        uses: docker/setup-qemu-action@v3
-
+      # Krok 2: Setup Docker Buildx (removed QEMU - build AMD64 only)
+      # ARM64 build will be done natively on Raspberry Pi to avoid QEMU issues
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -74,7 +72,7 @@ jobs:
           context: ./server
           file: ./server/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ steps.meta_backend.outputs.tags }}
           labels: ${{ steps.meta_backend.outputs.labels }}
           cache-from: type=gha
@@ -89,7 +87,7 @@ jobs:
           context: ./client
           file: ./client/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ steps.meta_frontend.outputs.tags }}
           labels: ${{ steps.meta_frontend.outputs.labels }}
           cache-from: type=gha
