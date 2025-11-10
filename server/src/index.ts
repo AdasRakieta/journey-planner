@@ -14,11 +14,39 @@ import userRoutes from './routes/user';
 
 dotenv.config();
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'DB_HOST',
+  'DB_PORT',
+  'DB_NAME',
+  'DB_USER',
+  'DB_PASSWORD',
+  'JWT_SECRET'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error(`   - ${varName}`);
+  });
+  console.error('\n💡 Make sure these variables are set in your .env file or Docker environment');
+  process.exit(1);
+}
+
+console.log('✅ All required environment variables are set');
+console.log(`📊 Database configuration:`);
+console.log(`   Host: ${process.env.DB_HOST}`);
+console.log(`   Port: ${process.env.DB_PORT}`);
+console.log(`   Database: ${process.env.DB_NAME}`);
+console.log(`   User: ${process.env.DB_USER}`);
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });

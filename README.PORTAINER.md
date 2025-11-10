@@ -20,39 +20,51 @@ Zapisz IP, np: `172.17.0.2`
 
 ### Krok 2: Przygotuj zmienne środowiskowe
 
-W Portainer przy dodawaniu stacka, w sekcji **Environment variables** dodaj:
+W Portainer przy dodawaniu stacka, w sekcji **Environment variables** dodaj **DOKŁADNIE**:
 
 ```env
-DB_HOST=172.17.0.2
+DB_HOST=100.103.184.90
 DB_PORT=5432
 DB_NAME=journey_planner
-DB_USER=journey_user
+DB_USER=admin
 DB_PASSWORD=twoje_haslo_do_bazy
 
 JWT_SECRET=wygeneruj_bezpieczny_klucz_32_znaki
 
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
+SMTP_SECURE=false
 SMTP_USERNAME=twoj-email@gmail.com
 SMTP_PASSWORD=haslo-aplikacji-gmail
 SMTP_FROM_EMAIL=twoj-email@gmail.com
+SMTP_FROM_NAME=Journey Planner
 
-FRONTEND_URL=http://IP_TWOJEGO_PI:5173
-VITE_API_URL=http://IP_TWOJEGO_PI:5001/api
-CORS_ORIGIN=http://IP_TWOJEGO_PI:5173
+FRONTEND_URL=http://100.103.184.90:5173
+VITE_API_URL=http://100.103.184.90:5001/api
+CORS_ORIGIN=http://100.103.184.90:5173
 
 BACKEND_PORT=5001
 FRONTEND_PORT=5173
 NODE_ENV=production
+IMAGE_TAG=local
 ```
 
-**⚠️ WAŻNE:**
-- Zamień `172.17.0.2` na rzeczywisty IP twojego Postgres
+**⚠️ WAŻNE - Nazwy zmiennych:**
+- `SMTP_HOST` (NIE `SMTP_SERVER`)
+- `SMTP_SECURE=false` (dla portu 587)
+- `SMTP_FROM_EMAIL` (NIE `EMAIL_FROM`)
+- `CORS_ORIGIN` (nowa zmienna, wymagana!)
+- `IMAGE_TAG=local` (Portainer buduje lokalnie)
+
+**⚠️ WAŻNE - Wartości:**
+- `DB_HOST` - IP PostgreSQL (NIE `localhost`!)
+  - Jeśli Postgres w kontenerze: użyj IP kontenera (np. `172.17.0.2`)
+  - Jeśli Postgres przez Tailscale: użyj Tailscale IP (np. `100.103.184.90`)
 - Zamień `twoje_haslo_do_bazy` na hasło do PostgreSQL
 - Wygeneruj `JWT_SECRET`: `openssl rand -base64 32`
-- Zamień `IP_TWOJEGO_PI` na IP Raspberry Pi (np. `192.168.1.100`)
-- `SMTP_PASSWORD` - to NIE jest zwykłe hasło Gmail, ale App Password!
-- **NIE TRZEBA** ustawiać `IMAGE_TAG` - Portainer sam zbuduje obrazy z kodu!
+- Zamień `100.103.184.90` na IP Raspberry Pi (lub zostaw Tailscale IP)
+- `SMTP_PASSWORD` - to App Password Gmail (16 znaków), nie zwykłe hasło!
+- **NIE DODAWAJ** `GITHUB_TOKEN` - nie jest potrzebny!
 
 ### Krok 3: Deploy w Portainer
 
