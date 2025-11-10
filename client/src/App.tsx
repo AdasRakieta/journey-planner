@@ -4,6 +4,8 @@ import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Tr
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
+import ConfirmDialog from './components/ConfirmDialog';
+import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService } from './services/api';
 import { socketService } from './services/socket';
@@ -29,6 +31,7 @@ const formatDateForDisplay = (date: Date | string | undefined): string => {
 function App() {
   const { user, logout } = useAuth();
   const { toasts, closeToast, success, error, warning, info } = useToast();
+  const confirm = useConfirm();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
   const [showNewJourneyForm, setShowNewJourneyForm] = useState(false);
@@ -390,7 +393,15 @@ function App() {
   };
 
   const handleDeleteJourney = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this journey?')) return;
+    const confirmed = await confirm.confirm({
+      title: 'Delete Journey',
+      message: 'Are you sure you want to delete this journey? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -626,7 +637,17 @@ function App() {
   };
 
   const handleDeleteStop = async (stopId: number) => {
-    if (!selectedJourney || !confirm('Are you sure you want to delete this stop?')) return;
+    if (!selectedJourney) return;
+
+    const confirmed = await confirm.confirm({
+      title: 'Delete Stop',
+      message: 'Are you sure you want to delete this stop? All attractions at this stop will also be deleted.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -647,7 +668,17 @@ function App() {
   };
 
   const handleDeleteAttraction = async (stopId: number, attractionId: number) => {
-    if (!selectedJourney || !confirm('Are you sure you want to delete this attraction?')) return;
+    if (!selectedJourney) return;
+
+    const confirmed = await confirm.confirm({
+      title: 'Delete Attraction',
+      message: 'Are you sure you want to delete this attraction?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -932,8 +963,15 @@ function App() {
               
               {/* Logout Button */}
               <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to logout?')) {
+                onClick={async () => {
+                  const confirmed = await confirm.confirm({
+                    title: 'Logout',
+                    message: 'Are you sure you want to logout?',
+                    confirmText: 'Logout',
+                    cancelText: 'Cancel',
+                    confirmVariant: 'danger',
+                  });
+                  if (confirmed) {
                     logout();
                   }
                 }}
@@ -998,9 +1036,17 @@ function App() {
               
               {/* Logout Button */}
               <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to logout?')) {
+                onClick={async () => {
+                  const confirmed = await confirm.confirm({
+                    title: 'Logout',
+                    message: 'Are you sure you want to logout?',
+                    confirmText: 'Logout',
+                    cancelText: 'Cancel',
+                    confirmVariant: 'danger',
+                  });
+                  if (confirmed) {
                     logout();
+                    setIsMobileMenuOpen(false);
                   }
                 }}
                 className="w-full gh-btn-danger justify-center"
@@ -2273,9 +2319,20 @@ function App() {
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onClose={closeToast} />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirm.isOpen}
+        title={confirm.options.title}
+        message={confirm.options.message}
+        confirmText={confirm.options.confirmText}
+        cancelText={confirm.options.cancelText}
+        confirmVariant={confirm.options.confirmVariant}
+        onConfirm={confirm.handleConfirm}
+        onCancel={confirm.handleCancel}
+      />
     </div>
   );
 }
 
 export default App;
-

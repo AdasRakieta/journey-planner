@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -12,16 +12,20 @@ import {
   UserPlus, 
   Save,
   AlertCircle,
-  CheckCircle,
   Loader2,
   X,
   ArrowLeft
 } from 'lucide-react';
 import { userAPI, adminAPI } from '../services/authApi';
 import type { User as UserType, Invitation } from '../types/auth';
+import { useToast, ToastContainer } from '../components/Toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 
 const SettingsPage: React.FC = () => {
   const { user, logout, updateUser, refreshUser } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
   
   // User Profile State
   const [username, setUsername] = useState(user?.username || '');
@@ -32,8 +36,6 @@ const SettingsPage: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [profileSuccess, setProfileSuccess] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
 
   // Admin Panel State
   const [users, setUsers] = useState<UserType[]>([]);
@@ -42,27 +44,22 @@ const SettingsPage: React.FC = () => {
   const [adminLoading, setAdminLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
-  const [adminSuccess, setAdminSuccess] = useState('');
 
-  // Refresh user data from database on mount
+  // Initialize username from user on mount only
   useEffect(() => {
-    refreshUser();
-  }, []);
-
-  // Update username when user changes
-  useEffect(() => {
-    if (user?.username) {
+    if (user?.username && username === '') {
       setUsername(user.username);
     }
-  }, [user]);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.username]); // Only when user.username becomes available
+  
+  // Refresh user data from database on mount (only once)
   useEffect(() => {
-    if (user?.role === 'admin') {
-      loadAdminData();
-    }
-  }, [user]);
+    refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - run only once on mount
 
-  const loadAdminData = async () => {
+  const loadAdminData = useCallback(async () => {
     setAdminLoading(true);
     try {
       const [usersResponse, invitationsResponse] = await Promise.all([
@@ -76,20 +73,26 @@ const SettingsPage: React.FC = () => {
     } finally {
       setAdminLoading(false);
     }
-  };
+  }, []); // No dependencies - function doesn't change
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadAdminData();
+    }
+  }, [user?.role, loadAdminData]); // Safe to include loadAdminData now
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError('');
-    setProfileSuccess('');
     setProfileLoading(true);
 
     try {
       const response = await userAPI.updateProfile(username);
       updateUser(response.data.user);
-      setProfileSuccess('Profile updated successfully!');
+      toast.success('Profile updated successfully!');
     } catch (error: any) {
       setProfileError(error.response?.data?.error || 'Failed to update profile');
+      toast.error(error.response?.data?.error || 'Failed to update profile');
     } finally {
       setProfileLoading(false);
     }
@@ -98,15 +101,18 @@ const SettingsPage: React.FC = () => {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
-    setPasswordSuccess('');
 
     if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match');
+      const errorMsg = 'New passwords do not match';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters long');
+      const errorMsg = 'Password must be at least 8 characters long';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
@@ -114,12 +120,15 @@ const SettingsPage: React.FC = () => {
 
     try {
       await userAPI.changePassword(currentPassword, newPassword);
-      setPasswordSuccess('Password changed successfully!');
+      toast.success('Password changed successfully!');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setPasswordError('');
     } catch (error: any) {
-      setPasswordError(error.response?.data?.error || 'Failed to change password');
+      const errorMsg = error.response?.data?.error || 'Failed to change password';
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setPasswordLoading(false);
     }
@@ -128,54 +137,85 @@ const SettingsPage: React.FC = () => {
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
-    setAdminSuccess('');
     setInviteLoading(true);
 
     try {
       await adminAPI.inviteUser(inviteEmail);
-      setAdminSuccess(`Invitation sent to ${inviteEmail}`);
+      toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
       await loadAdminData();
     } catch (error: any) {
-      setAdminError(error.response?.data?.error || 'Failed to send invitation');
+      const errorMsg = error.response?.data?.error || 'Failed to send invitation';
+      setAdminError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setInviteLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: number, username: string) => {
-    if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
+    const confirmed = await confirm.confirm({
+      title: 'Delete User',
+      message: `Are you sure you want to delete user "${username}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       await adminAPI.deleteUser(userId);
-      setAdminSuccess(`User "${username}" deleted successfully`);
+      toast.success(`User "${username}" deleted successfully`);
       await loadAdminData();
     } catch (error: any) {
-      setAdminError(error.response?.data?.error || 'Failed to delete user');
+      const errorMsg = error.response?.data?.error || 'Failed to delete user';
+      setAdminError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
   const handleChangeRole = async (userId: number, username: string, newRole: 'admin' | 'user') => {
-    if (!confirm(`Change ${username}'s role to ${newRole}?`)) return;
+    const confirmed = await confirm.confirm({
+      title: 'Change User Role',
+      message: `Change ${username}'s role to ${newRole}?`,
+      confirmText: 'Change Role',
+      cancelText: 'Cancel',
+      confirmVariant: 'primary',
+    });
+
+    if (!confirmed) return;
 
     try {
       await adminAPI.changeUserRole(userId, newRole);
-      setAdminSuccess(`User "${username}" role changed to ${newRole}`);
+      toast.success(`User "${username}" role changed to ${newRole}`);
       await loadAdminData();
     } catch (error: any) {
-      setAdminError(error.response?.data?.error || 'Failed to change user role');
+      const errorMsg = error.response?.data?.error || 'Failed to change user role';
+      setAdminError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
   const handleCancelInvitation = async (invitationId: number, email: string) => {
-    if (!confirm(`Cancel invitation for ${email}?`)) return;
+    const confirmed = await confirm.confirm({
+      title: 'Cancel Invitation',
+      message: `Cancel invitation for ${email}?`,
+      confirmText: 'Cancel Invitation',
+      cancelText: 'Keep Invitation',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       await adminAPI.cancelInvitation(invitationId);
-      setAdminSuccess(`Invitation for ${email} cancelled`);
+      toast.success(`Invitation for ${email} cancelled`);
       await loadAdminData();
     } catch (error: any) {
-      setAdminError(error.response?.data?.error || 'Failed to cancel invitation');
+      const errorMsg = error.response?.data?.error || 'Failed to cancel invitation';
+      setAdminError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
@@ -252,13 +292,6 @@ const SettingsPage: React.FC = () => {
                   <p className="text-sm text-red-300">{profileError}</p>
                 </div>
               )}
-              
-              {profileSuccess && (
-                <div className="mb-4 p-3 bg-green-900/20 border border-green-800 rounded-lg flex items-start gap-2">
-                  <CheckCircle size={20} className="text-green-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-green-300">{profileSuccess}</p>
-                </div>
-              )}
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
@@ -305,13 +338,6 @@ const SettingsPage: React.FC = () => {
                 <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-2">
                   <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-red-300">{passwordError}</p>
-                </div>
-              )}
-              
-              {passwordSuccess && (
-                <div className="mb-4 p-3 bg-green-900/20 border border-green-800 rounded-lg flex items-start gap-2">
-                  <CheckCircle size={20} className="text-green-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-green-300">{passwordSuccess}</p>
                 </div>
               )}
 
@@ -396,13 +422,6 @@ const SettingsPage: React.FC = () => {
                 <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-2">
                   <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-red-300">{adminError}</p>
-                </div>
-              )}
-              
-              {adminSuccess && (
-                <div className="p-4 bg-green-900/20 border border-green-800 rounded-lg flex items-start gap-2">
-                  <CheckCircle size={20} className="text-green-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-green-300">{adminSuccess}</p>
                 </div>
               )}
 
@@ -539,6 +558,21 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toast.toasts} onClose={toast.closeToast} />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirm.isOpen}
+        title={confirm.options.title}
+        message={confirm.options.message}
+        confirmText={confirm.options.confirmText}
+        cancelText={confirm.options.cancelText}
+        confirmVariant={confirm.options.confirmVariant}
+        onConfirm={confirm.handleConfirm}
+        onCancel={confirm.handleCancel}
+      />
     </div>
   );
 };

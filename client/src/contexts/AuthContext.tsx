@@ -66,7 +66,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function refreshUser() {
     try {
       const response = await authAPI.getCurrentUser();
-      setUser(response.data.user);
+      const newUser = response.data.user;
+      
+      // Only update if user data actually changed (avoid unnecessary rerenders)
+      setUser(prevUser => {
+        if (!prevUser || 
+            prevUser.id !== newUser.id || 
+            prevUser.username !== newUser.username || 
+            prevUser.email !== newUser.email ||
+            prevUser.role !== newUser.role) {
+          return newUser;
+        }
+        return prevUser; // Return same reference if nothing changed
+      });
     } catch (error) {
       console.error('Failed to refresh user:', error);
     }
