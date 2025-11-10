@@ -57,7 +57,10 @@ const PORT = process.env.PORT || 5001;
 app.set('io', io);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://twoja-domena',
+  credentials: true
+}));
 app.use(express.json());
 
 // Connect to PostgreSQL
