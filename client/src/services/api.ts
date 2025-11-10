@@ -60,7 +60,7 @@ export const stopService = {
   },
 
   async createStop(journeyId: number, stop: any) {
-    const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
+      const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stop),
@@ -70,7 +70,7 @@ export const stopService = {
   },
 
   async updateStop(stopId: number, stop: any) {
-    const response = await fetch(`${API_URL}/stops/${stopId}`, {
+      const response = await fetch(`${API_URL}/stops/${stopId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stop),
@@ -116,7 +116,7 @@ export const attractionService = {
   },
 
   async createAttraction(stopId: number, attraction: any) {
-    const response = await fetch(`${API_URL}/attractions/stop/${stopId}`, {
+      const response = await fetch(`${API_URL}/attractions/stop/${stopId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(attraction),
@@ -126,7 +126,7 @@ export const attractionService = {
   },
 
   async updateAttraction(attractionId: number, attraction: any) {
-    const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
+      const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(attraction),
@@ -162,7 +162,7 @@ export const transportService = {
   },
 
   async createTransport(journeyId: number, transport: any) {
-    const response = await fetch(`${API_URL}/transports/journey/${journeyId}`, {
+      const response = await fetch(`${API_URL}/transports/journey/${journeyId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(transport),
@@ -172,7 +172,7 @@ export const transportService = {
   },
 
   async updateTransport(transportId: number, transport: any) {
-    const response = await fetch(`${API_URL}/transports/${transportId}`, {
+      const response = await fetch(`${API_URL}/transports/${transportId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(transport),

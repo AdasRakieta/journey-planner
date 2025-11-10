@@ -130,12 +130,12 @@ function App() {
     socketService.on('stop:created', (stop: Stop) => {
       console.log('Real-time: Stop created', stop);
       setJourneys(prev => prev.map(j => {
-        if (j.id === stop.journeyId) {
+  if (j.id === stop.journeyId) {
           return { ...j, stops: [...(j.stops || []), stop] };
         }
         return j;
       }));
-      if (selectedJourney?.id === stop.journeyId) {
+  if (selectedJourney?.id === stop.journeyId) {
         setSelectedJourney(prev => prev ? { ...prev, stops: [...(prev.stops || []), stop] } : null);
       }
       // Notification only for real-time updates from other users
@@ -144,7 +144,7 @@ function App() {
     socketService.on('stop:updated', (stop: Stop) => {
       console.log('Real-time: Stop updated', stop);
       setJourneys(prev => prev.map(j => {
-        if (j.id === stop.journeyId) {
+  if (j.id === stop.journeyId) {
           return { 
             ...j, 
             stops: (j.stops || []).map(s => s.id === stop.id ? stop : s) 
@@ -152,7 +152,7 @@ function App() {
         }
         return j;
       }));
-      if (selectedJourney?.id === stop.journeyId) {
+  if (selectedJourney?.id === stop.journeyId) {
         setSelectedJourney(prev => prev ? {
           ...prev,
           stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s)
@@ -247,8 +247,8 @@ function App() {
     // Listen for transport events
     socketService.on('transport:created', (transport: any) => {
       console.log('Real-time: Transport created', transport);
-      setJourneys(prev => prev.map(j => {
-        if (j.id === transport.journeyId) {
+        setJourneys(prev => prev.map(j => {
+          if (j.id === transport.journeyId) {
           return { ...j, transports: [...(j.transports || []), transport] };
         }
         return j;
@@ -264,8 +264,8 @@ function App() {
     
     socketService.on('transport:updated', (transport: any) => {
       console.log('Real-time: Transport updated', transport);
-      setJourneys(prev => prev.map(j => {
-        if (j.id === transport.journeyId) {
+        setJourneys(prev => prev.map(j => {
+          if (j.id === transport.journeyId) {
           return { 
             ...j, 
             transports: (j.transports || []).map(t => t.id === transport.id ? transport : t)
@@ -273,7 +273,7 @@ function App() {
         }
         return j;
       }));
-      if (selectedJourney?.id === transport.journeyId) {
+  if (selectedJourney?.id === transport.journeyId) {
         setSelectedJourney(prev => prev ? {
           ...prev,
           transports: (prev.transports || []).map(t => t.id === transport.id ? transport : t)
@@ -284,8 +284,8 @@ function App() {
     
     socketService.on('transport:deleted', ({ id, journeyId }: { id: number; journeyId: number }) => {
       console.log('Real-time: Transport deleted', id);
-      setJourneys(prev => prev.map(j => {
-        if (j.id === journeyId) {
+        setJourneys(prev => prev.map(j => {
+          if (j.id === journeyId) {
           return {
             ...j,
             transports: (j.transports || []).filter(t => t.id !== id)
@@ -585,7 +585,7 @@ function App() {
       const payload = {
         ...newAttraction,
         estimatedCost:
-          newAttraction.estimatedCost === '' || newAttraction.estimatedCost === undefined
+          newAttraction.estimatedCost === undefined || newAttraction.estimatedCost === null
             ? null
             : newAttraction.estimatedCost,
         duration:
@@ -2083,7 +2083,7 @@ function App() {
                             currency: data.currency || newTransport.currency,
                           });
                           success('Ticket data scraped successfully!');
-                        } catch (err) {
+                        } catch {
                           error('Failed to scrape ticket data');
                         } finally {
                           setLoading(false);

@@ -1,5 +1,6 @@
 export interface Stop {
   id?: number;
+  journeyId?: number;
   city: string;
   country: string;
   latitude: number;
@@ -31,6 +32,7 @@ export interface Transport {
 
 export interface Attraction {
   id?: number;
+  stopId?: number;
   name: string;
   description?: string;
   estimatedCost?: number;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../services/authApi';
-import { MapPin, User, Lock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { MapPin, User, Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
