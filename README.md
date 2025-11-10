@@ -227,6 +227,7 @@ Journey Planner can be deployed alongside existing applications (like SmartHome)
 
 1. **Docker + Portainer + GitHub Actions** (Recommended)
    - See [PORTAINER_DEPLOY.md](./PORTAINER_DEPLOY.md) - Full CI/CD pipeline with auto-builds
+   - See [PORTAINER_ENV.md](./PORTAINER_ENV.md) - Environment variables management in Portainer
    
 2. **Integration with Existing Nginx**
    - See [NGINX_CONFIG_FOR_SMARTHOME.md](./NGINX_CONFIG_FOR_SMARTHOME.md) - Add to existing SmartHome stack
@@ -357,6 +358,7 @@ For issues and questions, please open an issue on GitHub.
 - **[NGINX_QUICK_COPY.md](NGINX_QUICK_COPY.md)** - 📋 Copy-paste Nginx configuration
 
 ### Deployment & Configuration
+- **[PORTAINER_ENV.md](PORTAINER_ENV.md)** - 📦 Environment variables management in Portainer
 - **[NGINX_INTEGRATION.md](NGINX_INTEGRATION.md)** - 🔗 Complete Nginx setup for SmartHome + Journey Planner
 - **[GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)** - 🚀 Automated Docker builds with GitHub Actions
 - **[NGINX_SETUP.md](NGINX_SETUP.md)** - 📝 Detailed Nginx reverse proxy configuration
