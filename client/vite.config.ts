@@ -13,6 +13,7 @@ export default defineConfig({
       }
     }
   },
-  // Production: use path-based routing behind Nginx reverse proxy
-  base: process.env.NODE_ENV === 'production' ? '/journey/' : '/',
+  // No base path - Nginx will handle routing
+  // Assets will be at /assets/ and Nginx will proxy /journey/ -> container:80/
+  base: '/',
 })
