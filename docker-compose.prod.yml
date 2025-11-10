@@ -1,0 +1,89 @@
+version: '3.8'
+
+# Production deployment - uses existing PostgreSQL instance
+# No postgres service - connects to external DB via IP
+
+services:
+  # Backend API (Node.js + Express)
+  backend:
+    image: ghcr.io/adasrakieta/journey-planner/backend:arm64
+    container_name: journey-planner-api
+    environment:
+      # Server Configuration
+      - PORT=${BACKEND_PORT:-5001}
+      - NODE_ENV=production
+      
+      # Database Configuration - connect to existing PostgreSQL instance
+      - DB_HOST=${DB_HOST}  # IP address of existing Postgres container/instance
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-journey_planner}
+      - DB_USER=${DB_USER:-journey_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+      
+      # Email Configuration (for password reset & invitations)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Journey Planner}
+      
+      # Frontend URL (for email links)
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      
+      # CORS Configuration
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
+    
+    ports:
+      - "${BACKEND_PORT:-5001}:5001"
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Connect to existing Postgres via network
+    # No depends_on since DB is external
+    networks:
+      - journey-planner-net
+
+  # Frontend (React + Vite + Nginx)
+  frontend:
+    image: ghcr.io/adasrakieta/journey-planner/frontend:arm64
+    container_name: journey-planner-web
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+    
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    networks:
+      - journey-planner-net
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  journey-planner-net:
+    driver: bridge
+
+# No volumes needed - DB is external
