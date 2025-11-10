@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+
+// Wymuś ładowanie .env z katalogu głównego
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import { Server } from 'socket.io';
 import { connectDB } from './config/db';
 import journeyRoutes from './routes/journeys';
