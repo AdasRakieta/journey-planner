@@ -61,9 +61,9 @@ services:
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Journey Planner}
       
       # Frontend URL (for CORS and email links)
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - VITE_API_URL=${VITE_API_URL}
       
       # File Upload Configuration
       - UPLOAD_DIR=/app/uploads/attachments
@@ -100,11 +100,11 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+        - VITE_API_URL=${VITE_API_URL}
     
     environment:
       # Frontend needs VITE_API_URL for build time
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:5001/api}
+      - VITE_API_URL=${VITE_API_URL}
     
     ports:
       - "${FRONTEND_PORT:-5173}:80"
