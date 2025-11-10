@@ -229,7 +229,7 @@ sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.ba
 sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
 ```
 
-### 2. Edytuj konfigurację
+### 2. Edytuj konfigurację Nginx
 
 ```bash
 # Wariant 1 (zalecane) - osobne pliki
@@ -241,20 +241,69 @@ sudo nano /etc/nginx/sites-available/default
 # Zastąp całą zawartość konfiguracją z Wariantu 2
 ```
 
-### 3. Test i restart
+### 3. Włącz konfigurację (tylko dla Wariantu 1)
 
 ```bash
-# Test składni
-sudo nginx -t
+sudo ln -sf /etc/nginx/sites-available/journey-planner /etc/nginx/sites-enabled/
+```
 
-# Jeśli OK:
+### 4. Test składni Nginx
+
+```bash
+sudo nginx -t
+```
+
+### 5. **Zaktualizuj zmienne środowiskowe Journey Planner**
+
+**WAŻNE:** Musisz zmienić URL-e z bezpośrednich portów na ścieżki Nginx!
+
+```bash
+# W Portainer → Stack → Environment variables
+# LUB edytuj .env lokalnie
+```
+
+Zamień:
+```env
+# PRZED (bezpośrednie porty):
+FRONTEND_URL=http://100.103.184.90:5173
+VITE_API_URL=http://100.103.184.90:5001/api
+CORS_ORIGIN=http://100.103.184.90:5173
+
+# PO (ścieżki Nginx):
+FRONTEND_URL=http://100.103.184.90/journey
+VITE_API_URL=http://100.103.184.90/journey/api
+CORS_ORIGIN=http://100.103.184.90
+```
+
+**Gotowy plik:** Zobacz `.env.nginx.example` w repo
+
+### 6. **Przebuduj frontend** (WYMAGANE!)
+
+Frontend musi być przebudowany z nowymi URL-ami:
+
+```bash
+# W Portainer:
+# Stacks → journey-planner → Editor → Update the stack → Pull and redeploy
+
+# LUB przez SSH:
+cd ~/journey-planner
+docker-compose down
+docker-compose up -d --build
+```
+
+⏱️ **Rebuild trwa 5-10 minut** na Raspberry Pi
+
+### 7. Reload Nginx
+
+```bash
+# Jeśli test OK:
 sudo systemctl reload nginx
 
 # Jeśli błąd, sprawdź logi:
 sudo tail -f /var/log/nginx/error.log
 ```
 
-### 4. Sprawdź czy działa
+### 8. Sprawdź czy działa
 
 ```bash
 # Test SmartHome
@@ -292,16 +341,47 @@ curl http://localhost/journey/api/health
 
 ## ⚙️ Konfiguracja zmiennych środowiskowych Journey Planner
 
-Po skonfigurowaniu Nginx, zaktualizuj `.env` Journey Planner:
+**KRYTYCZNE:** Po skonfigurowaniu Nginx, **MUSISZ** zaktualizować `.env` Journey Planner!
 
-```bash
-# Edytuj .env w Portainer lub lokalnie
-FRONTEND_URL=http://192.168.1.100/journey
-VITE_API_URL=http://192.168.1.100/journey/api
-CORS_ORIGIN=http://192.168.1.100
+### W Portainer:
+
+1. **Stacks → journey-planner → Editor**
+2. **Environment variables** → Zmień te 3 zmienne:
+
+```env
+# PRZED (bezpośrednie porty - NIE DZIAŁA Z NGINX!):
+FRONTEND_URL=http://100.103.184.90:5173
+VITE_API_URL=http://100.103.184.90:5001/api
+CORS_ORIGIN=http://100.103.184.90:5173
+
+# PO (ścieżki Nginx - POPRAWNE):
+FRONTEND_URL=http://100.103.184.90/journey
+VITE_API_URL=http://100.103.184.90/journey/api
+CORS_ORIGIN=http://100.103.184.90
 ```
 
-**WAŻNE:** Po zmianie `.env` musisz **przebudować frontend**:
+3. **Update the stack**
+4. ✅ **Pull and redeploy** (przebuduje frontend z nowymi URL!)
+
+### Lokalnie (przez SSH):
+
+```bash
+# Użyj gotowego template
+cp .env.nginx.example .env
+
+# LUB edytuj ręcznie
+nano .env
+
+# Zmień URL-e jak powyżej
+```
+
+### Dlaczego to jest potrzebne?
+
+- **Frontend (Vite)** kompiluje `VITE_API_URL` do bundle podczas buildu
+- **Bez rebuild** frontend będzie próbował łączyć się z `http://100.103.184.90:5001/api` (port, nie Nginx path)
+- **Po rebuild** frontend będzie używał `http://100.103.184.90/journey/api` ✅
+
+**⚠️ WAŻNE:** Po zmianie `.env` musisz **przebudować frontend**:
 
 ```bash
 # W Portainer: Stack → Redeploy
@@ -309,7 +389,7 @@ CORS_ORIGIN=http://192.168.1.100
 # Lub przez SSH:
 cd ~/journey-planner
 docker-compose down
-docker-compose up -d --build
+docker-compose up -d --build frontend
 ```
 
 ## 🐛 Troubleshooting
@@ -526,12 +606,17 @@ location = / {
 - [ ] Dodana konfiguracja dla `/journey/` (frontend)
 - [ ] Dodana konfiguracja dla `/journey/api/` (backend)
 - [ ] Test składni: `sudo nginx -t`
+- [ ] **ZAKTUALIZOWANE** zmienne środowiskowe Journey Planner:
+  - [ ] `FRONTEND_URL=http://IP/journey` (bez portu!)
+  - [ ] `VITE_API_URL=http://IP/journey/api` (bez portu!)
+  - [ ] `CORS_ORIGIN=http://IP` (bez portu i ścieżki!)
+- [ ] **PRZEBUDOWANY** frontend: `docker-compose up -d --build`
 - [ ] Reload Nginx: `sudo systemctl reload nginx`
-- [ ] Zaktualizowany `.env` w Journey Planner (FRONTEND_URL, VITE_API_URL)
-- [ ] Przebudowany frontend: `docker-compose up -d --build`
 - [ ] Test w przeglądarce: `http://pi-ip/journey/`
 - [ ] Test API: `http://pi-ip/journey/api/health`
 - [ ] Sprawdzone logi: `sudo tail -f /var/log/nginx/error.log`
+- [ ] Sprawdzone logi backend: `docker logs journey-planner-api`
+- [ ] SmartHome nadal działa: `http://pi-ip/smarthome/`
 
 ---
 
