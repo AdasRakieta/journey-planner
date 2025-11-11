@@ -68,19 +68,23 @@ export const createStop = async (req: Request, res: Response) => {
       accommodationUrl,
       accommodationPrice,
       accommodationCurrency,
-      notes
+      notes,
+      checkInTime,
+      checkOutTime
     } = req.body;
     
     const result = await query(
       `INSERT INTO stops (
         journey_id, city, country, latitude, longitude,
         arrival_date, departure_date, accommodation_name,
-        accommodation_url, accommodation_price, accommodation_currency, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        accommodation_url, accommodation_price, accommodation_currency, notes,
+        check_in_time, check_out_time
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [
         journeyId, city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
-        accommodationUrl, accommodationPrice, accommodationCurrency, notes
+        accommodationUrl, accommodationPrice, accommodationCurrency, notes,
+        checkInTime || null, checkOutTime || null
       ]
     );
     
@@ -131,19 +135,23 @@ export const updateStop = async (req: Request, res: Response) => {
       accommodationUrl,
       accommodationPrice,
       accommodationCurrency,
-      notes
+      notes,
+      checkInTime,
+      checkOutTime
     } = req.body;
     
     const result = await query(
       `UPDATE stops SET
         city=$1, country=$2, latitude=$3, longitude=$4,
         arrival_date=$5, departure_date=$6, accommodation_name=$7,
-        accommodation_url=$8, accommodation_price=$9, accommodation_currency=$10, notes=$11
-      WHERE id=$12 RETURNING *`,
+        accommodation_url=$8, accommodation_price=$9, accommodation_currency=$10, notes=$11,
+        check_in_time=$12, check_out_time=$13
+      WHERE id=$14 RETURNING *`,
       [
         city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
-        accommodationUrl, accommodationPrice, accommodationCurrency, notes, stopId
+        accommodationUrl, accommodationPrice, accommodationCurrency, notes,
+        checkInTime || null, checkOutTime || null, stopId
       ]
     );
     

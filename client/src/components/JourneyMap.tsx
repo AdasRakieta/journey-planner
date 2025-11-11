@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useTheme } from '../contexts/ThemeContext';
@@ -17,16 +17,53 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-interface MapLocation {
+// Custom icon for stops (blue)
+const stopIcon = new L.Icon({
+  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNSIgaGVpZ2h0PSI0MSIgdmlld0JveD0iMCAwIDI1IDQxIj48cGF0aCBmaWxsPSIjMDA3QUZGIiBkPSJNMTIuNSAwQzUuNiAwIDAgNS42IDAgMTIuNWMwIDguOSAxMi41IDI4LjUgMTIuNSAyOC41UzI1IDIxLjQgMjUgMTIuNUMyNSA1LjYgMTkuNCAwIDEyLjUgMHptMCAxN2MtMi41IDAtNC41LTItNC41LTQuNXMyLTQuNSA0LjUtNC41IDQuNSAyIDQuNSA0LjUtMiA0LjUtNC41IDQuNXoiLz48L3N2Zz4=',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: markerShadow,
+  shadowSize: [41, 41],
+});
+
+// Custom icon for attractions (red)
+const attractionIcon = new L.Icon({
+  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNSIgaGVpZ2h0PSI0MSIgdmlld0JveD0iMCAwIDI1IDQxIj48cGF0aCBmaWxsPSIjRkYzQjMwIiBkPSJNMTIuNSAwQzUuNiAwIDAgNS42IDAgMTIuNWMwIDguOSAxMi41IDI4LjUgMTIuNSAyOC41UzI1IDIxLjQgMjUgMTIuNUMyNSA1LjYgMTkuNCAwIDEyLjUgMHptMCAxN2MtMi41IDAtNC41LTItNC41LTQuNXMyLTQuNSA0LjUtNC41IDQuNSAyIDQuNSA0LjUtMiA0LjUtNC41IDQuNXoiLz48L3N2Zz4=',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: markerShadow,
+  shadowSize: [41, 41],
+});
+
+interface Attraction {
+  id?: number;
+  name: string;
+  description?: string;
+  estimatedCost?: number;
+  visitTime?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface Stop {
   lat: number;
   lng: number;
   city?: string;
   country?: string;
+  arrivalDate?: Date | string;
+  departureDate?: Date | string;
+  accommodationName?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  attractions?: Attraction[];
 }
 
 interface JourneyMapProps {
-  locations: MapLocation[];
-  onLocationClick?: (location: MapLocation) => void;
+  locations: Stop[];
+  onLocationClick?: (location: Stop) => void;
   onMapClick?: (lat: number, lng: number) => void;
   center?: [number, number];
   zoom?: number;
@@ -52,6 +89,20 @@ function MapCenterUpdater({ center }: { center: [number, number] }) {
   
   return null;
 }
+
+// Helper to format date
+const formatDate = (date: Date | string | undefined): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// Helper to format time
+const formatTime = (time: string | undefined): string => {
+  if (!time) return '';
+  return time;
+};
 
 const JourneyMap: React.FC<JourneyMapProps> = ({
   locations,
@@ -84,6 +135,27 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     }
   }, [locations]);
 
+  // Create polyline coordinates from stops (sorted by arrival date)
+  const polylinePositions: [number, number][] = locations
+    .filter(loc => loc.lat && loc.lng)
+    .sort((a, b) => {
+      if (!a.arrivalDate || !b.arrivalDate) return 0;
+      return new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime();
+    })
+    .map(loc => [loc.lat, loc.lng] as [number, number]);
+
+  // Collect all attractions with coordinates
+  const allAttractions: Array<Attraction & { stopCity?: string }> = [];
+  locations.forEach(stop => {
+    if (stop.attractions) {
+      stop.attractions.forEach(attraction => {
+        if (attraction.latitude && attraction.longitude) {
+          allAttractions.push({ ...attraction, stopCity: stop.city });
+        }
+      });
+    }
+  });
+
   return (
     <MapContainer
       center={mapCenter}
@@ -104,20 +176,98 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
           attribution=""
         />
       )}
+      
       <MapCenterUpdater center={mapCenter} />
       {onMapClick && <LocationMarker onMapClick={onMapClick} />}
+      
+      {/* Polyline connecting stops */}
+      {polylinePositions.length > 1 && (
+        <Polyline
+          positions={polylinePositions}
+          pathOptions={{
+            color: theme === 'dark' ? '#007AFF' : '#0066CC',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '10, 5',
+          }}
+        />
+      )}
+      
+      {/* Stop markers (blue) */}
       {locations.map((location, index) => (
         <Marker
-          key={index}
+          key={`stop-${index}`}
           position={[location.lat, location.lng]}
+          icon={stopIcon}
           eventHandlers={{
             click: () => onLocationClick && onLocationClick(location),
           }}
         >
           <Popup>
-            <div className="text-sm">
-              <strong className="dark:text-white">{location.city || 'Unknown Location'}</strong>
-              {location.country && <p className="text-xs text-gray-600 dark:text-gray-400">{location.country}</p>}
+            <div className="text-sm min-w-[200px]">
+              <strong className="text-base dark:text-white">{location.city || 'Unknown Location'}</strong>
+              {location.country && <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{location.country}</p>}
+              
+              {location.accommodationName && (
+                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                  <p className="font-medium text-xs text-gray-700 dark:text-gray-300">🏨 {location.accommodationName}</p>
+                </div>
+              )}
+              
+              {(location.arrivalDate || location.departureDate) && (
+                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                  {location.arrivalDate && (
+                    <p>
+                      <span className="font-medium">Arrival:</span> {formatDate(location.arrivalDate)}
+                      {location.checkInTime && <span className="ml-1">at {formatTime(location.checkInTime)}</span>}
+                    </p>
+                  )}
+                  {location.departureDate && (
+                    <p>
+                      <span className="font-medium">Departure:</span> {formatDate(location.departureDate)}
+                      {location.checkOutTime && <span className="ml-1">at {formatTime(location.checkOutTime)}</span>}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+      
+      {/* Attraction markers (red) */}
+      {allAttractions.map((attraction, index) => (
+        <Marker
+          key={`attraction-${index}`}
+          position={[attraction.latitude!, attraction.longitude!]}
+          icon={attractionIcon}
+        >
+          <Popup>
+            <div className="text-sm min-w-[200px]">
+              <strong className="text-base dark:text-white">🎯 {attraction.name}</strong>
+              {attraction.stopCity && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">{attraction.stopCity}</p>
+              )}
+              
+              {attraction.address && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">📍 {attraction.address}</p>
+              )}
+              
+              {attraction.description && (
+                <p className="text-xs text-gray-700 dark:text-gray-300 mt-2">{attraction.description}</p>
+              )}
+              
+              {attraction.visitTime && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                  <span className="font-medium">Visit time:</span> {formatTime(attraction.visitTime)}
+                </p>
+              )}
+              
+              {attraction.estimatedCost && attraction.estimatedCost > 0 && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  <span className="font-medium">Cost:</span> {attraction.estimatedCost} PLN
+                </p>
+              )}
             </div>
           </Popup>
         </Marker>

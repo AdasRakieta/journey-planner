@@ -55,13 +55,33 @@ export const getAttractionsByStopId = async (req: Request, res: Response) => {
 export const createAttraction = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.stopId);
-    let { name, description, estimatedCost, duration } = req.body;
-    // Fix: convert empty string to null for integer fields
+    let { 
+      name, description, estimatedCost, duration, 
+      address, addressStreet, addressCity, addressPostalCode, addressCountry,
+      latitude, longitude, visitTime 
+    } = req.body;
+    
+    // Fix: convert empty string to null for numeric/optional fields
     if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
     if (duration === '' || duration === undefined) duration = null;
+    if (address === '' || address === undefined) address = null;
+    if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
+    if (addressCity === '' || addressCity === undefined) addressCity = null;
+    if (addressPostalCode === '' || addressPostalCode === undefined) addressPostalCode = null;
+    if (addressCountry === '' || addressCountry === undefined) addressCountry = null;
+    if (latitude === '' || latitude === undefined) latitude = null;
+    if (longitude === '' || longitude === undefined) longitude = null;
+    if (visitTime === '' || visitTime === undefined) visitTime = null;
+    
     const result = await query(
-      'INSERT INTO attractions (stop_id, name, description, estimated_cost, duration) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [stopId, name, description, estimatedCost, duration]
+      `INSERT INTO attractions (
+        stop_id, name, description, estimated_cost, duration, 
+        address, address_street, address_city, address_postal_code, address_country,
+        latitude, longitude, visit_time
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [stopId, name, description, estimatedCost, duration, 
+       address, addressStreet, addressCity, addressPostalCode, addressCountry,
+       latitude, longitude, visitTime]
     );
     const attraction = toCamelCase(result.rows[0]);
     // Emit Socket.IO event
@@ -97,13 +117,33 @@ export const updateAttraction = async (req: Request, res: Response) => {
       return res.json(updated);
     }
 
-    let { name, description, estimatedCost, duration } = req.body;
-    // Fix: convert empty string or undefined for integer fields to null
+    let { 
+      name, description, estimatedCost, duration, 
+      address, addressStreet, addressCity, addressPostalCode, addressCountry,
+      latitude, longitude, visitTime 
+    } = req.body;
+    
+    // Fix: convert empty string or undefined for optional fields to null
     if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
     if (duration === '' || duration === undefined) duration = null;
+    if (address === '' || address === undefined) address = null;
+    if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
+    if (addressCity === '' || addressCity === undefined) addressCity = null;
+    if (addressPostalCode === '' || addressPostalCode === undefined) addressPostalCode = null;
+    if (addressCountry === '' || addressCountry === undefined) addressCountry = null;
+    if (latitude === '' || latitude === undefined) latitude = null;
+    if (longitude === '' || longitude === undefined) longitude = null;
+    if (visitTime === '' || visitTime === undefined) visitTime = null;
+    
     const result = await query(
-      'UPDATE attractions SET name=$1, description=$2, estimated_cost=$3, duration=$4 WHERE id=$5 RETURNING *',
-      [name, description, estimatedCost, duration, attractionId]
+      `UPDATE attractions SET 
+        name=$1, description=$2, estimated_cost=$3, duration=$4, 
+        address=$5, address_street=$6, address_city=$7, address_postal_code=$8, address_country=$9,
+        latitude=$10, longitude=$11, visit_time=$12 
+      WHERE id=$13 RETURNING *`,
+      [name, description, estimatedCost, duration, 
+       address, addressStreet, addressCity, addressPostalCode, addressCountry,
+       latitude, longitude, visitTime, attractionId]
     );
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'Attraction not found' });

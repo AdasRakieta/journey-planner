@@ -14,6 +14,8 @@ export interface Stop {
   notes?: string;
   attractions?: Attraction[];
   isPaid?: boolean;
+  checkInTime?: string;  // HH:MM format for accommodation check-in
+  checkOutTime?: string; // HH:MM format for accommodation check-out
 }
 
 export interface Transport {
@@ -40,6 +42,14 @@ export interface Attraction {
   estimatedCost?: number;
   duration?: string; // e.g., "2 hours", "30 minutes"
   isPaid?: boolean;
+  address?: string;      // Full address (legacy - for display/concatenated)
+  addressStreet?: string;    // Street name and number
+  addressCity?: string;      // City name
+  addressPostalCode?: string; // Postal/ZIP code
+  addressCountry?: string;    // Country name
+  latitude?: number;     // Latitude coordinate for map marker (auto-filled)
+  longitude?: number;    // Longitude coordinate for map marker (auto-filled)
+  visitTime?: string;    // HH:MM format for planned visit time
 }
 
 export interface JourneyShare {
