@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { 
   Settings, 
   LogOut, 
@@ -14,7 +15,9 @@ import {
   AlertCircle,
   Loader2,
   X,
-  ArrowLeft
+  ArrowLeft,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { userAPI, adminAPI } from '../services/authApi';
 import type { User as UserType, Invitation } from '../types/auth';
@@ -24,6 +27,7 @@ import { useConfirm } from '../hooks/useConfirm';
 
 const SettingsPage: React.FC = () => {
   const { user, logout, updateUser, refreshUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const toast = useToast();
   const confirm = useConfirm();
   
@@ -222,25 +226,25 @@ const SettingsPage: React.FC = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[#0d1117] p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1c1c1e] p-6 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Settings size={32} className="text-blue-500" />
-            <h1 className="text-3xl font-bold text-white">Settings</h1>
+            <Settings size={32} className="text-blue-500 dark:text-[#0a84ff]" />
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-[#ffffff]">Settings</h1>
           </div>
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="gh-btn-secondary"
+              className="px-4 py-2 bg-white dark:bg-[#2c2c2e] border border-gray-200 dark:border-[#38383a] text-gray-700 dark:text-[#ffffff] rounded-lg hover:bg-gray-50 dark:hover:bg-[#38383a] transition-all flex items-center gap-2"
             >
               <ArrowLeft size={20} />
               Back to Home
             </Link>
             <button
               onClick={logout}
-              className="gh-btn-danger"
+              className="px-4 py-2 bg-red-500 dark:bg-[#ff453a] text-white rounded-lg hover:bg-red-600 dark:hover:bg-red-600 transition-all flex items-center gap-2"
             >
               <LogOut size={20} />
               Logout
@@ -248,54 +252,111 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Dynamic layout: single centered column for users, two columns for admins */}
+        <div className={`${user.role === 'admin' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'max-w-2xl mx-auto space-y-6'}`}>
           {/* User Profile Section */}
           <div className="space-y-6">
+            {/* Theme Settings */}
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                {theme === 'dark' ? (
+                  <Moon size={24} className="text-[#0a84ff]" />
+                ) : (
+                  <Sun size={24} className="text-blue-500" />
+                )}
+                Appearance
+              </h2>
+              
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-[#98989d]">
+                  Choose your preferred theme for the application
+                </p>
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <div className="flex items-center gap-3">
+                    {theme === 'dark' ? (
+                      <Moon size={20} className="text-[#0a84ff]" />
+                    ) : (
+                      <Sun size={20} className="text-blue-500" />
+                    )}
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-[#636366]">
+                        {theme === 'dark' ? 'Dark theme' : 'Classic light theme'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleTheme}
+                    className={`relative w-14 h-8 rounded-full transition-colors duration-200 ${
+                      theme === 'dark' 
+                        ? 'bg-[#0a84ff]' 
+                        : 'bg-gray-300'
+                    }`}
+                    aria-label="Toggle theme"
+                  >
+                    <span
+                      className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform duration-200 flex items-center justify-center ${
+                        theme === 'dark' ? 'translate-x-6' : 'translate-x-0'
+                      }`}
+                    >
+                      {theme === 'dark' ? (
+                        <Moon size={14} className="text-[#0a84ff]" />
+                      ) : (
+                        <Sun size={14} className="text-gray-600" />
+                      )}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Account Information */}
-            <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-              <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <User size={24} className="text-blue-500" />
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <User size={24} className="text-blue-500 dark:text-[#0a84ff]" />
                 Account Information
               </h2>
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-[#0d1117] rounded-lg border border-[#30363d]">
-                  <User size={20} className="text-gray-400" />
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <User size={20} className="text-gray-400 dark:text-[#636366]" />
                   <div>
-                    <div className="text-xs text-gray-400">Username</div>
-                    <div className="font-medium text-white">{user.username}</div>
+                    <div className="text-xs text-gray-500 dark:text-[#636366]">Username</div>
+                    <div className="font-medium text-gray-900 dark:text-[#ffffff]">{user.username}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-[#0d1117] rounded-lg border border-[#30363d]">
-                  <Mail size={20} className="text-gray-400" />
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <Mail size={20} className="text-gray-400 dark:text-[#636366]" />
                   <div>
-                    <div className="text-xs text-gray-400">Email</div>
-                    <div className="font-medium text-white">{user.email}</div>
+                    <div className="text-xs text-gray-500 dark:text-[#636366]">Email</div>
+                    <div className="font-medium text-gray-900 dark:text-[#ffffff]">{user.email}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-[#0d1117] rounded-lg border border-[#30363d]">
-                  <Shield size={20} className="text-gray-400" />
+                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <Shield size={20} className="text-gray-400 dark:text-[#636366]" />
                   <div>
-                    <div className="text-xs text-gray-400">Role</div>
-                    <div className="font-medium text-white capitalize">{user.role}</div>
+                    <div className="text-xs text-gray-500 dark:text-[#636366]">Role</div>
+                    <div className="font-medium text-gray-900 dark:text-[#ffffff] capitalize">{user.role}</div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Update Username */}
-            <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-              <h2 className="text-xl font-semibold text-white mb-4">Update Username</h2>
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff] mb-4">Update Username</h2>
               
               {profileError && (
-                <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-2">
-                  <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-300">{profileError}</p>
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={20} className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-600 dark:text-red-300">{profileError}</p>
                 </div>
               )}
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-[#98989d] mb-2">
                     New Username
                   </label>
                   <input
@@ -303,7 +364,7 @@ const SettingsPage: React.FC = () => {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#38383a] text-gray-900 dark:text-[#ffffff] placeholder-gray-400 dark:placeholder-[#636366] focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-2 focus:ring-blue-200 dark:focus:ring-[#0a84ff]/20 outline-none transition-all"
                     placeholder="Enter new username"
                     required
                     minLength={3}
@@ -313,7 +374,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={profileLoading || username === user.username}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-blue-500 dark:bg-[#0a84ff] hover:bg-blue-600 dark:hover:bg-blue-600 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {profileLoading ? (
                     <>
@@ -331,19 +392,19 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {/* Change Password */}
-            <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-              <h2 className="text-xl font-semibold text-white mb-4">Change Password</h2>
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff] mb-4">Change Password</h2>
               
               {passwordError && (
-                <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-2">
-                  <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-300">{passwordError}</p>
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={20} className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-600 dark:text-red-300">{passwordError}</p>
                 </div>
               )}
 
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
-                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-[#98989d] mb-2">
                     Current Password
                   </label>
                   <input
@@ -351,13 +412,13 @@ const SettingsPage: React.FC = () => {
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#38383a] text-gray-900 dark:text-[#ffffff] placeholder-gray-400 dark:placeholder-[#636366] focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-2 focus:ring-blue-200 dark:focus:ring-[#0a84ff]/20 outline-none transition-all"
                     placeholder="Enter current password"
                     required
                   />
                 </div>
                 <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-[#98989d] mb-2">
                     New Password
                   </label>
                   <input
@@ -365,14 +426,14 @@ const SettingsPage: React.FC = () => {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#38383a] text-gray-900 dark:text-[#ffffff] placeholder-gray-400 dark:placeholder-[#636366] focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-2 focus:ring-blue-200 dark:focus:ring-[#0a84ff]/20 outline-none transition-all"
                     placeholder="Enter new password"
                     required
                     minLength={8}
                   />
                 </div>
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-[#98989d] mb-2">
                     Confirm New Password
                   </label>
                   <input
@@ -380,7 +441,7 @@ const SettingsPage: React.FC = () => {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#38383a] text-gray-900 dark:text-[#ffffff] placeholder-gray-400 dark:placeholder-[#636366] focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-2 focus:ring-blue-200 dark:focus:ring-[#0a84ff]/20 outline-none transition-all"
                     placeholder="Confirm new password"
                     required
                   />
@@ -388,7 +449,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-blue-500 dark:bg-[#0a84ff] hover:bg-blue-600 dark:hover:bg-blue-600 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {passwordLoading ? (
                     <>
@@ -410,30 +471,30 @@ const SettingsPage: React.FC = () => {
           {user.role === 'admin' && (
             <div className="space-y-6">
               {/* Admin Header */}
-              <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-                <h2 className="text-xl font-semibold text-white mb-2 flex items-center gap-2">
-                  <Shield size={24} className="text-yellow-500" />
+              <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff] mb-2 flex items-center gap-2">
+                  <Shield size={24} className="text-yellow-500 dark:text-[#ff9f0a]" />
                   Admin Panel
                 </h2>
-                <p className="text-gray-400 text-sm">Manage users and invitations</p>
+                <p className="text-gray-600 dark:text-[#98989d] text-sm">Manage users and invitations</p>
               </div>
 
               {adminError && (
-                <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg flex items-start gap-2">
-                  <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-300">{adminError}</p>
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={20} className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-600 dark:text-red-300">{adminError}</p>
                 </div>
               )}
 
               {/* Invite User */}
-              <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <UserPlus size={20} className="text-green-500" />
+              <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4 flex items-center gap-2">
+                  <UserPlus size={20} className="text-green-500 dark:text-[#30d158]" />
                   Invite New User
                 </h3>
                 <form onSubmit={handleInviteUser} className="space-y-4">
                   <div>
-                    <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-300 mb-2">
+                    <label htmlFor="inviteEmail" className="block text-sm font-medium text-gray-700 dark:text-[#98989d] mb-2">
                       Email Address
                     </label>
                     <input
@@ -441,7 +502,7 @@ const SettingsPage: React.FC = () => {
                       type="email"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                      className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#38383a] text-gray-900 dark:text-[#ffffff] placeholder-gray-400 dark:placeholder-[#636366] focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-2 focus:ring-blue-200 dark:focus:ring-[#0a84ff]/20 outline-none transition-all"
                       placeholder="user@example.com"
                       required
                     />
@@ -449,7 +510,7 @@ const SettingsPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={inviteLoading}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full bg-green-500 dark:bg-[#30d158] hover:bg-green-600 dark:hover:bg-green-600 text-white font-semibold py-3 rounded-lg shadow-md transition-all duration-300 ease-in-out hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {inviteLoading ? (
                       <>
@@ -468,17 +529,17 @@ const SettingsPage: React.FC = () => {
 
               {/* Pending Invitations */}
               {invitations.length > 0 && (
-                <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-                  <h3 className="text-lg font-semibold text-white mb-4">Pending Invitations</h3>
+                <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4">Pending Invitations</h3>
                   <div className="space-y-2">
                     {invitations.map((invitation) => (
                       <div
                         key={invitation.id}
-                        className="flex items-center justify-between p-3 bg-[#0d1117] rounded-lg border border-[#30363d]"
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]"
                       >
                         <div>
-                          <div className="text-white font-medium">{invitation.email}</div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-gray-900 dark:text-[#ffffff] font-medium">{invitation.email}</div>
+                          <div className="text-xs text-gray-500 dark:text-[#636366]">
                             Expires: {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString('en-US', {
                               year: 'numeric',
                               month: 'short',
@@ -488,7 +549,7 @@ const SettingsPage: React.FC = () => {
                         </div>
                         <button
                           onClick={() => handleCancelInvitation(invitation.id!, invitation.email)}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
+                          className="p-2 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out"
                           title="Cancel invitation"
                         >
                           <X size={20} />
@@ -500,33 +561,33 @@ const SettingsPage: React.FC = () => {
               )}
 
               {/* Users List */}
-              <div className="bg-[#161b22] rounded-xl shadow-sm p-6 border border-[#30363d]">
-                <h3 className="text-lg font-semibold text-white mb-4">
+              <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4">
                   Users ({users.length})
                 </h3>
                 {adminLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 size={32} className="animate-spin text-blue-500" />
+                    <Loader2 size={32} className="animate-spin text-blue-500 dark:text-[#0a84ff]" />
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {users.map((u) => (
                       <div
                         key={u.id}
-                        className="flex items-center justify-between p-4 bg-[#0d1117] rounded-lg border border-[#30363d]"
+                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]"
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-white font-medium">{u.username}</span>
+                            <span className="text-gray-900 dark:text-[#ffffff] font-medium">{u.username}</span>
                             <span className={`text-xs px-2 py-1 rounded ${
                               u.role === 'admin' 
-                                ? 'bg-yellow-900/20 text-yellow-400 border border-yellow-800' 
-                                : 'bg-blue-900/20 text-blue-400 border border-blue-800'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800' 
+                                : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                             }`}>
                               {u.role}
                             </span>
                           </div>
-                          <div className="text-sm text-gray-400">{u.email}</div>
+                          <div className="text-sm text-gray-600 dark:text-[#98989d]">{u.email}</div>
                         </div>
                         {u.id !== user.id && (
                           <div className="flex items-center gap-2">
@@ -536,13 +597,13 @@ const SettingsPage: React.FC = () => {
                                 u.username,
                                 u.role === 'admin' ? 'user' : 'admin'
                               )}
-                              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
+                              className="px-3 py-2 text-sm bg-blue-500 dark:bg-[#0a84ff] hover:bg-blue-600 dark:hover:bg-blue-600 text-white rounded-lg transition-all duration-300 ease-in-out"
                             >
                               {u.role === 'admin' ? 'Make User' : 'Make Admin'}
                             </button>
                             <button
                               onClick={() => handleDeleteUser(u.id!, u.username)}
-                              className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out hover:shadow-lg"
+                              className="p-2 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out"
                               title="Delete user"
                             >
                               <Trash2 size={20} />

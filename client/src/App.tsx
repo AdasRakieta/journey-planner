@@ -88,6 +88,9 @@ function App() {
   const [editingStop, setEditingStop] = useState<Stop | null>(null);
   const [showEditStopForm, setShowEditStopForm] = useState(false);
   
+  const [editingTransport, setEditingTransport] = useState<Transport | null>(null);
+  const [showEditTransportForm, setShowEditTransportForm] = useState(false);
+  
   const [editingAttraction, setEditingAttraction] = useState<Attraction | null>(null);
   const [showEditAttractionForm, setShowEditAttractionForm] = useState(false);
   const [editingAttractionStopId, setEditingAttractionStopId] = useState<number | null>(null);
@@ -706,6 +709,37 @@ function App() {
     }
   };
 
+  const handleDeleteTransport = async (transportId: number) => {
+    if (!selectedJourney) return;
+
+    const confirmed = await confirm.confirm({
+      title: 'Delete Transport',
+      message: 'Are you sure you want to delete this transport?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setLoading(true);
+      await transportService.deleteTransport(transportId);
+      
+      const updatedTransports = selectedJourney.transports?.filter(t => t.id !== transportId);
+      const updatedJourney = { ...selectedJourney, transports: updatedTransports };
+      
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      success('Transport deleted successfully!');
+    } catch (err) {
+      console.error('Failed to delete transport:', err);
+      error('Failed to delete transport');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEditStop = async () => {
     if (!editingStop?.id || !selectedJourney) return;
 
@@ -756,6 +790,29 @@ function App() {
     } catch (err) {
       console.error('Failed to update attraction:', err);
       error('Failed to update attraction');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditTransport = async () => {
+    if (!editingTransport?.id || !selectedJourney) return;
+
+    try {
+      setLoading(true);
+      const updated = await transportService.updateTransport(editingTransport.id, editingTransport);
+      
+      const updatedTransports = selectedJourney.transports?.map(t => t.id === updated.id ? updated : t);
+      const updatedJourney = { ...selectedJourney, transports: updatedTransports };
+      
+      setSelectedJourney(updatedJourney);
+      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+      setShowEditTransportForm(false);
+      setEditingTransport(null);
+      success('Transport updated successfully!');
+    } catch (err) {
+      console.error('Failed to update transport:', err);
+      error('Failed to update transport');
     } finally {
       setLoading(false);
     }
@@ -904,25 +961,25 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gh-bg-primary font-github">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1c1c1e] font-github transition-colors duration-200">
       {/* Header with Burger Menu */}
-      <header className="bg-gh-bg-secondary border-b border-gh-border-default sticky top-0 z-50">
+      <header className="bg-white dark:bg-[#2c2c2e] border-b border-gray-200 dark:border-[#38383a] sticky top-0 z-50 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
             {/* Logo */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden p-2 hover:bg-gh-bg-tertiary rounded-gh transition-colors"
+                className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-[#38383a] rounded-lg transition-colors"
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? (
-                  <X className="w-6 h-6 text-gh-text-primary" />
+                  <X className="w-6 h-6 text-gray-900 dark:text-[#ffffff]" />
                 ) : (
-                  <Menu className="w-6 h-6 text-gh-text-primary" />
+                  <Menu className="w-6 h-6 text-gray-900 dark:text-[#ffffff]" />
                 )}
               </button>
-              <h1 className="text-xl font-semibold text-gh-text-primary">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff]">
                 🗺️ Journey Planner
               </h1>
             </div>
@@ -931,11 +988,11 @@ function App() {
             <div className="hidden lg:flex items-center gap-3">
               {/* User Info */}
               {user && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-gh-bg-tertiary rounded-gh border border-gh-border-default">
-                  <User className="w-4 h-4 text-gh-text-secondary" />
-                  <span className="text-sm text-gh-text-primary font-medium">{user.username}</span>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-[#38383a] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <User className="w-4 h-4 text-gray-600 dark:text-[#98989d]" />
+                  <span className="text-sm text-gray-900 dark:text-[#ffffff] font-medium">{user.username}</span>
                   {user.role === 'admin' && (
-                    <span className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium">
+                    <span className="text-xs px-2 py-0.5 bg-blue-500 dark:bg-[#0a84ff] text-white rounded-full font-medium">
                       Admin
                     </span>
                   )}
@@ -945,7 +1002,7 @@ function App() {
               {/* Settings Button */}
               <Link
                 to="/settings"
-                className="gh-btn-secondary"
+                className="px-4 py-2 bg-gray-200 dark:bg-[#38383a] hover:bg-gray-300 dark:hover:bg-[#1c1c1e] border border-gray-300 dark:border-[#38383a] text-gray-700 dark:text-[#ffffff] rounded-lg transition-colors flex items-center gap-2"
               >
                 <Settings className="w-5 h-5" />
                 Settings
@@ -986,23 +1043,23 @@ function App() {
             {/* Mobile New Journey Button */}
             <button
               onClick={() => setShowNewJourneyForm(true)}
-              className="lg:hidden p-2 hover:bg-gh-bg-tertiary rounded-gh transition-colors"
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-[#2c2c2e] rounded-lg transition-colors"
               disabled={loading}
             >
-              <Plus className="w-6 h-6 text-gh-accent-primary" />
+              <Plus className="w-6 h-6 text-blue-600 dark:text-[#0a84ff]" />
             </button>
           </div>
         </div>
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-gh-border-default bg-gh-bg-secondary">
+          <div className="lg:hidden border-t border-gray-200 dark:border-[#38383a] bg-white dark:bg-[#2c2c2e]">
             <div className="px-4 py-3 space-y-2">
               {/* User Info */}
               {user && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-gh-bg-tertiary rounded-gh border border-gh-border-default mb-3">
-                  <User className="w-4 h-4 text-gh-text-secondary" />
-                  <span className="text-sm text-gh-text-primary font-medium">{user.username}</span>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a] mb-3">
+                  <User className="w-4 h-4 text-gray-600 dark:text-[#98989d]" />
+                  <span className="text-sm text-gray-900 dark:text-[#ffffff] font-medium">{user.username}</span>
                   {user.role === 'admin' && (
                     <span className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded-full font-medium">
                       Admin
@@ -1065,32 +1122,32 @@ function App() {
           {/* Journey List - Sidebar */}
           <div className="lg:col-span-1">
             <div className="gh-card">
-              <h2 className="text-lg font-semibold mb-4 text-gh-text-primary">Your Journeys</h2>
+              <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-[#ffffff]">Your Journeys</h2>
               <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2">
                 {loading && journeys.length === 0 ? (
-                  <p className="text-sm text-gh-text-secondary text-center py-8">
+                  <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-8">
                     Loading journeys...
                   </p>
                 ) : journeys.length === 0 ? (
-                  <p className="text-sm text-gh-text-secondary text-center py-8">
+                  <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-8">
                     No journeys yet. Create your first journey!
                   </p>
                 ) : (
                   journeys.map((journey) => (
                     <div
                       key={journey.id}
-                      className={`p-4 rounded-gh border transition-all ${
+                      className={`p-4 rounded-lg border transition-all ${
                         selectedJourney?.id === journey.id
-                          ? 'bg-gh-accent-emphasis bg-opacity-10 border-gh-accent-primary'
-                          : 'bg-gh-bg-tertiary border-gh-border-muted hover:border-gh-border-default'
+                          ? 'bg-gray-100 dark:bg-[#3f3f44] border-gray-300 dark:border-[#48484a]'
+                          : 'bg-gray-50 dark:bg-[#1c1c1e] border-gray-200 dark:border-[#38383a] hover:border-gray-300 dark:hover:border-[#48484a]'
                       }`}
                     >
                       <div
                         onClick={() => setSelectedJourney(journey)}
                         className="cursor-pointer"
                       >
-                        <h3 className="font-semibold text-gh-text-primary">{journey.title}</h3>
-                        <div className="flex items-center gap-2 mt-2 text-sm text-gh-text-secondary">
+                        <h3 className="font-semibold text-gray-900 dark:text-[#ffffff]">{journey.title}</h3>
+                        <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 dark:text-[#98989d]">
                           <Calendar className="w-4 h-4" />
                           <span>
                             {formatDateForDisplay(journey.startDate)} -{' '}
@@ -1100,13 +1157,13 @@ function App() {
                       </div>
                       
                       {/* Estimated Cost - Always visible and dynamically calculated */}
-                      <div className="mt-3 pt-3 border-t border-gh-border-muted">
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-[#38383a]">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm font-medium text-gh-text-success">
+                          <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-[#30d158]">
                             <DollarSign className="w-4 h-4" />
                             <span>Estimated Cost:</span>
                           </div>
-                          <span className="text-sm font-semibold text-gh-text-success">
+                          <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">
                             {calculateJourneyTotalCost(journey).toFixed(2)} {journey.currency}
                           </span>
                         </div>
@@ -1124,21 +1181,21 @@ function App() {
                           
                           return amountDue > 0 ? (
                             <div className="flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-2 text-sm font-medium text-gh-text-danger">
+                              <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
                                 <XCircle className="w-4 h-4" />
                                 <span>Amount Due:</span>
                               </div>
-                              <span className="text-sm font-semibold text-gh-text-danger">
+                              <span className="text-sm font-semibold text-red-600 dark:text-[#ff453a]">
                                 {amountDue.toFixed(2)} {journey.currency}
                               </span>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+                              <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-[#30d158]">
                                 <CheckCircle2 className="w-4 h-4" />
                                 <span>Fully Paid</span>
                               </div>
-                              <span className="text-sm font-semibold text-green-600">
+                              <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">
                                 {paymentSummary.percentPaid}%
                               </span>
                             </div>
@@ -1147,13 +1204,13 @@ function App() {
                       </div>
 
                       {selectedJourney?.id === journey.id && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-gh-border-muted">
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-[#38383a]">
                           <button
                             onClick={() => {
                               setEditingJourney(journey);
                               setShowEditJourneyForm(true);
                             }}
-                            className="flex-1 px-3 py-1.5 text-sm bg-gh-accent-link hover:bg-blue-700 text-white rounded-gh transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                             disabled={loading}
                           >
                             <Edit2 className="w-4 h-4" />
@@ -1161,7 +1218,7 @@ function App() {
                           </button>
                           <button
                             onClick={() => handleDeleteJourney(journey.id!)}
-                            className="flex-1 px-3 py-1.5 text-sm bg-gh-accent-danger hover:bg-red-700 text-white rounded-gh transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                             disabled={loading}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1209,9 +1266,9 @@ function App() {
               <div className="gh-card">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-gh-text-primary">{selectedJourney.title}</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">{selectedJourney.title}</h2>
                     {selectedJourney.description && (
-                      <p className="text-gh-text-secondary mt-2">{selectedJourney.description}</p>
+                      <p className="text-gray-600 dark:text-[#98989d] mt-2">{selectedJourney.description}</p>
                     )}
                   </div>
                 </div>
@@ -1219,7 +1276,7 @@ function App() {
                 {/* Stops */}
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gh-text-primary">Stops</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
                     <button
                       onClick={() => setShowStopForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -1232,12 +1289,12 @@ function App() {
                   <div className="space-y-3">
                     {selectedJourney.stops && selectedJourney.stops.length > 0 ? (
                       selectedJourney.stops.map((stop, index) => (
-                        <div key={index} className="bg-gh-bg-tertiary p-4 rounded-gh border border-gh-border-muted">
+                        <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
                           <div className="flex items-start gap-3">
-                            <MapPin className="w-5 h-5 text-gh-accent-primary mt-1 flex-shrink-0" />
+                            <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start mb-1">
-                                <h4 className="font-semibold text-gh-text-primary">
+                                <h4 className="font-semibold text-gray-900 dark:text-[#ffffff]">
                                   {stop.city}, {stop.country}
                                 </h4>
                                 <div className="flex gap-2">
@@ -1246,7 +1303,7 @@ function App() {
                                       setEditingStop(stop);
                                       setShowEditStopForm(true);
                                     }}
-                                    className="text-gh-text-link hover:text-blue-600 transition-colors p-1"
+                                    className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                     disabled={loading}
                                     title="Edit stop"
                                   >
@@ -1254,7 +1311,7 @@ function App() {
                                   </button>
                                   <button
                                     onClick={() => handleDeleteStop(stop.id!)}
-                                    className="text-gh-text-danger hover:text-red-600 transition-colors p-1"
+                                    className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                     disabled={loading}
                                     title="Delete stop"
                                   >
@@ -1262,17 +1319,17 @@ function App() {
                                   </button>
                                 </div>
                               </div>
-                              <p className="text-sm text-gh-text-secondary mt-1">
+                              <p className="text-sm text-gray-600 dark:text-[#98989d] mt-1">
                                 {formatDateForDisplay(stop.arrivalDate)} -{' '}
                                 {formatDateForDisplay(stop.departureDate)}
                               </p>
                               {stop.accommodationName && (
                                 <div className="mt-2 text-sm">
-                                  <p className="font-medium text-gh-text-primary">Accommodation:</p>
-                                  <p className="text-gh-text-secondary">{stop.accommodationName}</p>
+                                  <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation:</p>
+                                  <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
                                   {stop.accommodationPrice && (
                                     <div className="flex items-center justify-between">
-                                      <p className="text-gh-text-success">
+                                      <p className="text-green-600 dark:text-[#30d158]">
                                         {stop.accommodationPrice} {stop.accommodationCurrency}
                                       </p>
                                       <PaymentCheckbox
@@ -1288,7 +1345,7 @@ function App() {
                                       href={stop.accommodationUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-gh-text-link hover:underline"
+                                      className="text-blue-600 dark:text-[#0a84ff] hover:underline"
                                     >
                                       View booking →
                                     </a>
@@ -1297,10 +1354,10 @@ function App() {
                               )}
                               {stop.attractions && stop.attractions.length > 0 && (
                                 <div className="mt-2">
-                                  <p className="text-sm font-medium text-gh-text-primary">Attractions:</p>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-[#ffffff]">Attractions:</p>
                                   <ul className="text-sm space-y-1 mt-1">
                                     {stop.attractions.map((attr, i) => (
-                                      <li key={i} className="text-gh-text-secondary flex justify-between items-start group gap-2">
+                                      <li key={i} className="text-gray-600 dark:text-[#98989d] flex justify-between items-start group gap-2">
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-start justify-between gap-2">
                                             <span className="flex-1">
@@ -1314,7 +1371,7 @@ function App() {
                                                   setEditingAttractionStopId(stop.id!);
                                                   setShowEditAttractionForm(true);
                                                 }}
-                                                className="text-gh-text-link hover:text-blue-600 p-1"
+                                                className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                                 disabled={loading}
                                                 title="Edit attraction"
                                               >
@@ -1322,7 +1379,7 @@ function App() {
                                               </button>
                                               <button
                                                 onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
-                                                className="text-gh-text-danger hover:text-red-600 p-1"
+                                                className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                                 disabled={loading}
                                                 title="Delete attraction"
                                               >
@@ -1351,7 +1408,7 @@ function App() {
                                   setSelectedStopForAttraction(stop.id!);
                                   setShowAttractionForm(true);
                                 }}
-                                className="mt-3 text-sm text-gh-text-link hover:underline flex items-center gap-1"
+                                className="mt-3 text-sm text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-1"
                               >
                                 <Plus className="w-4 h-4" />
                                 Add Attraction
@@ -1361,7 +1418,7 @@ function App() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-gh-text-secondary text-center py-4">
+                      <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">
                         No stops yet. Click on the map to add your first stop!
                       </p>
                     )}
@@ -1371,7 +1428,7 @@ function App() {
                 {/* Transportation */}
                 <div>
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gh-text-primary">Transportation</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Transportation</h3>
                     <button
                       onClick={() => setShowTransportForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -1384,22 +1441,45 @@ function App() {
                   <div className="space-y-3">
                     {selectedJourney.transports && selectedJourney.transports.length > 0 ? (
                       selectedJourney.transports.map((transport, index) => (
-                        <div key={index} className="bg-gh-bg-tertiary p-4 rounded-gh border border-gh-border-muted">
+                        <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
                           <div className="flex items-start gap-3">
-                            <div className="text-gh-accent-primary mt-1 flex-shrink-0">
+                            <div className="text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0">
                               {getTransportIcon(transport.type)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold capitalize text-gh-text-primary">{transport.type}</h4>
-                              <p className="text-sm text-gh-text-secondary">
+                              <div className="flex justify-between items-start mb-1">
+                                <h4 className="font-semibold capitalize text-gray-900 dark:text-[#ffffff]">{transport.type}</h4>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingTransport(transport);
+                                      setShowEditTransportForm(true);
+                                    }}
+                                    className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
+                                    disabled={loading}
+                                    title="Edit transport"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteTransport(transport.id!)}
+                                    className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
+                                    disabled={loading}
+                                    title="Delete transport"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-600 dark:text-[#98989d]">
                                 {transport.fromLocation} → {transport.toLocation}
                               </p>
-                              <p className="text-sm text-gh-text-secondary mt-1">
+                              <p className="text-sm text-gray-600 dark:text-[#98989d] mt-1">
                                 {new Date(transport.departureDate).toLocaleString()} -{' '}
                                 {new Date(transport.arrivalDate).toLocaleString()}
                               </p>
                               <div className="text-sm mt-1 flex items-center justify-between">
-                                <p className="font-medium text-gh-text-success">
+                                <p className="font-medium text-green-600 dark:text-[#30d158]">
                                   {transport.price} {transport.currency}
                                 </p>
                                 <PaymentCheckbox
@@ -1414,7 +1494,7 @@ function App() {
                                   href={transport.bookingUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-sm text-gh-text-link hover:underline"
+                                  className="text-sm text-blue-600 dark:text-[#0a84ff] hover:underline"
                                 >
                                   View booking →
                                 </a>
@@ -1424,7 +1504,7 @@ function App() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-gh-text-secondary text-center py-4">
+                      <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">
                         No transportation added yet.
                       </p>
                     )}
@@ -1433,11 +1513,11 @@ function App() {
               </div>
             ) : (
               <div className="gh-card text-center py-12">
-                <MapPin className="w-16 h-16 text-gh-text-secondary mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-semibold text-gh-text-primary mb-2">
+                <MapPin className="w-16 h-16 text-gray-600 dark:text-[#98989d] mx-auto mb-4 opacity-50" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-2">
                   No Journey Selected
                 </h3>
-                <p className="text-gh-text-secondary">
+                <p className="text-gray-600 dark:text-[#98989d]">
                   Select a journey from the list or create a new one to get started
                 </p>
               </div>
@@ -1451,10 +1531,10 @@ function App() {
         <div className="gh-modal-overlay" onClick={() => setShowNewJourneyForm(false)}>
           <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Create New Journey</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Create New Journey</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Journey Title *
                   </label>
                   <input
@@ -1466,7 +1546,7 @@ function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Description
                   </label>
                   <textarea
@@ -1479,7 +1559,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Start Date *
                     </label>
                     <input
@@ -1490,7 +1570,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       End Date *
                     </label>
                     <input
@@ -1502,7 +1582,7 @@ function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Currency
                   </label>
                   <select
@@ -1543,10 +1623,10 @@ function App() {
         <div className="gh-modal-overlay" onClick={() => setShowEditJourneyForm(false)}>
           <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Edit Journey</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Edit Journey</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Journey Title *
                   </label>
                   <input
@@ -1558,7 +1638,7 @@ function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Description
                   </label>
                   <textarea
@@ -1571,7 +1651,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Start Date *
                     </label>
                     <input
@@ -1582,7 +1662,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       End Date *
                     </label>
                     <input
@@ -1594,7 +1674,7 @@ function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Currency
                   </label>
                   <select
@@ -1638,11 +1718,11 @@ function App() {
         <div className="gh-modal-overlay" onClick={() => setShowStopForm(false)}>
           <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Add Stop</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Add Stop</h2>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       City *
                     </label>
                     <input
@@ -1654,7 +1734,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Country *
                     </label>
                     <input
@@ -1681,7 +1761,7 @@ function App() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival Date
                     </label>
                     <input
@@ -1692,7 +1772,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure Date
                     </label>
                     <input
@@ -1705,8 +1785,8 @@ function App() {
                 </div>
                 
                 {/* Booking.com URL Auto-fill */}
-                <div className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-gh">
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                <div className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     📎 Quick Fill from Booking.com
                   </label>
                   <div className="flex gap-2">
@@ -1725,13 +1805,13 @@ function App() {
                       Auto-fill
                     </button>
                   </div>
-                  <p className="text-xs text-gh-text-muted mt-2">
+                  <p className="text-xs text-gray-500 dark:text-[#636366] mt-2">
                     💡 Paste a Booking.com link to automatically extract hotel name, location, and dates
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Accommodation Name
                   </label>
                   <input
@@ -1743,7 +1823,7 @@ function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Accommodation URL (Booking.com, Airbnb, etc.)
                   </label>
                   <input
@@ -1756,7 +1836,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Accommodation Price
                     </label>
                     <input
@@ -1768,7 +1848,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Currency
                     </label>
                     <select
@@ -1783,11 +1863,11 @@ function App() {
                     </select>
                   </div>
                 </div>
-                <div className="bg-gh-bg-tertiary p-3 rounded-gh border border-gh-border-muted">
-                  <p className="text-sm text-gh-text-secondary">
+                <div className="bg-gray-50 dark:bg-[#1c1c1e] p-3 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                  <p className="text-sm text-gray-600 dark:text-[#98989d]">
                     📍 Coordinates: {newStop.latitude?.toFixed(4)}, {newStop.longitude?.toFixed(4)}
                   </p>
-                  <p className="text-xs text-gh-text-secondary mt-1">
+                  <p className="text-xs text-gray-600 dark:text-[#98989d] mt-1">
                     Click on the map to update coordinates
                   </p>
                 </div>
@@ -1818,11 +1898,11 @@ function App() {
         <div className="gh-modal-overlay" onClick={() => setShowEditStopForm(false)}>
           <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Edit Stop</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Edit Stop</h2>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       City *
                     </label>
                     <input
@@ -1834,7 +1914,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Country *
                     </label>
                     <input
@@ -1848,7 +1928,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival Date
                     </label>
                     <input
@@ -1859,7 +1939,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure Date
                     </label>
                     <input
@@ -1871,7 +1951,7 @@ function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Accommodation Name
                   </label>
                   <input
@@ -1883,7 +1963,7 @@ function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Accommodation URL
                   </label>
                   <input
@@ -1896,7 +1976,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Accommodation Price
                     </label>
                     <input
@@ -1908,7 +1988,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Currency
                     </label>
                     <select
@@ -1953,10 +2033,10 @@ function App() {
         <div className="gh-modal-overlay" onClick={() => setShowTransportForm(false)}>
           <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
-              <h2 className="text-2xl font-bold text-gh-text-primary mb-6">Add Transportation</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Add Transportation</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Transport Type *
                   </label>
                   <select
@@ -1973,7 +2053,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       From *
                     </label>
                     <input
@@ -1985,7 +2065,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       To *
                     </label>
                     <input
@@ -1999,7 +2079,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure *
                     </label>
                     <input
@@ -2010,7 +2090,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival *
                     </label>
                     <input
@@ -2023,7 +2103,7 @@ function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Price *
                     </label>
                     <input
@@ -2035,7 +2115,7 @@ function App() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Currency
                     </label>
                     <select
@@ -2051,9 +2131,9 @@ function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Ticket URL/Attachment
-                    <span className="text-xs text-gray-500 ml-2">(Flight, train, or bus ticket link)</span>
+                    <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(Flight, train, or bus ticket link)</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -2095,7 +2175,7 @@ function App() {
                       {loading ? '🔍' : '🎫 Auto-fill'}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-[#98989d] mt-1">
                     Paste a link from Ryanair, Wizz Air, LOT, PKP Intercity, or Booking.com to auto-fill flight/train details
                   </p>
                 </div>
@@ -2121,19 +2201,158 @@ function App() {
         </div>
       )}
       
+      {/* Edit Transport Modal */}
+      {showEditTransportForm && editingTransport && (
+        <div className="gh-modal-overlay" onClick={() => setShowEditTransportForm(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Edit Transportation</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Transport Type *
+                  </label>
+                  <select
+                    value={editingTransport.type}
+                    onChange={(e) => setEditingTransport({ ...editingTransport, type: e.target.value as Transport['type'] })}
+                    className="gh-select"
+                  >
+                    <option value="flight">✈️ Flight</option>
+                    <option value="train">🚆 Train</option>
+                    <option value="bus">🚌 Bus</option>
+                    <option value="car">🚗 Car</option>
+                    <option value="other">🚢 Other</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      From *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Warsaw"
+                      value={editingTransport.fromLocation}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, fromLocation: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      To *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Paris"
+                      value={editingTransport.toLocation}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, toLocation: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Departure *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editingTransport.departureDate as string}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, departureDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Arrival *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editingTransport.arrivalDate as string}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, arrivalDate: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Price *
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={editingTransport.price || ''}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, price: parseFloat(e.target.value) || 0 })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={editingTransport.currency}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, currency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Ticket URL/Attachment
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={editingTransport.bookingUrl || ''}
+                    onChange={(e) => setEditingTransport({ ...editingTransport, bookingUrl: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditTransportForm(false);
+                    setEditingTransport(null);
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditTransport}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Transport'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Add Attraction Modal */}
       {showAttractionForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gh-bg-primary rounded-gh max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-[#1c1c1e] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gh-text-primary">Add Attraction</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">Add Attraction</h2>
                 <button
                   onClick={() => {
                     setShowAttractionForm(false);
                     setSelectedStopForAttraction(null);
                   }}
-                  className="text-gh-text-secondary hover:text-gh-text-primary"
+                  className="text-gray-600 dark:text-[#98989d] hover:text-gray-900 dark:text-[#ffffff]"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -2141,7 +2360,7 @@ function App() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Attraction Name *
                   </label>
                   <input
@@ -2154,7 +2373,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Description
                   </label>
                   <textarea
@@ -2167,7 +2386,7 @@ function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Estimated Cost
                     </label>
                     <input
@@ -2180,7 +2399,7 @@ function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Duration
                     </label>
                     <input
@@ -2221,17 +2440,17 @@ function App() {
       {/* Edit Attraction Modal */}
       {showEditAttractionForm && editingAttraction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gh-bg-primary rounded-gh max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-[#1c1c1e] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gh-text-primary">Edit Attraction</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">Edit Attraction</h2>
                 <button
                   onClick={() => {
                     setShowEditAttractionForm(false);
                     setEditingAttraction(null);
                     setEditingAttractionStopId(null);
                   }}
-                  className="text-gh-text-secondary hover:text-gh-text-primary"
+                  className="text-gray-600 dark:text-[#98989d] hover:text-gray-900 dark:text-[#ffffff]"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -2239,7 +2458,7 @@ function App() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Attraction Name *
                   </label>
                   <input
@@ -2252,7 +2471,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Description
                   </label>
                   <textarea
@@ -2265,7 +2484,7 @@ function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Estimated Cost
                     </label>
                     <input
@@ -2278,7 +2497,7 @@ function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gh-text-primary mb-2">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Duration
                     </label>
                     <input
