@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS transports (
     currency VARCHAR(3) DEFAULT 'USD',
     booking_url TEXT,
     notes TEXT,
+    flight_number VARCHAR(50),
+    train_number VARCHAR(50),
     is_paid BOOLEAN DEFAULT FALSE
 );
 

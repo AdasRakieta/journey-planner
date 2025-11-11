@@ -5,19 +5,20 @@ import {
   updateAttraction,
   deleteAttraction,
 } from '../controllers/attractionController';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
 // Get all attractions for a stop
-router.get('/stop/:stopId', getAttractionsByStopId);
+router.get('/stop/:stopId', authenticateToken, getAttractionsByStopId);
 
 // Create attraction for a stop
-router.post('/stop/:stopId', createAttraction);
+router.post('/stop/:stopId', authenticateToken, createAttraction);
 
 // Update attraction
-router.put('/:id', updateAttraction);
+router.put('/:id', authenticateToken, updateAttraction);
 
 // Delete attraction
-router.delete('/:id', deleteAttraction);
+router.delete('/:id', authenticateToken, deleteAttraction);
 
 export default router;

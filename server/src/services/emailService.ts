@@ -259,8 +259,110 @@ export async function sendPasswordResetEmail(
   });
 }
 
+/**
+ * Send journey sharing invitation email
+ */
+export async function sendJourneyInvitation(
+  email: string,
+  username: string,
+  sharedBy: string,
+  journeyTitle: string,
+  token: string
+): Promise<void> {
+  const acceptUrl = `${process.env.FRONTEND_URL || 'http://localhost'}/accept-invitation/${token}`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        .header {
+          background: linear-gradient(135deg, #0a84ff 0%, #30d158 100%);
+          color: white;
+          padding: 30px;
+          border-radius: 10px 10px 0 0;
+          text-align: center;
+        }
+        .content {
+          background: #f9fafb;
+          padding: 30px;
+          border-radius: 0 0 10px 10px;
+        }
+        .journey-info {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+          border-left: 4px solid #0a84ff;
+        }
+        .button {
+          display: inline-block;
+          background: #0a84ff;
+          color: white;
+          padding: 15px 30px;
+          text-decoration: none;
+          border-radius: 8px;
+          margin: 20px 0;
+          font-weight: 600;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 30px;
+          font-size: 12px;
+          color: #6b7280;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>🗺️ Journey Shared With You</h1>
+        <p>Journey Planner</p>
+      </div>
+      <div class="content">
+        <p>Hello <strong>${username}</strong>!</p>
+        <p><strong>${sharedBy}</strong> has shared a journey with you on Journey Planner.</p>
+        
+        <div class="journey-info">
+          <h2 style="margin-top: 0;">📍 ${journeyTitle}</h2>
+          <p>You've been invited to view and collaborate on this journey.</p>
+        </div>
+
+        <p>Click the button below to accept this invitation:</p>
+        <center>
+          <a href="${acceptUrl}" class="button">✓ Accept Invitation</a>
+        </center>
+        
+        <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">
+          You can also accept this invitation from your Settings page after logging in.
+        </p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Journey Planner. All rights reserved.</p>
+        <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: `${sharedBy} shared a journey with you - Journey Planner`,
+    html,
+    text: `${sharedBy} has shared the journey "${journeyTitle}" with you. Visit ${acceptUrl} to accept the invitation.`,
+  });
+}
+
 export default {
   sendEmail,
   sendInvitationEmail,
   sendPasswordResetEmail,
+  sendJourneyInvitation,
 };

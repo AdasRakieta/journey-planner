@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
@@ -17,19 +17,28 @@ import {
   X,
   ArrowLeft,
   Moon,
-  Sun
+  Sun,
+  Check,
+  Share2
 } from 'lucide-react';
 import { userAPI, adminAPI } from '../services/authApi';
 import type { User as UserType, Invitation } from '../types/auth';
+import type { JourneyShare } from '../types/journey';
 import { useToast, ToastContainer } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
+import { journeyShareService } from '../services/api';
 
 const SettingsPage: React.FC = () => {
   const { user, logout, updateUser, refreshUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const toast = useToast();
-  const confirm = useConfirm();
+  const confirmDialog = useConfirm();
+  const navigate = useNavigate();
+  
+  // Journey Invitations State
+  const [journeyInvitations, setJourneyInvitations] = useState<JourneyShare[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
   
   // User Profile State
   const [username, setUsername] = useState(user?.username || '');
@@ -63,6 +72,55 @@ const SettingsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - run only once on mount
 
+  // Load journey invitations
+  const loadJourneyInvitations = useCallback(async () => {
+    setInvitationsLoading(true);
+    try {
+      const invitations = await journeyShareService.getSharedWithMe();
+      setJourneyInvitations(invitations);
+    } catch (error: any) {
+      console.error('Failed to load journey invitations:', error);
+      toast.error('Failed to load journey invitations');
+    } finally {
+      setInvitationsLoading(false);
+    }
+  }, [toast]);
+
+  // Accept journey invitation
+  const handleAcceptInvitation = async (invitationId: number) => {
+    try {
+      await journeyShareService.acceptInvitation(invitationId.toString(), false);
+      toast.success('Journey invitation accepted!');
+      loadJourneyInvitations();
+      // Optional: navigate to main page to see the new journey
+      setTimeout(() => navigate('/'), 1000);
+    } catch (error: any) {
+      console.error('Failed to accept invitation:', error);
+      toast.error(error.message || 'Failed to accept invitation');
+    }
+  };
+
+  // Reject journey invitation
+  const handleRejectInvitation = async (invitationId: number) => {
+    const confirmed = await confirmDialog.confirm({
+      title: 'Reject Invitation',
+      message: 'Are you sure you want to reject this journey invitation?',
+      confirmText: 'Reject',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await journeyShareService.rejectInvitation(invitationId);
+      toast.success('Journey invitation rejected');
+      loadJourneyInvitations();
+    } catch (error: any) {
+      console.error('Failed to reject invitation:', error);
+      toast.error(error.message || 'Failed to reject invitation');
+    }
+  };
+
   const loadAdminData = useCallback(async () => {
     setAdminLoading(true);
     try {
@@ -84,6 +142,11 @@ const SettingsPage: React.FC = () => {
       loadAdminData();
     }
   }, [user?.role, loadAdminData]); // Safe to include loadAdminData now
+
+  // Load journey invitations on mount
+  useEffect(() => {
+    loadJourneyInvitations();
+  }, [loadJourneyInvitations]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +221,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: number, username: string) => {
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmDialog.confirm({
       title: 'Delete User',
       message: `Are you sure you want to delete user "${username}"? This action cannot be undone.`,
       confirmText: 'Delete',
@@ -180,7 +243,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleChangeRole = async (userId: number, username: string, newRole: 'admin' | 'user') => {
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmDialog.confirm({
       title: 'Change User Role',
       message: `Change ${username}'s role to ${newRole}?`,
       confirmText: 'Change Role',
@@ -202,7 +265,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleCancelInvitation = async (invitationId: number, email: string) => {
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmDialog.confirm({
       title: 'Cancel Invitation',
       message: `Cancel invitation for ${email}?`,
       confirmText: 'Cancel Invitation',
@@ -341,6 +404,69 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Journey Invitations */}
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Share2 size={24} className="text-blue-500 dark:text-[#0a84ff]" />
+                Journey Invitations
+              </h2>
+              
+              {invitationsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-500 dark:text-[#0a84ff]" />
+                </div>
+              ) : journeyInvitations.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-[#636366]">
+                  <Share2 size={48} className="mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">No pending journey invitations</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {journeyInvitations.map((invitation) => (
+                    <div
+                      key={invitation.id}
+                      className="p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900 dark:text-white mb-1">
+                            {invitation.journeyTitle}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-[#98989d] mb-2">
+                            Shared by <span className="font-medium">{invitation.sharedByUsername}</span>
+                          </p>
+                          {invitation.journeyDescription && (
+                            <p className="text-xs text-gray-500 dark:text-[#636366] mb-2">
+                              {invitation.journeyDescription}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 dark:text-[#636366]">
+                            Invited on {new Date(invitation.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => handleAcceptInvitation(invitation.id!)}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
+                          >
+                            <Check size={16} />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleRejectInvitation(invitation.id!)}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
+                          >
+                            <X size={16} />
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Update Username */}
@@ -625,14 +751,14 @@ const SettingsPage: React.FC = () => {
 
       {/* Confirm Dialog */}
       <ConfirmDialog
-        isOpen={confirm.isOpen}
-        title={confirm.options.title}
-        message={confirm.options.message}
-        confirmText={confirm.options.confirmText}
-        cancelText={confirm.options.cancelText}
-        confirmVariant={confirm.options.confirmVariant}
-        onConfirm={confirm.handleConfirm}
-        onCancel={confirm.handleCancel}
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.options.title}
+        message={confirmDialog.options.message}
+        confirmText={confirmDialog.options.confirmText}
+        cancelText={confirmDialog.options.cancelText}
+        confirmVariant={confirmDialog.options.confirmVariant}
+        onConfirm={confirmDialog.handleConfirm}
+        onCancel={confirmDialog.handleCancel}
       />
     </div>
   );

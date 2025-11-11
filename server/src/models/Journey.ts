@@ -32,6 +32,8 @@ export interface TransportAttributes {
   currency: string;
   bookingUrl?: string;
   notes?: string;
+  flightNumber?: string;
+  trainNumber?: string;
   isPaid?: boolean;
 }
 
@@ -43,6 +45,19 @@ export interface AttractionAttributes {
   estimatedCost?: number;
   duration?: number; // in hours
   isPaid?: boolean;
+}
+
+export interface JourneyShareAttributes {
+  id?: number;
+  journeyId: number;
+  sharedWithUserId?: number;
+  sharedByUserId: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  invitedEmail?: string;
+  invitationToken?: string;
+  createdAt?: Date;
+  acceptedAt?: Date;
+  rejectedAt?: Date;
 }
 
 export interface JourneyAttributes {
@@ -62,6 +77,7 @@ interface JourneyCreationAttributes extends Optional<JourneyAttributes, 'id' | '
 interface StopCreationAttributes extends Optional<StopAttributes, 'id'> {}
 interface TransportCreationAttributes extends Optional<TransportAttributes, 'id'> {}
 interface AttractionCreationAttributes extends Optional<AttractionAttributes, 'id'> {}
+interface JourneyShareCreationAttributes extends Optional<JourneyShareAttributes, 'id' | 'createdAt' | 'acceptedAt' | 'rejectedAt'> {}
 
 // Journey Model
 export class Journey extends Model<JourneyAttributes, JourneyCreationAttributes> implements JourneyAttributes {
@@ -234,6 +250,8 @@ export class Transport extends Model<TransportAttributes, TransportCreationAttri
   public currency!: string;
   public bookingUrl?: string;
   public notes?: string;
+  public flightNumber?: string;
+  public trainNumber?: string;
   public isPaid?: boolean;
 }
 
@@ -291,6 +309,16 @@ Transport.init(
     },
     notes: {
       type: DataTypes.TEXT,
+    },
+    flightNumber: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'flight_number', // Map to snake_case column
+    },
+    trainNumber: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'train_number', // Map to snake_case column
     },
     isPaid: {
       type: DataTypes.BOOLEAN,
@@ -361,6 +389,92 @@ Attraction.init(
   }
 );
 
+// JourneyShare Model
+export class JourneyShare extends Model<JourneyShareAttributes, JourneyShareCreationAttributes> implements JourneyShareAttributes {
+  public id!: number;
+  public journeyId!: number;
+  public sharedWithUserId?: number;
+  public sharedByUserId!: number;
+  public status!: 'pending' | 'accepted' | 'rejected';
+  public invitedEmail?: string;
+  public invitationToken?: string;
+  public readonly createdAt!: Date;
+  public acceptedAt?: Date;
+  public rejectedAt?: Date;
+}
+
+JourneyShare.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    journeyId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'journeys',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+      field: 'journey_id',
+    },
+    sharedWithUserId: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'users',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+      field: 'shared_with_user_id',
+    },
+    sharedByUserId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+      field: 'shared_by_user_id',
+    },
+    status: {
+      type: DataTypes.ENUM('pending', 'accepted', 'rejected'),
+      defaultValue: 'pending',
+      allowNull: false,
+    },
+    invitedEmail: {
+      type: DataTypes.STRING(255),
+      field: 'invited_email',
+    },
+    invitationToken: {
+      type: DataTypes.TEXT,
+      unique: true,
+      field: 'invitation_token',
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+      field: 'created_at',
+    },
+    acceptedAt: {
+      type: DataTypes.DATE,
+      field: 'accepted_at',
+    },
+    rejectedAt: {
+      type: DataTypes.DATE,
+      field: 'rejected_at',
+    },
+  },
+  {
+    sequelize,
+    tableName: 'journey_shares',
+    timestamps: false,
+    underscored: true,
+  }
+);
+
 // Define associations
 Journey.hasMany(Stop, { foreignKey: 'journeyId', as: 'stops' });
 Stop.belongsTo(Journey, { foreignKey: 'journeyId' });
@@ -374,6 +488,16 @@ Attraction.belongsTo(Stop, { foreignKey: 'stopId' });
 // User associations
 Journey.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 User.hasMany(Journey, { foreignKey: 'createdBy', as: 'journeys' });
+
+// JourneyShare associations
+Journey.hasMany(JourneyShare, { foreignKey: 'journeyId', as: 'shares' });
+JourneyShare.belongsTo(Journey, { foreignKey: 'journeyId', as: 'journey' });
+
+JourneyShare.belongsTo(User, { foreignKey: 'sharedWithUserId', as: 'sharedWithUser' });
+JourneyShare.belongsTo(User, { foreignKey: 'sharedByUserId', as: 'sharedByUser' });
+
+User.hasMany(JourneyShare, { foreignKey: 'sharedWithUserId', as: 'sharedJourneys' });
+User.hasMany(JourneyShare, { foreignKey: 'sharedByUserId', as: 'journeysSharedByMe' });
 
 // Transport attachment associations
 Transport.hasMany(TransportAttachment, { foreignKey: 'transportId', as: 'attachments' });

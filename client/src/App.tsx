@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2 } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
-import { journeyService, stopService, attractionService, transportService } from './services/api';
+import { journeyService, stopService, attractionService, transportService, journeyShareService } from './services/api';
 import { socketService } from './services/socket';
 import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
 import { useAuth } from './contexts/AuthContext';
@@ -73,6 +73,8 @@ function App() {
     price: 0,
     currency: 'PLN',
     bookingUrl: '',
+    flightNumber: '',
+    trainNumber: '',
   });
 
   const [newAttraction, setNewAttraction] = useState<Partial<Attraction>>({
@@ -98,8 +100,15 @@ function App() {
   const [editingJourney, setEditingJourney] = useState<Journey | null>(null);
   const [showEditJourneyForm, setShowEditJourneyForm] = useState(false);
 
+  // Share journey state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareEmailOrUsername, setShareEmailOrUsername] = useState('');
+
   useEffect(() => {
-    void loadJourneys();
+    // Only load journeys if user is authenticated
+    if (user) {
+      void loadJourneys();
+    }
     
     // Connect to Socket.IO for real-time updates
     socketService.connect();
@@ -310,7 +319,7 @@ function App() {
       socketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
 
   // Auto-calculate total cost from all sources
   const costDependency = useMemo(() => {
@@ -846,6 +855,8 @@ function App() {
         price: 0,
         currency: 'PLN',
         bookingUrl: '',
+        flightNumber: '',
+        trainNumber: '',
       });
       setShowTransportForm(false);
       success('Transport added successfully!');
@@ -958,6 +969,27 @@ function App() {
     const transportsCost = journey.transports?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
     
     return stopsCost + attractionsCost + transportsCost;
+  };
+
+  // Share journey handler
+  const handleShareJourney = async () => {
+    if (!selectedJourney || !shareEmailOrUsername.trim()) {
+      warning('Please enter email or username');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await journeyShareService.shareJourney(selectedJourney.id!, shareEmailOrUsername);
+      success(`Journey shared with ${shareEmailOrUsername}!`);
+      setShowShareModal(false);
+      setShareEmailOrUsername('');
+    } catch (err: any) {
+      console.error('Failed to share journey:', err);
+      error(err.message || 'Failed to share journey');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1146,7 +1178,14 @@ function App() {
                         onClick={() => setSelectedJourney(journey)}
                         className="cursor-pointer"
                       >
-                        <h3 className="font-semibold text-gray-900 dark:text-[#ffffff]">{journey.title}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900 dark:text-[#ffffff]">{journey.title}</h3>
+                          {journey.isShared && (
+                            <div title="Shared journey">
+                              <Users className="w-4 h-4 text-blue-600 dark:text-[#0a84ff]" />
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-2 text-sm text-gray-600 dark:text-[#98989d]">
                           <Calendar className="w-4 h-4" />
                           <span>
@@ -1204,26 +1243,40 @@ function App() {
                       </div>
 
                       {selectedJourney?.id === journey.id && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-[#38383a]">
-                          <button
-                            onClick={() => {
-                              setEditingJourney(journey);
-                              setShowEditJourneyForm(true);
-                            }}
-                            className="flex-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-                            disabled={loading}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Edit Journey
-                          </button>
-                          <button
-                            onClick={() => handleDeleteJourney(journey.id!)}
-                            className="flex-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-                            disabled={loading}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete Journey
-                          </button>
+                        <div className="space-y-2 mt-3 pt-3 border-t border-gray-200 dark:border-[#38383a]">
+                          {/* Share Journey Button - Only for journey owner */}
+                          {!journey.isShared && (
+                            <button
+                              onClick={() => setShowShareModal(true)}
+                              className="w-full px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                              disabled={loading}
+                            >
+                              <Share2 className="w-4 h-4" />
+                              Share Journey
+                            </button>
+                          )}
+                          
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingJourney(journey);
+                                setShowEditJourneyForm(true);
+                              }}
+                              className="flex-1 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                              disabled={loading}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              Edit Journey
+                            </button>
+                            <button
+                              onClick={() => handleDeleteJourney(journey.id!)}
+                              className="flex-1 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                              disabled={loading}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete Journey
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1448,7 +1501,19 @@ function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start mb-1">
-                                <h4 className="font-semibold capitalize text-gray-900 dark:text-[#ffffff]">{transport.type}</h4>
+                                <div>
+                                  <h4 className="font-semibold capitalize text-gray-900 dark:text-[#ffffff]">{transport.type}</h4>
+                                  {transport.flightNumber && (
+                                    <p className="text-xs text-gray-500 dark:text-[#636366] mt-0.5">
+                                      Flight: {transport.flightNumber}
+                                    </p>
+                                  )}
+                                  {transport.trainNumber && (
+                                    <p className="text-xs text-gray-500 dark:text-[#636366] mt-0.5">
+                                      Train: {transport.trainNumber}
+                                    </p>
+                                  )}
+                                </div>
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => {
@@ -1706,6 +1771,59 @@ function App() {
                   disabled={loading}
                 >
                   {loading ? 'Updating...' : 'Update Journey'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Journey Modal */}
+      {showShareModal && selectedJourney && (
+        <div className="gh-modal-overlay" onClick={() => setShowShareModal(false)}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-4">
+                Share Journey
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-[#98989d] mb-6">
+                Share "{selectedJourney.title}" with another user. They will receive an email invitation.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Email or Username *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter email or username"
+                    value={shareEmailOrUsername}
+                    onChange={(e) => setShareEmailOrUsername(e.target.value)}
+                    className="gh-input"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 dark:text-[#98989d] mt-2">
+                    Enter the email address or username of the person you want to share with.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowShareModal(false);
+                    setShareEmailOrUsername('');
+                  }}
+                  className="gh-btn-secondary flex-1"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleShareJourney}
+                  className="gh-btn-primary flex-1"
+                  disabled={loading || !shareEmailOrUsername.trim()}
+                >
+                  {loading ? 'Sharing...' : 'Share Journey'}
                 </button>
               </div>
             </div>
@@ -2051,6 +2169,41 @@ function App() {
                     <option value="other">🚢 Other</option>
                   </select>
                 </div>
+                
+                {/* Conditional field for Flight Number */}
+                {newTransport.type === 'flight' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Flight Number
+                      <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(e.g., LO123, FR1234)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., LO123"
+                      value={newTransport.flightNumber || ''}
+                      onChange={(e) => setNewTransport({ ...newTransport, flightNumber: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                )}
+                
+                {/* Conditional field for Train Number */}
+                {newTransport.type === 'train' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Train Number
+                      <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(e.g., TLK 12345, IC 5002)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., TLK 12345"
+                      value={newTransport.trainNumber || ''}
+                      onChange={(e) => setNewTransport({ ...newTransport, trainNumber: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -2224,6 +2377,41 @@ function App() {
                     <option value="other">🚢 Other</option>
                   </select>
                 </div>
+                
+                {/* Conditional field for Flight Number */}
+                {editingTransport.type === 'flight' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Flight Number
+                      <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(e.g., LO123, FR1234)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., LO123"
+                      value={editingTransport.flightNumber || ''}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, flightNumber: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                )}
+                
+                {/* Conditional field for Train Number */}
+                {editingTransport.type === 'train' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Train Number
+                      <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(e.g., TLK 12345, IC 5002)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., TLK 12345"
+                      value={editingTransport.trainNumber || ''}
+                      onChange={(e) => setEditingTransport({ ...editingTransport, trainNumber: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -2342,8 +2530,11 @@ function App() {
       
       {/* Add Attraction Modal */}
       {showAttractionForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-[#1c1c1e] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="gh-modal-overlay" onClick={() => {
+          setShowAttractionForm(false);
+          setSelectedStopForAttraction(null);
+        }}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">Add Attraction</h2>
@@ -2439,8 +2630,12 @@ function App() {
 
       {/* Edit Attraction Modal */}
       {showEditAttractionForm && editingAttraction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-[#1c1c1e] rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="gh-modal-overlay" onClick={() => {
+          setShowEditAttractionForm(false);
+          setEditingAttraction(null);
+          setEditingAttractionStopId(null);
+        }}>
+          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">Edit Attraction</h2>

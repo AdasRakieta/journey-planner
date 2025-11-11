@@ -65,21 +65,27 @@ export const createTransport = async (req: Request, res: Response) => {
       price,
       currency,
       bookingUrl,
-      notes
+      notes,
+      flightNumber,
+      trainNumber
     } = req.body;
     
     // Convert empty strings to null for optional date fields
     const cleanArrivalDate = arrivalDate && arrivalDate.trim() !== '' ? arrivalDate : null;
     const cleanDepartureDate = departureDate && departureDate.trim() !== '' ? departureDate : null;
+    const cleanFlightNumber = flightNumber && flightNumber.trim() !== '' ? flightNumber : null;
+    const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
     const result = await query(
       `INSERT INTO transports (
         journey_id, type, from_location, to_location,
-        departure_date, arrival_date, price, currency, booking_url, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        departure_date, arrival_date, price, currency, booking_url, notes,
+        flight_number, train_number
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [
         journeyId, type, fromLocation, toLocation,
-        cleanDepartureDate, cleanArrivalDate, price, currency, bookingUrl, notes
+        cleanDepartureDate, cleanArrivalDate, price, currency, bookingUrl, notes,
+        cleanFlightNumber, cleanTrainNumber
       ]
     );
     
@@ -128,23 +134,29 @@ export const updateTransport = async (req: Request, res: Response) => {
       price,
       currency,
       bookingUrl,
-      notes
+      notes,
+      flightNumber,
+      trainNumber
     } = req.body;
     
     // Convert empty strings to null for optional date fields
     const cleanArrivalDate = arrivalDate && arrivalDate.trim() !== '' ? arrivalDate : null;
     const cleanDepartureDate = departureDate && departureDate.trim() !== '' ? departureDate : null;
+    const cleanFlightNumber = flightNumber && flightNumber.trim() !== '' ? flightNumber : null;
+    const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
     const result = await query(
       `UPDATE transports SET
         type=$1, from_location=$2, to_location=$3,
         departure_date=$4, arrival_date=$5, price=$6,
-        currency=$7, booking_url=$8, notes=$9
-      WHERE id=$10 RETURNING *`,
+        currency=$7, booking_url=$8, notes=$9,
+        flight_number=$10, train_number=$11
+      WHERE id=$12 RETURNING *`,
       [
         type, fromLocation, toLocation,
         cleanDepartureDate, cleanArrivalDate, price,
-        currency, bookingUrl, notes, transportId
+        currency, bookingUrl, notes,
+        cleanFlightNumber, cleanTrainNumber, transportId
       ]
     );
     

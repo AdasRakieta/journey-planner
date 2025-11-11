@@ -27,6 +27,8 @@ export interface Transport {
   currency: string;
   bookingUrl?: string;
   notes?: string;
+  flightNumber?: string;  // For flights (e.g., "LO123")
+  trainNumber?: string;   // For trains (e.g., "TLK 12345")
   isPaid?: boolean;
 }
 
@@ -40,6 +42,26 @@ export interface Attraction {
   isPaid?: boolean;
 }
 
+export interface JourneyShare {
+  id: number;
+  journeyId: number;
+  sharedWithUserId?: number;
+  sharedByUserId: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  invitedEmail?: string;
+  invitationToken?: string;
+  createdAt: Date | string;
+  acceptedAt?: Date | string;
+  rejectedAt?: Date | string;
+  // Additional fields from joined queries
+  journeyTitle?: string;
+  journeyDescription?: string;
+  startDate?: Date | string;
+  endDate?: Date | string;
+  sharedByUsername?: string;
+  sharedByEmail?: string;
+}
+
 export interface Journey {
   id?: number;
   title: string;
@@ -50,6 +72,8 @@ export interface Journey {
   transports?: Transport[];
   totalEstimatedCost?: number;
   currency: string;
+  createdBy?: number;
+  isShared?: boolean; // Flag indicating if journey is shared with current user
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }
