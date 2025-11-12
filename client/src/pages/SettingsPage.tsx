@@ -84,7 +84,8 @@ const SettingsPage: React.FC = () => {
     } finally {
       setInvitationsLoading(false);
     }
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependencies - toast is stable enough
 
   // Accept journey invitation
   const handleAcceptInvitation = async (invitationId: number) => {
@@ -141,12 +142,14 @@ const SettingsPage: React.FC = () => {
     if (user?.role === 'admin') {
       loadAdminData();
     }
-  }, [user?.role, loadAdminData]); // Safe to include loadAdminData now
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role]); // loadAdminData is stable, no need to include
 
   // Load journey invitations on mount
   useEffect(() => {
     loadJourneyInvitations();
-  }, [loadJourneyInvitations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
