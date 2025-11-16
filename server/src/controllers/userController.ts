@@ -1,14 +1,7 @@
 import { Request, Response } from 'express';
-import { Pool } from 'pg';
 import { hashPassword, comparePassword, validatePassword } from '../utils/auth';
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
+import { query, DB_AVAILABLE } from '../config/db';
+import jsonStore from '../config/jsonStore';
 
 /**
  * PUT /api/user/profile
@@ -23,25 +16,17 @@ export async function updateProfile(req: Request, res: Response) {
     }
 
     // Check if username is already taken by another user
-    const usernameCheck = await pool.query(
-      'SELECT id FROM users WHERE username = $1 AND id != $2',
-      [username, req.user!.userId]
-    );
-
-    if (usernameCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'Username already taken' });
+    if (DB_AVAILABLE) {
+      const usernameCheck = await query('SELECT id FROM users WHERE username = $1 AND id != $2', [username, req.user!.userId]);
+      if (usernameCheck.rows.length > 0) return res.status(400).json({ error: 'Username already taken' });
+      const result = await query('UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, role', [username, req.user!.userId]);
+      return res.json({ message: 'Profile updated successfully', user: result.rows[0] });
     }
 
-    // Update username
-    const result = await pool.query(
-      'UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, role',
-      [username, req.user!.userId]
-    );
-
-    res.json({
-      message: 'Profile updated successfully',
-      user: result.rows[0],
-    });
+    const users = await jsonStore.getAll('users');
+    if (users.some((u: any) => u.username === username && u.id !== req.user!.userId)) return res.status(400).json({ error: 'Username already taken' });
+    const updated = await jsonStore.updateById('users', req.user!.userId, { username });
+    return res.json({ message: 'Profile updated successfully', user: updated });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -67,33 +52,34 @@ export async function changePassword(req: Request, res: Response) {
     }
 
     // Get user's current password hash
-    const userResult = await pool.query(
-      'SELECT password_hash FROM users WHERE id = $1',
-      [req.user!.userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    let currentHash: string | null = null;
+    if (DB_AVAILABLE) {
+      const userResult = await query('SELECT password_hash FROM users WHERE id = $1', [req.user!.userId]);
+      if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      currentHash = userResult.rows[0].password_hash;
+    } else {
+      const u = await jsonStore.getById('users', req.user!.userId);
+      if (!u) return res.status(404).json({ error: 'User not found' });
+      currentHash = u.password_hash;
     }
 
     // Verify current password
-    const isValidPassword = await comparePassword(
-      currentPassword,
-      userResult.rows[0].password_hash
-    );
-
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Current password is incorrect' });
+    if (!currentHash) {
+      // No password hash present for user — treat as error
+      return res.status(500).json({ error: 'User has no password set' });
     }
+    const isValidPassword = await comparePassword(currentPassword, currentHash);
+    if (!isValidPassword) return res.status(401).json({ error: 'Current password is incorrect' });
 
     // Hash new password
     const newPasswordHash = await hashPassword(newPassword);
 
     // Update password
-    await pool.query(
-      'UPDATE users SET password_hash = $1 WHERE id = $2',
-      [newPasswordHash, req.user!.userId]
-    );
+    if (DB_AVAILABLE) {
+      await query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, req.user!.userId]);
+    } else {
+      await jsonStore.updateById('users', req.user!.userId, { password_hash: newPasswordHash });
+    }
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {

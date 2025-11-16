@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS journeys (
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
     total_estimated_cost DECIMAL(10, 2) DEFAULT 0,
-    currency VARCHAR(3) DEFAULT 'USD',
+    currency VARCHAR(3) DEFAULT 'PLN',
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -152,13 +152,13 @@ INSERT INTO transports (journey_id, type, from_location, to_location, departure_
 (1, 'train', 'Paris', 'Rome', '2024-06-05 09:00:00', '2024-06-05 19:00:00', 200, 'EUR'),
 (1, 'flight', 'Rome', 'Barcelona', '2024-06-10 14:00:00', '2024-06-10 16:00:00', 80, 'EUR');
 
-INSERT INTO attractions (stop_id, name, description, estimated_cost, duration) VALUES
-(1, 'Eiffel Tower', 'Visit the iconic Eiffel Tower', 25, 3),
-(1, 'Louvre Museum', 'Explore the world-famous art museum', 17, 4),
-(2, 'Colosseum', 'Ancient Roman amphitheater', 16, 2),
-(2, 'Vatican Museums', 'Vatican art and history', 17, 4),
-(3, 'Sagrada Familia', 'Gaudi''s masterpiece', 26, 3),
-(3, 'Park Güell', 'Colorful park by Gaudi', 10, 2);
+INSERT INTO attractions (stop_id, name, description, estimated_cost, duration, currency) VALUES
+(1, 'Eiffel Tower', 'Visit the iconic Eiffel Tower', 25, 3, 'EUR'),
+(1, 'Louvre Museum', 'Explore the world-famous art museum', 17, 4, 'EUR'),
+(2, 'Colosseum', 'Ancient Roman amphitheater', 16, 2, 'EUR'),
+(2, 'Vatican Museums', 'Vatican art and history', 17, 4, 'EUR'),
+(3, 'Sagrada Familia', 'Gaudi''s masterpiece', 26, 3, 'EUR'),
+(3, 'Park Güell', 'Colorful park by Gaudi', 10, 2, 'EUR');
 */
 
 -- Display table information

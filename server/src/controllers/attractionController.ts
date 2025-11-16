@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { query } from '../config/db';
+import { query, DB_AVAILABLE } from '../config/db';
+import jsonStore from '../config/jsonStore';
 
 // Helper: Convert snake_case to camelCase recursively
 const toCamelCase = (obj: any): any => {
@@ -40,6 +41,11 @@ const toCamelCase = (obj: any): any => {
 export const getAttractionsByStopId = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.stopId);
+    if (!DB_AVAILABLE) {
+      const attractions = (await jsonStore.findByField('attractions', 'stop_id', stopId))
+        .sort((a: any, b: any) => (a.id || 0) - (b.id || 0));
+      return res.json(toCamelCase(attractions));
+    }
     const result = await query(
       'SELECT * FROM attractions WHERE stop_id = $1 ORDER BY id ASC',
       [stopId]
@@ -56,7 +62,7 @@ export const createAttraction = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.stopId);
     let { 
-      name, description, estimatedCost, duration, 
+      name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
       latitude, longitude, visitTime 
     } = req.body;
@@ -73,13 +79,26 @@ export const createAttraction = async (req: Request, res: Response) => {
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
     
+    if (!DB_AVAILABLE) {
+      const newAttraction = await jsonStore.insert('attractions', {
+        stop_id: stopId,
+        name, description, estimated_cost: estimatedCost, duration, currency: currency || 'PLN',
+        address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
+        latitude, longitude, visit_time: visitTime,
+        created_at: new Date().toISOString()
+      });
+      const attraction = toCamelCase(newAttraction);
+      const io = req.app.get('io');
+      io.emit('attraction:created', attraction);
+      return res.status(201).json(attraction);
+    }
     const result = await query(
       `INSERT INTO attractions (
-        stop_id, name, description, estimated_cost, duration, 
+        stop_id, name, description, estimated_cost, duration, currency,
         address, address_street, address_city, address_postal_code, address_country,
         latitude, longitude, visit_time
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
-      [stopId, name, description, estimatedCost, duration, 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      [stopId, name, description, estimatedCost, duration, currency || 'PLN',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
        latitude, longitude, visitTime]
     );
@@ -102,6 +121,14 @@ export const updateAttraction = async (req: Request, res: Response) => {
     if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
       console.log(`✅ Updating attraction ${attractionId} payment status to:`, req.body.isPaid);
       const { isPaid } = req.body;
+      if (!DB_AVAILABLE) {
+        const updated = await jsonStore.updateById('attractions', attractionId, { is_paid: isPaid });
+        if (!updated) return res.status(404).json({ message: 'Attraction not found' });
+        const updatedCamel = toCamelCase(updated);
+        const io = req.app.get('io');
+        io.emit('attraction:updated', updatedCamel);
+        return res.json(updatedCamel);
+      }
       const paidResult = await query(
         'UPDATE attractions SET is_paid=$1 WHERE id=$2 RETURNING *',
         [isPaid, attractionId]
@@ -118,7 +145,7 @@ export const updateAttraction = async (req: Request, res: Response) => {
     }
 
     let { 
-      name, description, estimatedCost, duration, 
+      name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
       latitude, longitude, visitTime 
     } = req.body;
@@ -135,13 +162,25 @@ export const updateAttraction = async (req: Request, res: Response) => {
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
     
+    if (!DB_AVAILABLE) {
+      const updated = await jsonStore.updateById('attractions', attractionId, {
+        name, description, estimated_cost: estimatedCost, duration, currency: currency || 'USD',
+        address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
+        latitude, longitude, visit_time: visitTime
+      });
+      if (!updated) return res.status(404).json({ message: 'Attraction not found' });
+      const attraction = toCamelCase(updated);
+      const io = req.app.get('io');
+      io.emit('attraction:updated', attraction);
+      return res.json(attraction);
+    }
     const result = await query(
       `UPDATE attractions SET 
-        name=$1, description=$2, estimated_cost=$3, duration=$4, 
-        address=$5, address_street=$6, address_city=$7, address_postal_code=$8, address_country=$9,
-        latitude=$10, longitude=$11, visit_time=$12 
-      WHERE id=$13 RETURNING *`,
-      [name, description, estimatedCost, duration, 
+        name=$1, description=$2, estimated_cost=$3, duration=$4, currency=$5,
+        address=$6, address_street=$7, address_city=$8, address_postal_code=$9, address_country=$10,
+        latitude=$11, longitude=$12, visit_time=$13 
+      WHERE id=$14 RETURNING *`,
+      [name, description, estimatedCost, duration, currency || 'USD',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
        latitude, longitude, visitTime, attractionId]
     );
@@ -163,6 +202,13 @@ export const updateAttraction = async (req: Request, res: Response) => {
 export const deleteAttraction = async (req: Request, res: Response) => {
   try {
     const attractionId = parseInt(req.params.id);
+    if (!DB_AVAILABLE) {
+      const ok = await jsonStore.deleteById('attractions', attractionId);
+      if (!ok) return res.status(404).json({ message: 'Attraction not found' });
+      const io = req.app.get('io');
+      io.emit('attraction:deleted', { id: attractionId });
+      return res.json({ message: 'Attraction deleted successfully' });
+    }
     await query('DELETE FROM attractions WHERE id = $1', [attractionId]);
     
     // Emit Socket.IO event

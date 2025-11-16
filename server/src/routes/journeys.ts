@@ -2,6 +2,8 @@ import express from 'express';
 import {
   createJourney,
   getAllJourneys,
+  exportJourneys,
+  importJourneys,
   getJourneyById,
   updateJourney,
   deleteJourney,
@@ -18,6 +20,10 @@ const router = express.Router();
 // Protected routes - require authentication
 router.post('/', authenticateToken, createJourney);
 router.get('/', authenticateToken, getAllJourneys);
+// Export user's journeys as JSON. Optional query `?id=123` to export single journey.
+router.get('/export', authenticateToken, exportJourneys);
+// Import journeys JSON (array of journeys) - requires authenticated user. Server will insert into DB when available.
+router.post('/import', authenticateToken, importJourneys);
 router.get('/shared-with-me', authenticateToken, getSharedWithMe);
 router.get('/:id', authenticateToken, getJourneyById);
 router.put('/:id', authenticateToken, updateJourney);

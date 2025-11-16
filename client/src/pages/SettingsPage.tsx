@@ -27,7 +27,7 @@ import type { JourneyShare } from '../types/journey';
 import { useToast, ToastContainer } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useConfirm } from '../hooks/useConfirm';
-import { journeyShareService } from '../services/api';
+import { journeyShareService, journeyService } from '../services/api';
 
 const SettingsPage: React.FC = () => {
   const { user, logout, updateUser, refreshUser } = useAuth();
@@ -57,6 +57,10 @@ const SettingsPage: React.FC = () => {
   const [adminLoading, setAdminLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
+  // Export/Import state
+  const [exportLoading, setExportLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
 
   // Initialize username from user on mount only
   useEffect(() => {
@@ -289,6 +293,55 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // Export all journeys (or single if id param provided)
+  const handleExportJourneys = async () => {
+    setExportLoading(true);
+    try {
+      const data = await journeyService.exportJourneys();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fname = `journeys-export-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Journeys exported');
+    } catch (error: any) {
+      console.error('Export failed', error);
+      toast.error(error.message || 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Import from uploaded JSON file
+  const handleImportFile = async (file?: File) => {
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportLoading(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      // Accept either { journeys: [...] } or raw array
+      const payload = Array.isArray(parsed) ? { journeys: parsed } : parsed.journeys ? parsed : { journeys: [] };
+      if (!payload.journeys || !Array.isArray(payload.journeys) || payload.journeys.length === 0) {
+        throw new Error('No journeys array found in file');
+      }
+      const resp = await journeyService.importJourneys(payload);
+      toast.success(resp.message || 'Import successful');
+      // Optionally refresh UI or navigate
+      setTimeout(() => navigate('/'), 800);
+    } catch (error: any) {
+      console.error('Import failed', error);
+      toast.error(error.message || 'Import failed');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -406,6 +459,38 @@ const SettingsPage: React.FC = () => {
                     <div className="font-medium text-gray-900 dark:text-[#ffffff] capitalize">{user.role}</div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Export / Import Journeys */}
+            <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Save size={24} className="text-blue-500 dark:text-[#0a84ff]" />
+                Export / Import Journeys
+              </h2>
+
+              <p className="text-sm text-gray-600 dark:text-[#98989d] mb-4">Export your journeys to JSON or import previously exported journeys.</p>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleExportJourneys}
+                  disabled={exportLoading}
+                  className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                >
+                  {exportLoading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                  Export Journeys (JSON)
+                </button>
+
+                <label className="px-4 py-3 bg-green-500 dark:bg-[#30d158] text-white rounded-lg hover:bg-green-600 dark:hover:bg-green-600 transition-all duration-300 ease-in-out shadow-sm hover:shadow-lg cursor-pointer flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={e => handleImportFile(e.target.files ? e.target.files[0] : undefined)}
+                  />
+                  {importLoading ? <Loader2 className="animate-spin text-white" size={16} /> : <ArrowLeft size={16} className="text-white" />}
+                  <span className="text-sm text-white">{importFileName ? `Import: ${importFileName}` : 'Import Journeys (JSON)'}</span>
+                </label>
               </div>
             </div>
 

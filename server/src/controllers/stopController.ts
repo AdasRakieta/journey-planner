@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { query } from '../config/db';
+import { query, DB_AVAILABLE } from '../config/db';
+import jsonStore from '../config/jsonStore';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
@@ -42,6 +43,11 @@ const toCamelCase = (obj: any): any => {
 export const getStopsByJourneyId = async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.journeyId);
+    if (!DB_AVAILABLE) {
+      const stops = (await jsonStore.findByField('stops', 'journey_id', journeyId))
+        .sort((a: any, b: any) => (new Date(a.arrival_date || 0).getTime()) - (new Date(b.arrival_date || 0).getTime()));
+      return res.json(toCamelCase(stops));
+    }
     const result = await query(
       'SELECT * FROM stops WHERE journey_id = $1 ORDER BY arrival_date ASC',
       [journeyId]
@@ -73,6 +79,21 @@ export const createStop = async (req: Request, res: Response) => {
       checkOutTime
     } = req.body;
     
+    if (!DB_AVAILABLE) {
+      const newStop = await jsonStore.insert('stops', {
+        journey_id: journeyId,
+        city, country, latitude, longitude,
+        arrival_date: arrivalDate, departure_date: departureDate,
+        accommodation_name: accommodationName, accommodation_url: accommodationUrl,
+        accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
+        notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null,
+        created_at: new Date().toISOString()
+      });
+      const stop = toCamelCase(newStop);
+      const io = req.app.get('io');
+      io.emit('stop:created', stop);
+      return res.status(201).json(stop);
+    }
     const result = await query(
       `INSERT INTO stops (
         journey_id, city, country, latitude, longitude,
@@ -109,6 +130,14 @@ export const updateStop = async (req: Request, res: Response) => {
     if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
       console.log(`✅ Updating stop ${stopId} payment status to:`, req.body.isPaid);
       const { isPaid } = req.body;
+      if (!DB_AVAILABLE) {
+        const updated = await jsonStore.updateById('stops', stopId, { is_paid: isPaid });
+        if (!updated) return res.status(404).json({ message: 'Stop not found' });
+        const updatedCamel = toCamelCase(updated);
+        const io = req.app.get('io');
+        io.emit('stop:updated', updatedCamel);
+        return res.json(updatedCamel);
+      }
       const paidResult = await query(
         `UPDATE stops SET is_paid=$1 WHERE id=$2 RETURNING *`,
         [isPaid, stopId]
@@ -140,6 +169,20 @@ export const updateStop = async (req: Request, res: Response) => {
       checkOutTime
     } = req.body;
     
+    if (!DB_AVAILABLE) {
+      const updated = await jsonStore.updateById('stops', stopId, {
+        city, country, latitude, longitude,
+        arrival_date: arrivalDate, departure_date: departureDate,
+        accommodation_name: accommodationName, accommodation_url: accommodationUrl,
+        accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
+        notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null
+      });
+      if (!updated) return res.status(404).json({ message: 'Stop not found' });
+      const stop = toCamelCase(updated);
+      const io = req.app.get('io');
+      io.emit('stop:updated', stop);
+      return res.json(stop);
+    }
     const result = await query(
       `UPDATE stops SET
         city=$1, country=$2, latitude=$3, longitude=$4,
@@ -176,6 +219,13 @@ export const updateStop = async (req: Request, res: Response) => {
 export const deleteStop = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.id);
+    if (!DB_AVAILABLE) {
+      const ok = await jsonStore.deleteById('stops', stopId);
+      if (!ok) return res.status(404).json({ message: 'Stop not found' });
+      const io = req.app.get('io');
+      io.emit('stop:deleted', { id: stopId });
+      return res.json({ message: 'Stop deleted successfully' });
+    }
     await query('DELETE FROM stops WHERE id = $1', [stopId]);
     
     // Emit Socket.IO event

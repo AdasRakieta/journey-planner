@@ -8,6 +8,7 @@ import ConfirmDialog from './components/ConfirmDialog';
 import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService, journeyShareService } from './services/api';
+import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
 import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
 import { useAuth } from './contexts/AuthContext';
@@ -121,6 +122,42 @@ function App() {
 
   const [editingJourney, setEditingJourney] = useState<Journey | null>(null);
   const [showEditJourneyForm, setShowEditJourneyForm] = useState(false);
+  // Currency rates cache for client-side conversions
+  const [ratesCache, setRatesCache] = useState<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const data = await getRates('USD');
+        if (mounted) setRatesCache(data);
+      } catch (e) {
+        console.warn('Failed to load rates on client:', e);
+      }
+    };
+    void load();
+    return () => { mounted = false; };
+  }, []);
+
+  const getRate = (from: string, to: string): number | null => {
+    try {
+      if (!ratesCache) return null;
+      if (from === to) return 1;
+      const rates = ratesCache.rates || {};
+      const rateFrom = rates[from];
+      const rateTo = rates[to];
+      if (rateFrom == null || rateTo == null) return null;
+      return (1 / rateFrom) * rateTo;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const convertAmount = (amount: number, from: string, to: string): number | null => {
+    const rate = getRate(from, to);
+    if (rate == null) return null;
+    return amount * rate;
+  };
 
   // Share journey state
   const [showShareModal, setShowShareModal] = useState(false);
@@ -2068,6 +2105,19 @@ function App() {
                       onChange={(e) => setNewStop({ ...newStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
+                    {/* Live conversion to journey main currency */}
+                    {((newStop.accommodationPrice || 0) > 0) && (
+                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
+                        {(() => {
+                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
+                          const from = newStop.accommodationCurrency || mainCurr;
+                          if (from === mainCurr) return null;
+                          const conv = convertAmount(newStop.accommodationPrice || 0, from, mainCurr);
+                          if (conv == null) return <span>≈ conversion not available</span>;
+                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
+                        })()}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -2234,6 +2284,18 @@ function App() {
                       onChange={(e) => setEditingStop({ ...editingStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
+                    {((editingStop?.accommodationPrice || 0) > 0) && (
+                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
+                        {(() => {
+                          const mainCurr = editingJourney?.currency || selectedJourney?.currency || newJourney.currency || 'PLN';
+                          const from = editingStop?.accommodationCurrency || mainCurr;
+                          if (from === mainCurr) return null;
+                          const conv = convertAmount(editingStop!.accommodationPrice || 0, from, mainCurr);
+                          if (conv == null) return <span>≈ conversion not available</span>;
+                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
+                        })()}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -2396,6 +2458,18 @@ function App() {
                       onChange={(e) => setNewTransport({ ...newTransport, price: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
+                    {((newTransport.price || 0) > 0) && (
+                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
+                        {(() => {
+                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
+                          const from = newTransport.currency || mainCurr;
+                          if (from === mainCurr) return null;
+                          const conv = convertAmount(newTransport.price || 0, from, mainCurr);
+                          if (conv == null) return <span>≈ conversion not available</span>;
+                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
+                        })()}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -2717,6 +2791,33 @@ function App() {
                       onChange={(e) => setNewAttraction({ ...newAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-600 dark:text-[#98989d] mb-1">Currency</label>
+                      <select
+                        value={(newAttraction as any).currency || newJourney.currency || 'PLN'}
+                        onChange={(e) => setNewAttraction({ ...newAttraction, currency: e.target.value })}
+                        className="gh-select"
+                      >
+                        <option value="PLN">PLN</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="KRW">KRW</option>
+                      </select>
+                    </div>
+                    {((newAttraction.estimatedCost || 0) > 0) && (
+                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
+                        {(() => {
+                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
+                          // attractions currently don't have currency field; assume journey currency unless specified later
+                          const from = (newAttraction as any).currency || mainCurr;
+                          if (from === mainCurr) return null;
+                          const conv = convertAmount(newAttraction.estimatedCost || 0, from, mainCurr);
+                          if (conv == null) return <span>≈ conversion not available</span>;
+                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
+                        })()}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -2910,6 +3011,20 @@ function App() {
                       onChange={(e) => setEditingAttraction({ ...editingAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-600 dark:text-[#98989d] mb-1">Currency</label>
+                      <select
+                        value={(editingAttraction as any).currency || selectedJourney?.currency || 'PLN'}
+                        onChange={(e) => setEditingAttraction({ ...editingAttraction, currency: e.target.value })}
+                        className="gh-select"
+                      >
+                        <option value="PLN">PLN</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="KRW">KRW</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>

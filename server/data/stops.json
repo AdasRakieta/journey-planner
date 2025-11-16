@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "journey_id": 2,
+    "city": "ssad",
+    "country": "asdasd",
+    "latitude": 51.505,
+    "longitude": -0.09,
+    "arrival_date": "2333-03-12",
+    "departure_date": "3321-03-12",
+    "accommodation_name": "",
+    "accommodation_url": "",
+    "accommodation_price": 150,
+    "accommodation_currency": "PLN",
+    "is_paid": false,
+    "check_in_time": "12:03",
+    "check_out_time": "12:03"
+  }
+]

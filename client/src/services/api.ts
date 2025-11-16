@@ -73,6 +73,32 @@ export const journeyService = {
     if (!response.ok) throw new Error('Failed to calculate cost');
     return response.json();
   },
+
+  async exportJourneys(id?: number) {
+    const token = localStorage.getItem('accessToken');
+    const url = id ? `${API_URL}/journeys/export?id=${id}` : `${API_URL}/journeys/export`;
+    const response = await fetch(url, {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to export journeys');
+    }
+    return response.json();
+  },
+
+  async importJourneys(payload: any) {
+    const response = await fetch(`${API_URL}/journeys/import`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to import journeys');
+    }
+    return response.json();
+  },
 };
 
 // Stop Service

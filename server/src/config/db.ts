@@ -1,7 +1,12 @@
 import { Pool, PoolClient } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
+
+// Flag whether DB is available; fallback to JSON when false
+export let DB_AVAILABLE = true;
 
 // Connection pool configuration (similar to Python psycopg2)
 const pool = new Pool({
@@ -39,14 +44,21 @@ export const connectDB = async () => {
       ORDER BY table_name
     `);
     console.log('📋 Available tables:', tables.rows.map(r => r.table_name).join(', '));
+    DB_AVAILABLE = true;
+    return DB_AVAILABLE;
   } catch (error: any) {
     console.error('❌ Database connection failed:', error.message);
-    throw error;
+    console.warn('⚠️ Falling back to JSON data store. Server will still start but some operations are limited.');
+    DB_AVAILABLE = false;
+    return DB_AVAILABLE;
   }
 };
 
 // Execute query with automatic connection handling
 export const query = async (text: string, params?: any[]) => {
+  if (!DB_AVAILABLE) {
+    throw new Error('DB unavailable');
+  }
   const client = await pool.connect();
   try {
     const result = await client.query(text, params);
@@ -58,13 +70,16 @@ export const query = async (text: string, params?: any[]) => {
 
 // Get a client from the pool for transactions
 export const getClient = async (): Promise<PoolClient> => {
+  if (!DB_AVAILABLE) throw new Error('DB unavailable');
   return await pool.connect();
 };
 
 // Graceful shutdown
 export const closePool = async () => {
-  await pool.end();
-  console.log('Database connection pool closed');
+  if (DB_AVAILABLE) {
+    await pool.end();
+    console.log('Database connection pool closed');
+  }
 };
 
 export default pool;

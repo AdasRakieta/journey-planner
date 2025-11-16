@@ -40,6 +40,7 @@ export interface Attraction {
   name: string;
   description?: string;
   estimatedCost?: number;
+  currency?: string;
   duration?: string; // e.g., "2 hours", "30 minutes"
   isPaid?: boolean;
   address?: string;      // Full address (legacy - for display/concatenated)

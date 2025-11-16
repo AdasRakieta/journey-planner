@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { query } from '../config/db';
+import { query, DB_AVAILABLE } from '../config/db';
+import jsonStore from '../config/jsonStore';
 import { scrapeTicketData } from '../services/ticketScraper';
 
 // Convert snake_case to camelCase and handle Date objects
@@ -41,6 +42,11 @@ const toCamelCase = (obj: any): any => {
 export const getTransportsByJourneyId = async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.journeyId);
+    if (!DB_AVAILABLE) {
+      const transports = (await jsonStore.findByField('transports', 'journey_id', journeyId))
+        .sort((a: any, b: any) => (new Date(a.departure_date || 0).getTime()) - (new Date(b.departure_date || 0).getTime()));
+      return res.json(toCamelCase(transports));
+    }
     const result = await query(
       'SELECT * FROM transports WHERE journey_id = $1 ORDER BY departure_date ASC',
       [journeyId]
@@ -76,6 +82,18 @@ export const createTransport = async (req: Request, res: Response) => {
     const cleanFlightNumber = flightNumber && flightNumber.trim() !== '' ? flightNumber : null;
     const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
+    if (!DB_AVAILABLE) {
+      const newTransport = await jsonStore.insert('transports', {
+        journey_id: journeyId, type, from_location: fromLocation, to_location: toLocation,
+        departure_date: cleanDepartureDate, arrival_date: cleanArrivalDate, price, currency, booking_url: bookingUrl, notes,
+        flight_number: cleanFlightNumber, train_number: cleanTrainNumber,
+        created_at: new Date().toISOString()
+      });
+      const transport = toCamelCase(newTransport);
+      const io = req.app.get('io');
+      io.emit('transport:created', transport);
+      return res.status(201).json(transport);
+    }
     const result = await query(
       `INSERT INTO transports (
         journey_id, type, from_location, to_location,
@@ -110,6 +128,14 @@ export const updateTransport = async (req: Request, res: Response) => {
     if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
       console.log(`✅ Updating transport ${transportId} payment status to:`, req.body.isPaid);
       const { isPaid } = req.body;
+      if (!DB_AVAILABLE) {
+        const updated = await jsonStore.updateById('transports', transportId, { is_paid: isPaid });
+        if (!updated) return res.status(404).json({ message: 'Transport not found' });
+        const updatedCamel = toCamelCase(updated);
+        const io = req.app.get('io');
+        io.emit('transport:updated', updatedCamel);
+        return res.json(updatedCamel);
+      }
       const paidResult = await query(
         `UPDATE transports SET is_paid=$1 WHERE id=$2 RETURNING *`,
         [isPaid, transportId]
@@ -145,6 +171,18 @@ export const updateTransport = async (req: Request, res: Response) => {
     const cleanFlightNumber = flightNumber && flightNumber.trim() !== '' ? flightNumber : null;
     const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
+    if (!DB_AVAILABLE) {
+      const updated = await jsonStore.updateById('transports', transportId, {
+        type, from_location: fromLocation, to_location: toLocation,
+        departure_date: cleanDepartureDate, arrival_date: cleanArrivalDate, price,
+        currency, booking_url: bookingUrl, notes, flight_number: cleanFlightNumber, train_number: cleanTrainNumber
+      });
+      if (!updated) return res.status(404).json({ message: 'Transport not found' });
+      const transport = toCamelCase(updated);
+      const io = req.app.get('io');
+      io.emit('transport:updated', transport);
+      return res.json(transport);
+    }
     const result = await query(
       `UPDATE transports SET
         type=$1, from_location=$2, to_location=$3,
@@ -181,6 +219,16 @@ export const updateTransport = async (req: Request, res: Response) => {
 export const deleteTransport = async (req: Request, res: Response) => {
   try {
     const transportId = parseInt(req.params.id);
+    if (!DB_AVAILABLE) {
+      const transport = await jsonStore.getById('transports', transportId);
+      if (!transport) return res.status(404).json({ message: 'Transport not found' });
+      const journeyId = transport.journey_id;
+      const ok = await jsonStore.deleteById('transports', transportId);
+      if (!ok) return res.status(404).json({ message: 'Transport not found' });
+      const io = req.app.get('io');
+      io.emit('transport:deleted', { id: transportId, journeyId });
+      return res.json({ message: 'Transport deleted successfully' });
+    }
     
     // Get journeyId before deleting
     const transportResult = await query('SELECT journey_id FROM transports WHERE id = $1', [transportId]);
