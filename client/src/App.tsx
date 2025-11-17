@@ -1543,29 +1543,32 @@ function App() {
                                 {formatDateForDisplay(stop.arrivalDate)} -{' '}
                                 {formatDateForDisplay(stop.departureDate)}
                               </p>
+
+                              {/* Always show accommodation price & Paid checkbox when price exists, even without accommodation name */}
+                              {stop.accommodationPrice != null && (
+                                <div className="flex items-center justify-between mt-2">
+                                  <p className="text-green-600 dark:text-[#30d158]">
+                                    {stop.accommodationPrice} {stop.accommodationCurrency}
+                                    {stop.accommodationPrice && stop.accommodationCurrency && selectedJourney?.currency && stop.accommodationCurrency !== selectedJourney.currency && (
+                                      (() => {
+                                        const conv = convertAmount(stop.accommodationPrice || 0, stop.accommodationCurrency || selectedJourney.currency, selectedJourney.currency || 'PLN');
+                                        return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
+                                      })()
+                                    )}
+                                  </p>
+                                  <PaymentCheckbox
+                                    id={`stop-payment-${stop.id}`}
+                                    checked={stop.isPaid || false}
+                                    onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)}
+                                    disabled={loading}
+                                  />
+                                </div>
+                              )}
+
                               {stop.accommodationName && (
                                 <div className="mt-2 text-sm">
                                   <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation:</p>
                                   <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
-                                  {stop.accommodationPrice != null && (
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-green-600 dark:text-[#30d158]">
-                                        {stop.accommodationPrice} {stop.accommodationCurrency}
-                                        {stop.accommodationPrice && stop.accommodationCurrency && selectedJourney?.currency && stop.accommodationCurrency !== selectedJourney.currency && (
-                                          (() => {
-                                            const conv = convertAmount(stop.accommodationPrice || 0, stop.accommodationCurrency || selectedJourney.currency, selectedJourney.currency || 'PLN');
-                                            return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
-                                          })()
-                                        )}
-                                      </p>
-                                      <PaymentCheckbox
-                                        id={`stop-payment-${stop.id}`}
-                                        checked={stop.isPaid || false}
-                                        onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)}
-                                        disabled={loading}
-                                      />
-                                    </div>
-                                  )}
                                   {stop.accommodationUrl && (
                                     <a
                                       href={stop.accommodationUrl}
