@@ -265,7 +265,7 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
               
               {attraction.estimatedCost && attraction.estimatedCost > 0 && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                  <span className="font-medium">Cost:</span> {attraction.estimatedCost} PLN
+                  <span className="font-medium">Cost:</span> {attraction.estimatedCost} {(attraction as any).currency || 'PLN'}
                 </p>
               )}
             </div>

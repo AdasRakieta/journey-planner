@@ -396,19 +396,35 @@ function App() {
   useEffect(() => {
     if (!selectedJourney) return;
     
-    // Calculate costs from stops (accommodation)
+    // Calculate costs from stops (accommodation) converting to journey main currency when possible
     const stopCosts = selectedJourney.stops?.reduce((sum, stop) => {
-      return sum + (stop.accommodationPrice || 0);
+      const price = stop.accommodationPrice || 0;
+      const from = (stop as any).accommodationCurrency || selectedJourney.currency || 'PLN';
+      const to = selectedJourney.currency || 'PLN';
+      const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
+      return sum + (converted || 0);
     }, 0) || 0;
     
     // Calculate costs from attractions
     const attractionCosts = selectedJourney.stops?.reduce((sum, stop) => {
-      const attrSum = stop.attractions?.reduce((s, a) => s + (a.estimatedCost || 0), 0) || 0;
+      const attrSum = stop.attractions?.reduce((s, a) => {
+        const price = a.estimatedCost || 0;
+        const from = (a as any).currency || selectedJourney.currency || 'PLN';
+        const to = selectedJourney.currency || 'PLN';
+        const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
+        return s + (converted || 0);
+      }, 0) || 0;
       return sum + attrSum;
     }, 0) || 0;
     
     // Calculate costs from transports
-    const transportCosts = selectedJourney.transports?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
+    const transportCosts = selectedJourney.transports?.reduce((sum, t) => {
+      const price = t.price || 0;
+      const from = (t as any).currency || selectedJourney.currency || 'PLN';
+      const to = selectedJourney.currency || 'PLN';
+      const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
+      return sum + (converted || 0);
+    }, 0) || 0;
     
     const totalCost = stopCosts + attractionCosts + transportCosts;
     
@@ -1525,6 +1541,12 @@ function App() {
                                     <div className="flex items-center justify-between">
                                       <p className="text-green-600 dark:text-[#30d158]">
                                         {stop.accommodationPrice} {stop.accommodationCurrency}
+                                        {stop.accommodationPrice && stop.accommodationCurrency && selectedJourney?.currency && stop.accommodationCurrency !== selectedJourney.currency && (
+                                          (() => {
+                                            const conv = convertAmount(stop.accommodationPrice || 0, stop.accommodationCurrency || selectedJourney.currency, selectedJourney.currency || 'PLN');
+                                            return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
+                                          })()
+                                        )}
                                       </p>
                                       <PaymentCheckbox
                                         id={`stop-payment-${stop.id}`}
@@ -1556,7 +1578,18 @@ function App() {
                                           <div className="flex items-start justify-between gap-2">
                                             <span className="flex-1">
                                               • {attr.name}
-                                              {attr.estimatedCost && ` - ${attr.estimatedCost} ${selectedJourney.currency}`}
+                                              {attr.estimatedCost != null && (
+                                                (() => {
+                                                  const origCurr = (attr as any).currency || selectedJourney.currency || 'PLN';
+                                                  const parts = [` ${attr.estimatedCost} ${origCurr}`];
+                                                  if (selectedJourney?.currency && origCurr !== selectedJourney.currency) {
+                                                    const conv = convertAmount(attr.estimatedCost || 0, origCurr, selectedJourney.currency);
+                                                    if (conv != null) parts.push(` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}`);
+                                                    else parts.push(' (≈ conversion unavailable)');
+                                                  }
+                                                  return parts.join('');
+                                                })()
+                                              )}
                                             </span>
                                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                               <button
