@@ -380,62 +380,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Auto-calculate total cost from all sources
-  const costDependency = useMemo(() => {
-    if (!selectedJourney) return '';
-    return JSON.stringify({
-      stops: selectedJourney.stops?.map(s => ({ 
-        id: s.id, 
-        price: s.accommodationPrice,
-        attractions: s.attractions?.map(a => ({ id: a.id, cost: a.estimatedCost }))
-      })),
-      transports: selectedJourney.transports?.map(t => ({ id: t.id, price: t.price }))
-    });
-  }, [selectedJourney]);
-
-  useEffect(() => {
-    if (!selectedJourney) return;
-    
-    // Calculate costs from stops (accommodation) converting to journey main currency when possible
-    const stopCosts = selectedJourney.stops?.reduce((sum, stop) => {
-      const price = stop.accommodationPrice || 0;
-      const from = (stop as any).accommodationCurrency || selectedJourney.currency || 'PLN';
-      const to = selectedJourney.currency || 'PLN';
-      const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
-      return sum + (converted || 0);
-    }, 0) || 0;
-    
-    // Calculate costs from attractions
-    const attractionCosts = selectedJourney.stops?.reduce((sum, stop) => {
-      const attrSum = stop.attractions?.reduce((s, a) => {
-        const price = a.estimatedCost || 0;
-        const from = (a as any).currency || selectedJourney.currency || 'PLN';
-        const to = selectedJourney.currency || 'PLN';
-        const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
-        return s + (converted || 0);
-      }, 0) || 0;
-      return sum + attrSum;
-    }, 0) || 0;
-    
-    // Calculate costs from transports
-    const transportCosts = selectedJourney.transports?.reduce((sum, t) => {
-      const price = t.price || 0;
-      const from = (t as any).currency || selectedJourney.currency || 'PLN';
-      const to = selectedJourney.currency || 'PLN';
-      const converted = (price && from && to) ? (convertAmount(price, from, to) ?? price) : price;
-      return sum + (converted || 0);
-    }, 0) || 0;
-    
-    const totalCost = stopCosts + attractionCosts + transportCosts;
-    
-    // Only update if changed to avoid infinite loop
-    if (selectedJourney.totalEstimatedCost !== totalCost) {
-      const updatedJourney = { ...selectedJourney, totalEstimatedCost: totalCost };
-      setSelectedJourney(updatedJourney);
-      setJourneys(prevJourneys => prevJourneys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedJourney?.id, costDependency]);
+  // We no longer recompute totals client-side: the server is authoritative
 
   const loadJourneys = async () => {
     try {
@@ -1112,6 +1057,10 @@ function App() {
 
   // Calculate total estimated cost dynamically from stops, transports, and attractions
   const calculateJourneyTotalCost = (journey: Journey): number => {
+    // Prefer server-provided totalEstimatedCost when available (authoritative)
+    if (journey.totalEstimatedCost !== undefined && journey.totalEstimatedCost !== null) {
+      return journey.totalEstimatedCost;
+    }
     const stopsCost = journey.stops?.reduce((sum, stop) => sum + (stop.accommodationPrice || 0), 0) || 0;
     const attractionsCost = journey.stops?.reduce((sum, stop) => {
       const attrSum = stop.attractions?.reduce((s, a) => s + (a.estimatedCost || 0), 0) || 0;
@@ -1451,9 +1400,15 @@ function App() {
                     arrivalDate: stop.arrivalDate,
                     departureDate: stop.departureDate,
                     accommodationName: stop.accommodationName,
+                    accommodationPrice: stop.accommodationPrice,
+                    accommodationCurrency: stop.accommodationCurrency,
+                    isPaid: stop.isPaid,
                     checkInTime: stop.checkInTime,
                     checkOutTime: stop.checkOutTime,
-                    attractions: stop.attractions,
+                    attractions: (stop.attractions || []).map(a => ({
+                      ...a,
+                      currency: (a as any).currency
+                    })),
                   })) || []
                 }
                 onMapClick={selectedJourney ? handleMapClick : undefined}

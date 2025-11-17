@@ -211,6 +211,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
               {location.accommodationName && (
                 <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
                   <p className="font-medium text-xs text-gray-700 dark:text-gray-300">🏨 {location.accommodationName}</p>
+                  {location.accommodationPrice != null && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      <span className="font-medium">Price:</span> {location.accommodationPrice} {(location as any).accommodationCurrency || 'PLN'}{(location as any).isPaid ? ' • Paid' : ''}
+                    </p>
+                  )}
                 </div>
               )}
               
