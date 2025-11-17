@@ -1064,8 +1064,9 @@ function App() {
 
   // Calculate total estimated cost dynamically from stops, transports, and attractions
   const calculateJourneyTotalCost = (journey: Journey): number => {
-    // Prefer server-provided totalEstimatedCost when available (authoritative)
-    if (journey.totalEstimatedCost !== undefined && journey.totalEstimatedCost !== null) {
+    // Prefer server-provided totalEstimatedCost when it's a positive value (authoritative).
+    // If it's 0 or missing but there are item-level prices, compute locally instead.
+    if (typeof journey.totalEstimatedCost === 'number' && journey.totalEstimatedCost > 0) {
       return journey.totalEstimatedCost;
     }
     // Fallback: compute locally while converting per-item currencies to journey.currency when possible
