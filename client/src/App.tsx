@@ -126,18 +126,25 @@ function App() {
   const [ratesCache, setRatesCache] = useState<any>(null);
 
   useEffect(() => {
+    // Intentionally do not pre-load a fixed base; we'll load rates for the selected journey when available
+    return undefined;
+  }, []);
+
+  // When a journey is selected, fetch rates for its main currency so client-side conversions work
+  useEffect(() => {
     let mounted = true;
-    const load = async () => {
+    const loadForJourney = async () => {
       try {
-        const data = await getRates('USD');
+        const base = selectedJourney?.currency || 'PLN';
+        const data = await getRates(base);
         if (mounted) setRatesCache(data);
       } catch (e) {
-        console.warn('Failed to load rates on client:', e);
+        console.warn('Failed to load rates for selected journey:', e);
       }
     };
-    void load();
+    if (selectedJourney) void loadForJourney();
     return () => { mounted = false; };
-  }, []);
+  }, [selectedJourney?.id, selectedJourney?.currency]);
 
   const getRate = (from: string, to: string): number | null => {
     try {
@@ -1061,13 +1068,32 @@ function App() {
     if (journey.totalEstimatedCost !== undefined && journey.totalEstimatedCost !== null) {
       return journey.totalEstimatedCost;
     }
-    const stopsCost = journey.stops?.reduce((sum, stop) => sum + (stop.accommodationPrice || 0), 0) || 0;
+    // Fallback: compute locally while converting per-item currencies to journey.currency when possible
+    const mainCurr = journey.currency || 'PLN';
+    const stopsCost = journey.stops?.reduce((sum, stop) => {
+      const price = (stop as any).accommodationPrice ?? (stop as any).accommodation_price ?? 0;
+      const from = (stop as any).accommodationCurrency || (stop as any).accommodation_currency || mainCurr;
+      const conv = convertAmount(price || 0, from, mainCurr);
+      return sum + (conv ?? price ?? 0);
+    }, 0) || 0;
+
     const attractionsCost = journey.stops?.reduce((sum, stop) => {
-      const attrSum = stop.attractions?.reduce((s, a) => s + (a.estimatedCost || 0), 0) || 0;
+      const attrSum = (stop.attractions || []).reduce((s, a) => {
+        const price = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+        const from = (a as any).currency || (a as any).curr || mainCurr;
+        const conv = convertAmount(price || 0, from, mainCurr);
+        return s + (conv ?? price ?? 0);
+      }, 0);
       return sum + attrSum;
     }, 0) || 0;
-    const transportsCost = journey.transports?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
-    
+
+    const transportsCost = journey.transports?.reduce((sum, t) => {
+      const price = (t as any).price ?? 0;
+      const from = (t as any).currency || mainCurr;
+      const conv = convertAmount(price || 0, from, mainCurr);
+      return sum + (conv ?? price ?? 0);
+    }, 0) || 0;
+
     return stopsCost + attractionsCost + transportsCost;
   };
 
@@ -1307,17 +1333,45 @@ function App() {
                           </span>
                         </div>
                         
-                        {/* Amount Due - Cost remaining after paid items */}
+                        {/* Amount Due - Cost remaining after paid items (converted to journey currency when possible) */}
                         {(() => {
-                          const amountDue = calculateAmountDue(
-                            journey.stops || [],
-                            journey.transports || []
-                          );
-                          const paymentSummary = getPaymentSummary(
-                            journey.stops || [],
-                            journey.transports || []
-                          );
-                          
+                          const mainCurr = journey.currency || 'PLN';
+                          // compute totals converting per-item currencies to journey currency when possible
+                          let total = 0;
+                          let paid = 0;
+
+                          // stops
+                          (journey.stops || []).forEach(s => {
+                            const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
+                            const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
+                            const conv = convertAmount(price || 0, from, mainCurr);
+                            const effective = conv ?? price ?? 0;
+                            total += effective;
+                            if (s.isPaid) paid += effective;
+                            // attractions
+                            (s.attractions || []).forEach(a => {
+                              const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+                              const afrom = (a as any).currency || mainCurr;
+                              const aconv = convertAmount(aprice || 0, afrom, mainCurr);
+                              const ae = aconv ?? aprice ?? 0;
+                              total += ae;
+                              if (a.isPaid) paid += ae;
+                            });
+                          });
+
+                          // transports
+                          (journey.transports || []).forEach(t => {
+                            const tprice = (t as any).price ?? 0;
+                            const tfrom = (t as any).currency || mainCurr;
+                            const tconv = convertAmount(tprice || 0, tfrom, mainCurr);
+                            const te = tconv ?? tprice ?? 0;
+                            total += te;
+                            if (t.isPaid) paid += te;
+                          });
+
+                          const amountDue = Math.max(0, total - paid);
+                          const percentPaid = total > 0 ? Math.round((paid / total) * 100) : 0;
+
                           return amountDue > 0 ? (
                             <div className="flex items-center justify-between mt-2">
                               <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
@@ -1325,7 +1379,7 @@ function App() {
                                 <span>Amount Due:</span>
                               </div>
                               <span className="text-sm font-semibold text-red-600 dark:text-[#ff453a]">
-                                {amountDue.toFixed(2)} {journey.currency}
+                                {amountDue.toFixed(2)} {mainCurr}
                               </span>
                             </div>
                           ) : (
@@ -1335,7 +1389,7 @@ function App() {
                                 <span>Fully Paid</span>
                               </div>
                               <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">
-                                {paymentSummary.percentPaid}%
+                                {percentPaid}%
                               </span>
                             </div>
                           );
@@ -1492,7 +1546,7 @@ function App() {
                                 <div className="mt-2 text-sm">
                                   <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation:</p>
                                   <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
-                                  {stop.accommodationPrice && (
+                                  {stop.accommodationPrice != null && (
                                     <div className="flex items-center justify-between">
                                       <p className="text-green-600 dark:text-[#30d158]">
                                         {stop.accommodationPrice} {stop.accommodationCurrency}
