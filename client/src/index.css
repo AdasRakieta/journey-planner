@@ -28,6 +28,7 @@
   /* All buttons get cursor pointer */
   button {
     cursor: pointer;
+    transition: 0.3s all ease !important;
   }
 
   button:disabled {
@@ -250,6 +251,7 @@
 
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
+  transform-origin: bottom right;
 }
 
 .animate-fade-in {
@@ -258,6 +260,7 @@
 
 .animate-scale-in {
   animation: scaleIn 0.2s ease-out;
+  transform-origin: bottom right;
 }
 
 /* Apple Maps Dark Style */

@@ -117,7 +117,7 @@ export async function sendInvitationEmail(
           text-align: center;
         }
         .content {
-          background: #dcddddff;
+          background: #d8dfffff;
           padding: 30px;
           border-radius: 0 0 10px 10px;
         }
@@ -130,6 +130,10 @@ export async function sendInvitationEmail(
           border-radius: 8px;
           margin: 20px 0;
           font-weight: 600;
+          transition: 0.3s all ease-in-out;
+        }
+          .button:hover {
+          background: #536febff;
         }
         .footer {
           text-align: center;

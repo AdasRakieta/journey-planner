@@ -7,5 +7,14 @@
     "expires_at": "2025-11-24T14:27:00.326Z",
     "used": true,
     "created_at": "2025-11-17T14:27:00.336Z"
+  },
+  {
+    "id": 2,
+    "token": "7938a9dead61205ca32790538ab60ec470fe293867177dd7172744f623c37f6c",
+    "email": "szymon.przybysz@op.pl",
+    "invited_by": 1,
+    "expires_at": "2025-11-25T12:11:33.835Z",
+    "used": false,
+    "created_at": "2025-11-18T12:11:33.835Z"
   }
 ]

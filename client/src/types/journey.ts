@@ -85,12 +85,21 @@ export interface Journey {
   endDate: Date | string;
   stops?: Stop[];
   transports?: Transport[];
+  // Checklist for packing/shopping per journey
+  checklist?: ChecklistItem[];
   totalEstimatedCost?: number;
   currency: string;
   createdBy?: number;
   isShared?: boolean; // Flag indicating if journey is shared with current user
   createdAt?: Date | string;
   updatedAt?: Date | string;
+}
+
+export interface ChecklistItem {
+  id: string; // client-generated UUID or unique key
+  name: string;
+  bought?: boolean; // whether item is already bought
+  packed?: boolean; // whether item is packed
 }
 
 export type TransportType = 'flight' | 'train' | 'bus' | 'car' | 'other';

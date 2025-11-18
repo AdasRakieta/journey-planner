@@ -263,18 +263,39 @@ export const createJourney = async (req: Request, res: Response) => {
 
 export const updateJourney = async (req: Request, res: Response) => {
   try {
-    const { title, description, startDate, endDate, currency } = req.body;
+    const { title, description, startDate, endDate, currency, checklist } = req.body;
     const id = parseInt(req.params.id);
     if (!DB_AVAILABLE) {
-      const updated = await jsonStore.updateById('journeys', id, {
-        title, description, start_date: startDate, end_date: endDate, currency, updated_at: new Date().toISOString()
-      });
+      const updateObj: any = { title, description, start_date: startDate, end_date: endDate, currency, updated_at: new Date().toISOString() };
+      if (checklist !== undefined) updateObj.checklist = checklist;
+      const updated = await jsonStore.updateById('journeys', id, updateObj);
       if (!updated) return res.status(404).json({ message: 'Not found' });
       const journey = toCamelCase(updated);
       const io = req.app.get('io');
       io.emit('journey:updated', journey);
       return res.json(journey);
     }
+    // DB available flow: fetch existing journey, merge fields and persist (including checklist JSONB)
+    const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [id]);
+    const existing = journeyRes.rows[0];
+    if (!existing) return res.status(404).json({ message: 'Not found' });
+
+    const newTitle = title !== undefined ? title : existing.title;
+    const newDescription = description !== undefined ? description : existing.description;
+    const newStart = startDate !== undefined ? startDate : existing.start_date;
+    const newEnd = endDate !== undefined ? endDate : existing.end_date;
+    const newCurrency = currency !== undefined ? currency : existing.currency;
+    const newChecklist = checklist !== undefined ? checklist : existing.checklist || [];
+
+    const updatedRes = await query(
+      'UPDATE journeys SET title=$1, description=$2, start_date=$3, end_date=$4, currency=$5, checklist=$6, updated_at=NOW() WHERE id=$7 RETURNING *',
+      [newTitle, newDescription, newStart, newEnd, newCurrency, newChecklist, id]
+    );
+    const updated = updatedRes.rows[0];
+    const journey = toCamelCase(updated);
+    const io = req.app.get('io');
+    io.emit('journey:updated', journey);
+    return res.json(journey);
   } catch (error) {
     res.status(500).json({ message: 'Failed to update journey' });
   }

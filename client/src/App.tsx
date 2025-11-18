@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, Navigation } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, Navigation, ChevronDown, ChevronRight } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
 import ManageSharesModal from './components/ManageSharesModal';
 import { useConfirm } from './hooks/useConfirm';
-import type { Journey, Stop, Transport, Attraction } from './types/journey';
+import type { Journey, Stop, Transport, Attraction, ChecklistItem } from './types/journey';
 import { journeyService, stopService, attractionService, transportService, journeyShareService } from './services/api';
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
@@ -188,6 +188,188 @@ function App() {
   const [shareEmailOrUsername, setShareEmailOrUsername] = useState('');
   const [shareRole, setShareRole] = useState<'view' | 'edit' | 'manage'>('edit');
   const [showManageSharesModal, setShowManageSharesModal] = useState(false);
+
+  // UI state for collapsible sections
+  const [stopsOpen, setStopsOpen] = useState<boolean>(true);
+  const [transportsOpen, setTransportsOpen] = useState<boolean>(true);
+
+  // Checklist UI state
+  // Local storage key for per-journey UI state (collapses)
+  const UI_STATE_KEY = 'jp:journey_ui_state_v1';
+
+  const loadUIStateForJourney = (id: number) => {
+    try {
+      const raw = localStorage.getItem(UI_STATE_KEY);
+      if (!raw) return null;
+      const all = JSON.parse(raw || '{}');
+      return all[id] || null;
+    } catch (e) {
+      console.warn('Failed to load UI state', e);
+      return null;
+    }
+  };
+
+  const saveUIStateForJourney = (id: number, state: { stopsOpen: boolean; transportsOpen: boolean; checklistOpen: boolean }) => {
+    try {
+      const raw = localStorage.getItem(UI_STATE_KEY);
+      const all = raw ? JSON.parse(raw) : {};
+      all[id] = state;
+      localStorage.setItem(UI_STATE_KEY, JSON.stringify(all));
+    } catch (e) {
+      console.warn('Failed to save UI state', e);
+    }
+  };
+
+  const [newChecklistItemName, setNewChecklistItemName] = useState<string>('');
+  const [checklistOpen, setChecklistOpen] = useState<boolean>(true);
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editingChecklistName, setEditingChecklistName] = useState<string>('');
+
+  const toggleChecklistOpen = () => {
+    setChecklistOpen(prev => {
+      const next = !prev;
+      if (selectedJourney?.id) saveUIStateForJourney(selectedJourney.id, { stopsOpen, transportsOpen, checklistOpen: next });
+      return next;
+    });
+  };
+
+  const startEditChecklistItem = (id: string, name: string) => {
+    setEditingChecklistId(id);
+    setEditingChecklistName(name);
+  };
+
+  const saveEditChecklistItem = () => {
+    if (!selectedJourney || !editingChecklistId) return;
+    const name = editingChecklistName.trim();
+    if (!name) return;
+    // Optimistic UI update
+    setJourneys(prev => prev.map(j => {
+      if (j.id !== selectedJourney.id) return j;
+      const checklist = (j.checklist || []).map(it => it.id === editingChecklistId ? { ...it, name } : it);
+      return { ...j, checklist };
+    }));
+    setSelectedJourney(prev => prev ? { ...prev, checklist: (prev.checklist || []).map(it => it.id === editingChecklistId ? { ...it, name } : it) } : prev);
+    // Persist change
+    (async () => {
+      try {
+        await journeyService.updateJourney(selectedJourney.id!, { checklist: (selectedJourney.checklist || []).map(it => it.id === editingChecklistId ? { ...it, name } : it) });
+        success('Checklist updated');
+      } catch (err) {
+        console.error('Failed to save checklist edit:', err);
+        error('Failed to save checklist edit');
+      }
+    })();
+    setEditingChecklistId(null);
+    setEditingChecklistName('');
+  };
+
+  const cancelEditChecklistItem = () => {
+    setEditingChecklistId(null);
+    setEditingChecklistName('');
+  };
+
+  const toggleStopsOpen = () => {
+    setStopsOpen(prev => {
+      const next = !prev;
+      if (selectedJourney?.id) saveUIStateForJourney(selectedJourney.id, { stopsOpen: next, transportsOpen, checklistOpen });
+      return next;
+    });
+  };
+
+  const toggleTransportsOpen = () => {
+    setTransportsOpen(prev => {
+      const next = !prev;
+      if (selectedJourney?.id) saveUIStateForJourney(selectedJourney.id, { stopsOpen, transportsOpen: next, checklistOpen });
+      return next;
+    });
+  };
+
+  const addChecklistItem = () => {
+    if (!selectedJourney) return;
+    const name = newChecklistItemName.trim();
+    if (!name) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    const item: ChecklistItem = { id, name, bought: false, packed: false };
+    // Optimistic UI update
+    setJourneys(prev => prev.map(j => j.id === selectedJourney.id ? { ...j, checklist: [...(j.checklist || []), item] } : j));
+    setSelectedJourney(prev => prev ? { ...prev, checklist: [...(prev.checklist || []), item] } : prev);
+    // Persist
+    (async () => {
+      try {
+        await journeyService.updateJourney(selectedJourney.id!, { checklist: [...(selectedJourney.checklist || []), item] });
+        success('Checklist item added');
+      } catch (err) {
+        console.error('Failed to add checklist item:', err);
+        error('Failed to add checklist item');
+      }
+    })();
+    setNewChecklistItemName('');
+  };
+
+  const toggleChecklistBought = (itemId: string) => {
+    if (!selectedJourney) return;
+    // update locally
+    setJourneys(prev => prev.map(j => {
+      if (j.id !== selectedJourney.id) return j;
+      const checklist = (j.checklist || []).map(it => it.id === itemId ? { ...it, bought: !it.bought } : it);
+      return { ...j, checklist };
+    }));
+    setSelectedJourney(prev => prev ? { ...prev, checklist: (prev.checklist || []).map(it => it.id === itemId ? { ...it, bought: !it.bought } : it) } : prev);
+    // Persist
+    (async () => {
+      try {
+        const updated = (selectedJourney.checklist || []).map(it => it.id === itemId ? { ...it, bought: !it.bought } : it);
+        await journeyService.updateJourney(selectedJourney.id!, { checklist: updated });
+      } catch (err) {
+        console.error('Failed to update checklist bought status:', err);
+        error('Failed to update checklist');
+      }
+    })();
+  };
+
+  const toggleChecklistPacked = (itemId: string) => {
+    if (!selectedJourney) return;
+    setJourneys(prev => prev.map(j => {
+      if (j.id !== selectedJourney.id) return j;
+      const checklist = (j.checklist || []).map(it => it.id === itemId ? { ...it, packed: !it.packed } : it);
+      return { ...j, checklist };
+    }));
+    setSelectedJourney(prev => prev ? { ...prev, checklist: (prev.checklist || []).map(it => it.id === itemId ? { ...it, packed: !it.packed } : it) } : prev);
+    (async () => {
+      try {
+        const updated = (selectedJourney.checklist || []).map(it => it.id === itemId ? { ...it, packed: !it.packed } : it);
+        await journeyService.updateJourney(selectedJourney.id!, { checklist: updated });
+      } catch (err) {
+        console.error('Failed to update checklist packed status:', err);
+        error('Failed to update checklist');
+      }
+    })();
+  };
+
+  const removeChecklistItem = (itemId: string) => {
+    if (!selectedJourney) return;
+    const updatedChecklist = (selectedJourney.checklist || []).filter(it => it.id !== itemId);
+    setJourneys(prev => prev.map(j => j.id === selectedJourney.id ? { ...j, checklist: updatedChecklist } : j));
+    setSelectedJourney(prev => prev ? { ...prev, checklist: updatedChecklist } : prev);
+    (async () => {
+      try {
+        await journeyService.updateJourney(selectedJourney.id!, { checklist: updatedChecklist });
+        success('Checklist item removed');
+      } catch (err) {
+        console.error('Failed to remove checklist item:', err);
+        error('Failed to remove checklist item');
+      }
+    })();
+  };
+
+  // Helper for displaying amounts with optional conversion to selected journey currency
+  const formatPriceWithConversion = (amount?: number | null, from?: string | null) => {
+    if (amount == null) return null;
+    const fromCurr = from || selectedJourney?.currency || 'PLN';
+    const toCurr = selectedJourney?.currency || 'PLN';
+    const conv = convertAmount(amount, fromCurr, toCurr);
+    return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${toCurr}` : `${amount} ${fromCurr}`;
+  };
 
   useEffect(() => {
     // Only load journeys if user is authenticated
@@ -405,6 +587,23 @@ function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Load per-journey UI state (collapses) when selected journey changes
+  useEffect(() => {
+    if (selectedJourney?.id) {
+      const s = loadUIStateForJourney(selectedJourney.id);
+      if (s) {
+        setStopsOpen(typeof s.stopsOpen === 'boolean' ? s.stopsOpen : true);
+        setTransportsOpen(typeof s.transportsOpen === 'boolean' ? s.transportsOpen : true);
+        setChecklistOpen(typeof s.checklistOpen === 'boolean' ? s.checklistOpen : true);
+      } else {
+        // defaults
+        setStopsOpen(true);
+        setTransportsOpen(true);
+        setChecklistOpen(true);
+      }
+    }
+  }, [selectedJourney?.id]);
 
   // We no longer recompute totals client-side: the server is authoritative
 
@@ -1597,10 +1796,89 @@ function App() {
                   </div>
                 </div>
 
+                {/* Checklist */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-3">
+                      <button onClick={toggleChecklistOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle checklist">
+                        <span className="sr-only">Toggle checklist</span>
+                        {checklistOpen ? (
+                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                        )}
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Checklist</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add item (e.g., Passport)"
+                        value={newChecklistItemName}
+                        onChange={(e) => setNewChecklistItemName(e.target.value)}
+                        className="gh-input text-sm"
+                      />
+                      <button onClick={addChecklistItem} className="gh-btn-primary text-sm">Add</button>
+                    </div>
+                  </div>
+
+                  {checklistOpen && (
+                    <div className="space-y-2">
+                      {(selectedJourney?.checklist || []).length === 0 ? (
+                        <p className="text-sm text-gray-600 dark:text-[#98989d]">No checklist items yet.</p>
+                      ) : (
+                        (selectedJourney!.checklist || []).map(item => (
+                          <div key={item.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2">
+                                <PaymentCheckbox id={`check-bought-${item.id}`} checked={item.bought || false} onChange={(v) => toggleChecklistBought(item.id)} label="Bought" />
+                                <PaymentCheckbox id={`check-packed-${item.id}`} checked={item.packed || false} onChange={(v) => toggleChecklistPacked(item.id)} label="Packed" />
+                              </div>
+                              {editingChecklistId === item.id ? (
+                                <input
+                                  type="text"
+                                  value={editingChecklistName}
+                                  onChange={(e) => setEditingChecklistName(e.target.value)}
+                                  className="gh-input text-sm ml-2"
+                                />
+                              ) : (
+                                <span className="ml-2 text-sm text-gray-900 dark:text-[#ffffff]">{item.name}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {editingChecklistId === item.id ? (
+                                <>
+                                  <button onClick={saveEditChecklistItem} className="gh-btn-primary text-sm">Save</button>
+                                  <button onClick={cancelEditChecklistItem} className="gh-btn-secondary text-sm">Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => startEditChecklistItem(item.id, item.name)} className="text-blue-600 hover:text-blue-700" title="Edit item"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => removeChecklistItem(item.id)} className="text-red-600 hover:text-red-700" title="Remove item"><Trash2 className="w-4 h-4" /></button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Stops */}
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
+                    <div className="flex items-center gap-3">
+                      <button onClick={toggleStopsOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle stops">
+                        <span className="sr-only">Toggle stops</span>
+                        {stopsOpen ? (
+                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                        )}
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
+                    </div>
                     <button
                       onClick={() => setShowStopForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -1610,168 +1888,115 @@ function App() {
                       Add Stop
                     </button>
                   </div>
-                  <div className="space-y-3">
-                    {selectedJourney.stops && selectedJourney.stops.length > 0 ? (
-                      selectedJourney.stops.map((stop, index) => (
-                        <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
-                          <div className="flex items-start gap-3">
-                            <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start mb-1">
-                                <h4 className="font-semibold text-gray-900 dark:text-[#ffffff]">
-                                  {stop.city}, {stop.country}
-                                </h4>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setEditingStop(stop);
-                                      setShowEditStopForm(true);
-                                    }}
-                                    className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
-                                    disabled={loading}
-                                    title="Edit stop"
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteStop(stop.id!)}
-                                    className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
-                                    disabled={loading}
-                                    title="Delete stop"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                  {stopsOpen && (
+                    <div className="space-y-3">
+                      {selectedJourney.stops && selectedJourney.stops.length > 0 ? (
+                        selectedJourney.stops.map((stop, index) => (
+                          <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                            <div className="flex items-start gap-3">
+                              <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start mb-1">
+                                  <h4 className="font-semibold text-gray-900 dark:text-[#ffffff]">{stop.city}, {stop.country}</h4>
+                                  <div className="flex items-center gap-2">
+                                    <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={(v) => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
+                                    <button
+                                      onClick={() => { setEditingStop(stop); setShowEditStopForm(true); }}
+                                      className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1"
+                                    ><Edit2 className="w-4 h-4" /></button>
+                                    <button
+                                      onClick={() => handleDeleteStop(stop.id!)}
+                                      className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1"
+                                    ><Trash2 className="w-4 h-4" /></button>
+                                  </div>
                                 </div>
-                              </div>
-                              <p className="text-sm text-gray-600 dark:text-[#98989d] mt-1">
-                                {formatDateForDisplay(stop.arrivalDate)} -{' '}
-                                {formatDateForDisplay(stop.departureDate)}
-                              </p>
+                                <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} — {formatDateForDisplay(stop.departureDate)}</p>
 
-                              {/* Always show accommodation price & Paid checkbox when price exists, even without accommodation name */}
-                              {stop.accommodationPrice != null && (
-                                <div className="flex items-center justify-between mt-2">
-                                  <p className="text-sm font-medium text-green-600 dark:text-[#30d158]">
-                                    {stop.accommodationPrice} {stop.accommodationCurrency}
-                                    {stop.accommodationPrice && stop.accommodationCurrency && selectedJourney?.currency && stop.accommodationCurrency !== selectedJourney.currency && (
-                                      (() => {
-                                        const conv = convertAmount(stop.accommodationPrice || 0, stop.accommodationCurrency || selectedJourney.currency, selectedJourney.currency || 'PLN');
-                                        return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
-                                      })()
+                                {stop.accommodationName && (
+                                  <div className="mt-2 text-sm">
+                                    <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation</p>
+                                    <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
+                                    {stop.accommodationUrl && (
+                                      <a href={stop.accommodationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-[#0a84ff] hover:underline">View booking →</a>
                                     )}
-                                  </p>
-                                  <PaymentCheckbox
-                                    id={`stop-payment-${stop.id}`}
-                                    checked={stop.isPaid || false}
-                                    onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)}
-                                    disabled={loading}
-                                  />
-                                </div>
-                              )}
+                                  </div>
+                                )}
 
-                              {stop.accommodationName && (
-                                <div className="mt-2 text-sm">
-                                  <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation:</p>
-                                  <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
-                                  {stop.accommodationUrl && (
-                                    <a
-                                      href={stop.accommodationUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 dark:text-[#0a84ff] hover:underline"
-                                    >
-                                      View booking →
-                                    </a>
-                                  )}
-                                </div>
-                              )}
-                              {stop.attractions && stop.attractions.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-[#ffffff]">Attractions:</p>
-                                  <ul className="text-sm space-y-1 mt-1">
-                                    {stop.attractions.map((attr, i) => (
-                                      <li key={i} className="text-gray-600 dark:text-[#98989d] flex justify-between items-start group gap-2">
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-start justify-between gap-2">
-                                            <span className="flex-1">
-                                              • {attr.name}
-                                              {attr.estimatedCost != null && (() => {
-                                                const origCurr = (attr as any).currency || selectedJourney.currency || 'PLN';
-                                                const conv = selectedJourney?.currency && origCurr !== selectedJourney.currency
-                                                  ? convertAmount(attr.estimatedCost || 0, origCurr, selectedJourney.currency)
-                                                  : null;
-                                                return (
-                                                  <span className="text-sm font-medium text-green-600 dark:text-[#30d158]">
-                                                    {` ${attr.estimatedCost} ${origCurr}`}
-                                                    {conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney?.currency}` : (selectedJourney?.currency && origCurr !== selectedJourney.currency ? ' (≈ conversion unavailable)' : '')}
-                                                  </span>
-                                                );
-                                              })()}
-                                            </span>
-                                                    <div className="flex items-center gap-2 shrink-0">
-                                                      {(attr.estimatedCost || attr.estimatedCost === 0) && (
-                                                        <PaymentCheckbox
-                                                          id={`attraction-payment-${attr.id}`}
-                                                          checked={attr.isPaid || false}
-                                                          onChange={() => handleToggleAttractionPayment(stop.id!, attr.id!, attr.isPaid || false)}
-                                                          disabled={loading}
-                                                        />
-                                                      )}
-                                                      <button
-                                                        onClick={() => {
-                                                          setEditingAttraction(attr);
-                                                          setEditingAttractionStopId(stop.id!);
-                                                          setShowEditAttractionForm(true);
-                                                        }}
-                                                        className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-150 ease-in-out"
-                                                        disabled={loading}
-                                                        title="Edit attraction"
-                                                      >
-                                                        <Edit2 className="w-4 h-4" />
-                                                      </button>
-                                                      <button
-                                                        onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
-                                                        className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-150 ease-in-out"
-                                                        disabled={loading}
-                                                        title="Delete attraction"
-                                                      >
-                                                        <Trash2 className="w-4 h-4" />
-                                                      </button>
-                                                    </div>
+                                {stop.accommodationPrice != null && (
+                                  <div className="mt-2 text-sm">
+                                    <span className="font-medium text-green-600 dark:text-[#30d158]">{formatPriceWithConversion(stop.accommodationPrice, stop.accommodationCurrency || selectedJourney.currency)}</span>
+                                    {/* Payment control moved to top-right action area to avoid layout shift */}
+                                  </div>
+                                )}
+
+                                {stop.attractions && stop.attractions.length > 0 && (
+                                  <div className="mt-2 text-sm">
+                                    <div className="flex justify-between items-center">
+                                      <p className="font-medium text-gray-900 dark:text-[#ffffff]">Attractions</p>
+                                      <button
+                                        onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
+                                        className="gh-btn-secondary text-sm"
+                                        disabled={loading}
+                                      >
+                                        <Plus className="w-4 h-4" />
+                                        Add
+                                      </button>
+                                    </div>
+                                    <ul className="ml-0 mt-1 text-gray-600 dark:text-[#98989d]">
+                                      {stop.attractions.map((a) => (
+                                        <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm text-gray-900 dark:text-[#ffffff]">{a.name}</span>
+                                            {a.estimatedCost != null ? (
+                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatPriceWithConversion(a.estimatedCost, (a as any).currency || selectedJourney.currency)}</span>
+                                            ) : null}
                                           </div>
-                                          {/* Payment checkbox moved to action area (to the right) for consistent layout */}
-                                        </div>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setSelectedStopForAttraction(stop.id!);
-                                  setShowAttractionForm(true);
-                                }}
-                                className="mt-3 text-sm text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-1"
-                              >
-                                <Plus className="w-4 h-4" />
-                                Add Attraction
-                              </button>
+                                          <div className="flex items-center gap-2">
+                                            <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={(v) => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
+                                            <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="text-blue-600 hover:text-blue-700 p-1"><Edit2 className="w-4 h-4" /></button>
+                                            <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="text-red-600 hover:text-red-700 p-1"><Trash2 className="w-4 h-4" /></button>
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {!stop.attractions || stop.attractions.length === 0 ? (
+                                  <div className="mt-2">
+                                    <button
+                                      onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
+                                      className="gh-btn-secondary text-sm"
+                                      disabled={loading}
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      Add attraction
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">
-                        No stops yet. Click on the map to add your first stop!
-                      </p>
-                    )}
-                  </div>
-                </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">No stops yet. Click on the map to add your first stop!</p>
+                      )}
+                    </div>
+                  )}
 
                 {/* Transportation */}
-                <div>
+                <div className="mt-6">
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Transportation</h3>
+                    <div className="flex items-center gap-3">
+                      <button onClick={toggleTransportsOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle transports">
+                        <span className="sr-only">Toggle transports</span>
+                        {transportsOpen ? (
+                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                        )}
+                      </button>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Transportation</h3>
+                    </div>
                     <button
                       onClick={() => setShowTransportForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -1781,7 +2006,8 @@ function App() {
                       Add Transport
                     </button>
                   </div>
-                  <div className="space-y-3">
+                  {transportsOpen && (
+                    <div className="space-y-3">
                     {selectedJourney.transports && selectedJourney.transports.length > 0 ? (
                       selectedJourney.transports.map((transport, index) => (
                         <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
@@ -1869,6 +2095,8 @@ function App() {
                         No transportation added yet.
                       </p>
                     )}
+                  </div>
+                  )}
                   </div>
                 </div>
               </div>
