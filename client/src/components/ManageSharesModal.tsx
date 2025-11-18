@@ -114,7 +114,7 @@ const ManageSharesModal: React.FC<Props> = ({ journeyId, isOpen, onClose, onUpda
           </div>
 
           <div className="flex justify-end mt-6">
-            <button onClick={onClose} className="gh-btn-secondary">Close</button>
+            <button onClick={onClose} className="gh-btn-danger">Close</button>
           </div>
         </div>
       </div>

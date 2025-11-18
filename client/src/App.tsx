@@ -78,6 +78,9 @@ function App() {
     country: '',
     latitude: 51.505,
     longitude: -0.09,
+    addressStreet: '',
+    addressHouseNumber: '',
+    postalCode: '',
     arrivalDate: '',
     departureDate: '',
     accommodationName: '',
@@ -538,6 +541,76 @@ function App() {
     } catch (err) {
       console.error('Geocoding failed:', err);
       error('Failed to find location');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeocodeAddress = async (street: string | undefined, house: string | undefined, postal: string | undefined, city: string | undefined, country: string | undefined) => {
+    const parts = [] as string[];
+    if (street) parts.push(street);
+    if (house) parts.push(house);
+    if (postal) parts.push(postal);
+    if (city) parts.push(city);
+    if (country) parts.push(country);
+    const query = parts.join(', ');
+    if (!query) {
+      warning('Please fill address fields to geocode');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'JourneyPlannerApp/1.0' } }
+      );
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setNewStop(prev => ({ ...prev, latitude: parseFloat(lat), longitude: parseFloat(lon) }));
+        success('Address located on map!');
+      } else {
+        warning('Address not found. Try more details or try locating by city.');
+      }
+    } catch (err) {
+      console.error('Geocoding by address failed:', err);
+      error('Failed to locate address');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeocodeAddressEdit = async (street: string | undefined, house: string | undefined, postal: string | undefined, city: string | undefined, country: string | undefined) => {
+    const parts = [] as string[];
+    if (street) parts.push(street);
+    if (house) parts.push(house);
+    if (postal) parts.push(postal);
+    if (city) parts.push(city);
+    if (country) parts.push(country);
+    const query = parts.join(', ');
+    if (!query) {
+      warning('Please fill address fields to geocode');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'JourneyPlannerApp/1.0' } }
+      );
+      const data = await response.json();
+      if (data && data.length > 0 && editingStop) {
+        const { lat, lon } = data[0];
+        setEditingStop({ ...editingStop, latitude: parseFloat(lat), longitude: parseFloat(lon) });
+        success('Address located on map!');
+      } else {
+        warning('Address not found. Try more details or try locating by city.');
+      }
+    } catch (err) {
+      console.error('Geocoding by address failed:', err);
+      error('Failed to locate address');
     } finally {
       setLoading(false);
     }
@@ -1578,7 +1651,7 @@ function App() {
                               {/* Always show accommodation price & Paid checkbox when price exists, even without accommodation name */}
                               {stop.accommodationPrice != null && (
                                 <div className="flex items-center justify-between mt-2">
-                                  <p className="text-green-600 dark:text-[#30d158]">
+                                  <p className="text-sm font-medium text-green-600 dark:text-[#30d158]">
                                     {stop.accommodationPrice} {stop.accommodationCurrency}
                                     {stop.accommodationPrice && stop.accommodationCurrency && selectedJourney?.currency && stop.accommodationCurrency !== selectedJourney.currency && (
                                       (() => {
@@ -1622,18 +1695,18 @@ function App() {
                                           <div className="flex items-start justify-between gap-2">
                                             <span className="flex-1">
                                               • {attr.name}
-                                              {attr.estimatedCost != null && (
-                                                (() => {
-                                                  const origCurr = (attr as any).currency || selectedJourney.currency || 'PLN';
-                                                  const parts = [` ${attr.estimatedCost} ${origCurr}`];
-                                                  if (selectedJourney?.currency && origCurr !== selectedJourney.currency) {
-                                                    const conv = convertAmount(attr.estimatedCost || 0, origCurr, selectedJourney.currency);
-                                                    if (conv != null) parts.push(` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}`);
-                                                    else parts.push(' (≈ conversion unavailable)');
-                                                  }
-                                                  return parts.join('');
-                                                })()
-                                              )}
+                                              {attr.estimatedCost != null && (() => {
+                                                const origCurr = (attr as any).currency || selectedJourney.currency || 'PLN';
+                                                const conv = selectedJourney?.currency && origCurr !== selectedJourney.currency
+                                                  ? convertAmount(attr.estimatedCost || 0, origCurr, selectedJourney.currency)
+                                                  : null;
+                                                return (
+                                                  <span className="text-sm font-medium text-green-600 dark:text-[#30d158]">
+                                                    {` ${attr.estimatedCost} ${origCurr}`}
+                                                    {conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney?.currency}` : (selectedJourney?.currency && origCurr !== selectedJourney.currency ? ' (≈ conversion unavailable)' : '')}
+                                                  </span>
+                                                );
+                                              })()}
                                             </span>
                                                     <div className="flex items-center gap-2 shrink-0">
                                                       {(attr.estimatedCost || attr.estimatedCost === 0) && (
@@ -1963,7 +2036,7 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowNewJourneyForm(false)}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -2058,7 +2131,7 @@ function App() {
                     setShowEditJourneyForm(false);
                     setEditingJourney(null);
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -2157,43 +2230,61 @@ function App() {
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Add Stop</h2>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Paris"
-                      value={newStop.city}
-                      onChange={(e) => setNewStop({ ...newStop, city: e.target.value })}
-                      className="gh-input"
-                    />
+                {/* Address block: Street & number, City* + Postal Code, Country*, then single locate button */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Address</label>
+                  <input
+                    type="text"
+                    placeholder="Street and number"
+                    value={newStop.addressStreet || ''}
+                    onChange={(e) => setNewStop({ ...newStop, addressStreet: e.target.value })}
+                    className="gh-input mb-3"
+                  />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">City *</label>
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={newStop.city || ''}
+                        onChange={(e) => setNewStop({ ...newStop, city: e.target.value })}
+                        className="gh-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Postal Code</label>
+                      <input
+                        type="text"
+                        placeholder="Postal Code"
+                        value={newStop.postalCode || ''}
+                        onChange={(e) => setNewStop({ ...newStop, postalCode: e.target.value })}
+                        className="gh-input"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      Country *
-                    </label>
+
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Country *</label>
                     <input
                       type="text"
-                      placeholder="e.g., France"
-                      value={newStop.country}
+                      placeholder="Country"
+                      value={newStop.country || ''}
                       onChange={(e) => setNewStop({ ...newStop, country: e.target.value })}
                       className="gh-input"
                     />
                   </div>
-                </div>
-                
-                {/* Geocode Button */}
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => handleGeocodeCity(newStop.city || '', newStop.country || '')}
-                    disabled={loading || !newStop.city || !newStop.country}
-                    className="gh-btn-secondary text-sm flex items-center gap-2"
-                  >
-                    <MapPin className="w-4 h-4" />
-                    Locate on Map
-                  </button>
+
+                  <div className="mt-4">
+                    <button
+                      onClick={() => handleGeocodeAddress(newStop.addressStreet, newStop.addressHouseNumber, newStop.postalCode, newStop.city, newStop.country)}
+                      disabled={loading || !(newStop.addressStreet || newStop.city || newStop.postalCode || newStop.country)}
+                      className="gh-btn-primary w-full flex items-center justify-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Locate on Map
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2325,7 +2416,7 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowStopForm(false)}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -2350,30 +2441,60 @@ function App() {
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Edit Stop</h2>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Paris"
-                      value={editingStop.city}
-                      onChange={(e) => setEditingStop({ ...editingStop, city: e.target.value })}
-                      className="gh-input"
-                    />
+                {/* Address block: Street & number, City + Postal Code, Country, then single locate button */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Address</label>
+                  <input
+                    type="text"
+                    placeholder="Street and number"
+                    value={editingStop.addressStreet || ''}
+                    onChange={(e) => setEditingStop({ ...editingStop, addressStreet: e.target.value })}
+                    className="gh-input mb-3"
+                  />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">City *</label>
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={editingStop.city || ''}
+                        onChange={(e) => setEditingStop({ ...editingStop, city: e.target.value })}
+                        className="gh-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Postal Code</label>
+                      <input
+                        type="text"
+                        placeholder="Postal Code"
+                        value={editingStop.postalCode || ''}
+                        onChange={(e) => setEditingStop({ ...editingStop, postalCode: e.target.value })}
+                        className="gh-input"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      Country *
-                    </label>
+
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Country *</label>
                     <input
                       type="text"
-                      placeholder="e.g., France"
-                      value={editingStop.country}
+                      placeholder="Country"
+                      value={editingStop.country || ''}
                       onChange={(e) => setEditingStop({ ...editingStop, country: e.target.value })}
                       className="gh-input"
                     />
+                  </div>
+
+                  <div className="mt-4">
+                    <button
+                      onClick={() => handleGeocodeAddressEdit(editingStop.addressStreet, undefined, editingStop.postalCode, editingStop.city, editingStop.country)}
+                      disabled={loading || !(editingStop.addressStreet || editingStop.city || editingStop.postalCode || editingStop.country)}
+                      className="gh-btn-primary w-full flex items-center justify-center gap-2"
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Locate on Map
+                    </button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2498,7 +2619,7 @@ function App() {
                     setShowEditStopForm(false);
                     setEditingStop(null);
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -2718,7 +2839,7 @@ function App() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowTransportForm(false)}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -2892,7 +3013,7 @@ function App() {
                     setShowEditTransportForm(false);
                     setEditingTransport(null);
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -3049,11 +3170,11 @@ function App() {
                     />
                     <button
                       onClick={handleGeocodeAttraction}
-                      disabled={geocodingAttraction}
-                      className="gh-btn-secondary w-full flex items-center justify-center gap-2"
+                      disabled={geocodingAttraction || !(newAttraction.addressStreet || newAttraction.addressCity || newAttraction.addressPostalCode || newAttraction.addressCountry)}
+                      className="gh-btn-primary w-full flex items-center justify-center gap-2"
                     >
-                      <Navigation className="w-4 h-4" />
-                      {geocodingAttraction ? 'Finding coordinates...' : 'Find Coordinates'}
+                      <MapPin className="w-4 h-4" />
+                      {geocodingAttraction ? 'Finding coordinates...' : 'Locate on Map'}
                     </button>
                   </div>
                 </div>
@@ -3110,7 +3231,7 @@ function App() {
                     setShowAttractionForm(false);
                     setSelectedStopForAttraction(null);
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -3256,11 +3377,11 @@ function App() {
                     />
                     <button
                       onClick={handleGeocodeEditAttraction}
-                      disabled={geocodingEditAttraction}
-                      className="gh-btn-secondary w-full flex items-center justify-center gap-2"
+                      disabled={geocodingEditAttraction || !(editingAttraction.addressStreet || editingAttraction.addressCity || editingAttraction.addressPostalCode || editingAttraction.addressCountry)}
+                      className="gh-btn-primary w-full flex items-center justify-center gap-2"
                     >
-                      <Navigation className="w-4 h-4" />
-                      {geocodingEditAttraction ? 'Finding coordinates...' : 'Find Coordinates'}
+                      <MapPin className="w-4 h-4" />
+                      {geocodingEditAttraction ? 'Finding coordinates...' : 'Locate on Map'}
                     </button>
                   </div>
                 </div>
@@ -3318,7 +3439,7 @@ function App() {
                     setEditingAttraction(null);
                     setEditingAttractionStopId(null);
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel

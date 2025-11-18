@@ -3,6 +3,9 @@ export interface Stop {
   journeyId?: number;
   city: string;
   country: string;
+  addressStreet?: string; // street name
+  addressHouseNumber?: string; // house number
+  postalCode?: string; // postal / ZIP code
   latitude: number;
   longitude: number;
   arrivalDate: Date | string;

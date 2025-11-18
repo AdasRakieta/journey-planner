@@ -117,7 +117,7 @@ export async function sendInvitationEmail(
           text-align: center;
         }
         .content {
-          background: #f9fafb;
+          background: #dcddddff;
           padding: 30px;
           border-radius: 0 0 10px 10px;
         }
