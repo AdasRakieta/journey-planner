@@ -288,7 +288,7 @@ export const transportService = {
 
 // Journey Share Service
 export const journeyShareService = {
-  async shareJourney(journeyId: number, emailOrUsername: string): Promise<JourneyShare> {
+  async shareJourney(journeyId: number, emailOrUsername: string, role?: 'view' | 'edit' | 'manage'): Promise<JourneyShare> {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/journeys/${journeyId}/share`, {
       method: 'POST',
@@ -296,11 +296,48 @@ export const journeyShareService = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ emailOrUsername }),
+      body: JSON.stringify({ emailOrUsername, role }),
     });
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Failed to share journey');
+    }
+    return response.json();
+  },
+
+  async getSharesForJourney(journeyId: number): Promise<JourneyShare[]> {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/shares`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch shares');
+    }
+    return response.json();
+  },
+
+  async updateShareRole(journeyId: number, shareId: number, role: 'view' | 'edit' | 'manage') {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/shares/${shareId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update share role');
+    }
+    return response.json();
+  },
+
+  async removeShare(journeyId: number, shareId: number) {
+    const response = await fetch(`${API_URL}/journeys/${journeyId}/shares/${shareId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to remove share');
     }
     return response.json();
   },

@@ -11,9 +11,27 @@
     "accommodation_name": "",
     "accommodation_url": "",
     "accommodation_price": 150,
-    "accommodation_currency": "PLN",
+    "accommodation_currency": "USD",
     "is_paid": false,
     "check_in_time": "12:03",
     "check_out_time": "12:03"
+  },
+  {
+    "id": 2,
+    "journey_id": 2,
+    "city": "sad",
+    "country": "asd",
+    "latitude": 51.505,
+    "longitude": -0.09,
+    "arrival_date": "",
+    "departure_date": "",
+    "accommodation_name": "",
+    "accommodation_url": "",
+    "accommodation_price": 123,
+    "accommodation_currency": "EUR",
+    "check_in_time": null,
+    "check_out_time": null,
+    "created_at": "2025-11-17T12:16:46.368Z",
+    "is_paid": false
   }
 ]

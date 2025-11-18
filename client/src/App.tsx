@@ -5,6 +5,7 @@ import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
+import ManageSharesModal from './components/ManageSharesModal';
 import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction } from './types/journey';
 import { journeyService, stopService, attractionService, transportService, journeyShareService } from './services/api';
@@ -126,8 +127,21 @@ function App() {
   const [ratesCache, setRatesCache] = useState<any>(null);
 
   useEffect(() => {
-    // Intentionally do not pre-load a fixed base; we'll load rates for the selected journey when available
-    return undefined;
+    // Load rates for PLN by default (so UI that is not showing a specific journey
+    // can still display converted totals). When a journey is selected the other
+    // effect below will load rates for that journey's currency.
+    let mounted = true;
+    const loadDefault = async () => {
+      try {
+        const data = await getRates('PLN');
+        if (mounted) setRatesCache(data);
+      } catch (e) {
+        // ignore - UI will show original amounts if conversion unavailable
+        console.warn('Failed to load default PLN rates', e);
+      }
+    };
+    void loadDefault();
+    return () => { mounted = false; };
   }, []);
 
   // When a journey is selected, fetch rates for its main currency so client-side conversions work
@@ -142,7 +156,7 @@ function App() {
         console.warn('Failed to load rates for selected journey:', e);
       }
     };
-    if (selectedJourney) void loadForJourney();
+    void loadForJourney();
     return () => { mounted = false; };
   }, [selectedJourney?.id, selectedJourney?.currency]);
 
@@ -169,6 +183,8 @@ function App() {
   // Share journey state
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareEmailOrUsername, setShareEmailOrUsername] = useState('');
+  const [shareRole, setShareRole] = useState<'view' | 'edit' | 'manage'>('edit');
+  const [showManageSharesModal, setShowManageSharesModal] = useState(false);
 
   useEffect(() => {
     // Only load journeys if user is authenticated
@@ -1107,10 +1123,11 @@ function App() {
 
     try {
       setLoading(true);
-      await journeyShareService.shareJourney(selectedJourney.id!, shareEmailOrUsername);
+      await journeyShareService.shareJourney(selectedJourney.id!, shareEmailOrUsername, shareRole);
       success(`Journey shared with ${shareEmailOrUsername}!`);
       setShowShareModal(false);
       setShareEmailOrUsername('');
+      setShareRole('edit');
     } catch (err: any) {
       console.error('Failed to share journey:', err);
       error(err.message || 'Failed to share journey');
@@ -1400,18 +1417,30 @@ function App() {
                       {selectedJourney?.id === journey.id && (
                         <div className="space-y-2 mt-3 pt-3 border-t border-gray-200 dark:border-[#38383a]">
                           {/* Share Journey Button - Only for journey owner */}
-                          {!journey.isShared && (
-                            <button
-                              onClick={() => setShowShareModal(true)}
-                              className="w-full px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-                              disabled={loading}
-                            >
-                              <Share2 className="w-4 h-4" />
-                              Share Journey
-                            </button>
-                          )}
-                          
                           <div className="flex gap-2">
+                            {!journey.isShared && (
+                              <button
+                                onClick={() => setShowShareModal(true)}
+                                className="flex-1 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                                disabled={loading}
+                              >
+                                <Share2 className="w-4 h-4" />
+                                Share Journey
+                              </button>
+                            )}
+
+                            {selectedJourney?.createdBy === user?.id && (
+                              <button
+                                onClick={() => setShowManageSharesModal(true)}
+                                className="flex-1 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors flex items-center justify-center gap-2"
+                              >
+                                <Users className="w-4 h-4" />
+                                Manage Shares
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2 mt-2">
                             <button
                               onClick={() => {
                                 setEditingJourney(journey);
@@ -1478,6 +1507,8 @@ function App() {
                       ]
                     : undefined
                 }
+                journeyCurrency={selectedJourney?.currency}
+                ratesCache={ratesCache}
               />
             </div>
 
@@ -1604,39 +1635,38 @@ function App() {
                                                 })()
                                               )}
                                             </span>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                              <button
-                                                onClick={() => {
-                                                  setEditingAttraction(attr);
-                                                  setEditingAttractionStopId(stop.id!);
-                                                  setShowEditAttractionForm(true);
-                                                }}
-                                                className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
-                                                disabled={loading}
-                                                title="Edit attraction"
-                                              >
-                                                <Edit2 className="w-3 h-3" />
-                                              </button>
-                                              <button
-                                                onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
-                                                className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
-                                                disabled={loading}
-                                                title="Delete attraction"
-                                              >
-                                                <Trash2 className="w-3 h-3" />
-                                              </button>
-                                            </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                      {(attr.estimatedCost || attr.estimatedCost === 0) && (
+                                                        <PaymentCheckbox
+                                                          id={`attraction-payment-${attr.id}`}
+                                                          checked={attr.isPaid || false}
+                                                          onChange={() => handleToggleAttractionPayment(stop.id!, attr.id!, attr.isPaid || false)}
+                                                          disabled={loading}
+                                                        />
+                                                      )}
+                                                      <button
+                                                        onClick={() => {
+                                                          setEditingAttraction(attr);
+                                                          setEditingAttractionStopId(stop.id!);
+                                                          setShowEditAttractionForm(true);
+                                                        }}
+                                                        className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-150 ease-in-out"
+                                                        disabled={loading}
+                                                        title="Edit attraction"
+                                                      >
+                                                        <Edit2 className="w-4 h-4" />
+                                                      </button>
+                                                      <button
+                                                        onClick={() => handleDeleteAttraction(stop.id!, attr.id!)}
+                                                        className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-150 ease-in-out"
+                                                        disabled={loading}
+                                                        title="Delete attraction"
+                                                      >
+                                                        <Trash2 className="w-4 h-4" />
+                                                      </button>
+                                                    </div>
                                           </div>
-                                          {attr.estimatedCost && (
-                                            <div className="mt-1 ml-4">
-                                              <PaymentCheckbox
-                                                id={`attraction-payment-${attr.id}`}
-                                                checked={attr.isPaid || false}
-                                                onChange={() => handleToggleAttractionPayment(stop.id!, attr.id!, attr.isPaid || false)}
-                                                disabled={loading}
-                                              />
-                                            </div>
-                                          )}
+                                          {/* Payment checkbox moved to action area (to the right) for consistent layout */}
                                         </div>
                                       </li>
                                     ))}
@@ -1733,6 +1763,12 @@ function App() {
                               <div className="text-sm mt-1 flex items-center justify-between">
                                 <p className="font-medium text-green-600 dark:text-[#30d158]">
                                   {transport.price} {transport.currency}
+                                  {(transport.price && transport.currency && selectedJourney?.currency && transport.currency !== selectedJourney.currency) && (
+                                    (() => {
+                                      const conv = convertAmount(transport.price || 0, transport.currency || selectedJourney.currency, selectedJourney.currency || 'PLN');
+                                      return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
+                                    })()
+                                  )}
                                 </p>
                                 <PaymentCheckbox
                                   id={`transport-payment-${transport.id}`}
@@ -1764,14 +1800,89 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="gh-card text-center py-12">
+              <div className="gh-card text-center py-6">
                 <MapPin className="w-16 h-16 text-gray-600 dark:text-[#98989d] mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-2">
                   No Journey Selected
                 </h3>
-                <p className="text-gray-600 dark:text-[#98989d]">
+                <p className="text-gray-600 dark:text-[#98989d] mb-4">
                   Select a journey from the list or create a new one to get started
                 </p>
+                {/* Aggregated totals across all journeys (converted to PLN when possible) */}
+                {(() => {
+                  const base = 'PLN';
+                  let total = 0;
+                  let paid = 0;
+
+                  journeys.forEach(j => {
+                    const mainCurr = j.currency || base;
+
+                    // stops
+                    (j.stops || []).forEach(s => {
+                      const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
+                      const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
+                      const conv = convertAmount(price || 0, from, base);
+                      const eff = conv ?? price ?? 0;
+                      total += eff;
+                      if (s.isPaid) paid += eff;
+
+                      // attractions
+                      (s.attractions || []).forEach(a => {
+                        const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+                        const afrom = (a as any).currency || mainCurr;
+                        const aconv = convertAmount(aprice || 0, afrom, base);
+                        const ae = aconv ?? aprice ?? 0;
+                        total += ae;
+                        if (a.isPaid) paid += ae;
+                      });
+                    });
+
+                    // transports
+                    (j.transports || []).forEach(t => {
+                      const tprice = (t as any).price ?? 0;
+                      const tfrom = (t as any).currency || mainCurr;
+                      const tconv = convertAmount(tprice || 0, tfrom, base);
+                      const te = tconv ?? tprice ?? 0;
+                      total += te;
+                      if (t.isPaid) paid += te;
+                    });
+                  });
+
+                  const amountDue = Math.max(0, total - paid);
+                  const percentPaid = total > 0 ? Math.round((paid / total) * 100) : 0;
+
+                  return (
+                    <div className="max-w-md mx-auto text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-[#30d158]">
+                          <DollarSign className="w-4 h-4" />
+                          <span>Estimated Cost (all journeys):</span>
+                        </div>
+                        <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">{total.toFixed(2)} {base}</span>
+                      </div>
+
+                      <div className="mt-3">
+                        {amountDue > 0 ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
+                              <XCircle className="w-4 h-4" />
+                              <span>Amount Due:</span>
+                            </div>
+                            <span className="text-sm font-semibold text-red-600 dark:text-[#ff453a]">{amountDue.toFixed(2)} {base}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-[#30d158]">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Fully Paid</span>
+                            </div>
+                            <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">{percentPaid}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1993,6 +2104,15 @@ function App() {
                     Enter the email address or username of the person you want to share with.
                   </p>
                 </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Role</label>
+                    <select value={shareRole} onChange={(e) => setShareRole(e.target.value as any)} className="gh-input w-full">
+                      <option value="view">View</option>
+                      <option value="edit">Edit</option>
+                      <option value="manage">Manage</option>
+                    </select>
+                    <p className="text-xs text-gray-500 dark:text-[#98989d] mt-2">Choose the permission level for the invited user.</p>
+                  </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button
@@ -2016,6 +2136,18 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Manage Shares Modal */}
+      {showManageSharesModal && selectedJourney && (
+        <ManageSharesModal
+          journeyId={selectedJourney.id!}
+          isOpen={showManageSharesModal}
+          onClose={() => setShowManageSharesModal(false)}
+          onUpdated={() => {
+            void loadJourneys();
+          }}
+        />
       )}
 
       {/* Add Stop Modal */}

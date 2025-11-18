@@ -12,6 +12,9 @@ import {
   getSharedWithMe,
   acceptInvitation,
   rejectInvitation,
+  getSharesForJourney,
+  updateShareRole,
+  removeShare,
 } from '../controllers/journeyController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -32,5 +35,11 @@ router.post('/:id/calculate-cost', authenticateToken, calculateTotalCost);
 router.post('/:id/share', authenticateToken, shareJourney);
 router.post('/invitations/accept', authenticateToken, acceptInvitation);
 router.post('/invitations/:id/reject', authenticateToken, rejectInvitation);
+// List shares for a journey
+router.get('/:id/shares', authenticateToken, getSharesForJourney);
+// Update a share role
+router.put('/:id/shares/:shareId', authenticateToken, updateShareRole);
+// Remove an existing share (unshare)
+router.delete('/:id/shares/:shareId', authenticateToken, removeShare);
 
 export default router;

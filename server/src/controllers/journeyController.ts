@@ -445,7 +445,7 @@ export const calculateTotalCost = async (req: Request, res: Response) => {
 export const shareJourney = async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.id);
-    const { emailOrUsername } = req.body;
+    const { emailOrUsername, role } = req.body;
     const userId = req.user?.userId;
 
     if (!userId) {
@@ -471,7 +471,7 @@ export const shareJourney = async (req: Request, res: Response) => {
 
       const crypto = require('crypto');
       const invitationToken = crypto.randomBytes(32).toString('hex');
-      const newShare = await jsonStore.insert('journey_shares', { journey_id: journeyId, shared_with_user_id: targetUser.id, shared_by_user_id: userId, status: 'pending', invited_email: targetUser.email, invitation_token: invitationToken, created_at: new Date().toISOString() });
+      const newShare = await jsonStore.insert('journey_shares', { journey_id: journeyId, shared_with_user_id: targetUser.id, shared_by_user_id: userId, status: 'pending', invited_email: targetUser.email, invitation_token: invitationToken, created_at: new Date().toISOString(), role: role || 'edit' });
 
       try {
         const emailService = require('../services/emailService');
@@ -529,10 +529,10 @@ export const shareJourney = async (req: Request, res: Response) => {
     // Create share record
     const shareResult = await query(
       `INSERT INTO journey_shares 
-       (journey_id, shared_with_user_id, shared_by_user_id, status, invited_email, invitation_token) 
-       VALUES ($1, $2, $3, 'pending', $4, $5) 
+       (journey_id, shared_with_user_id, shared_by_user_id, status, invited_email, invitation_token, role) 
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6) 
        RETURNING *`,
-      [journeyId, targetUser.id, userId, targetUser.email, invitationToken]
+      [journeyId, targetUser.id, userId, targetUser.email, invitationToken, role || 'edit']
     );
 
     // Send email notification
@@ -557,6 +557,92 @@ export const shareJourney = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error sharing journey:', error);
     res.status(500).json({ message: 'Failed to share journey' });
+  }
+};
+
+// Helper: check if user may manage shares for a journey (owner or accepted 'manage' share)
+const canManageShares = async (userId: number, journeyId: number) => {
+  if (!userId) return false;
+  if (!DB_AVAILABLE) {
+    const j = await jsonStore.getById('journeys', journeyId);
+    if (j && j.created_by === userId) return true;
+    const share = (await jsonStore.findByField('journey_shares', 'journey_id', journeyId)).find((s: any) => s.shared_with_user_id === userId && s.status === 'accepted' && s.role === 'manage');
+    return !!share;
+  }
+  // DB flow: owner
+  const jRes = await query('SELECT created_by FROM journeys WHERE id = $1', [journeyId]);
+  if (jRes.rows[0] && jRes.rows[0].created_by === userId) return true;
+  const sRes = await query('SELECT * FROM journey_shares WHERE journey_id = $1 AND shared_with_user_id = $2 AND status = $3 AND role = $4', [journeyId, userId, 'accepted', 'manage']);
+  return sRes.rows.length > 0;
+};
+
+// List shares for a journey (owner or manager can view current shares)
+export const getSharesForJourney = async (req: Request, res: Response) => {
+  try {
+    const journeyId = parseInt(req.params.id);
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    // permission: owner or 'manage' role
+    if (!(await canManageShares(userId, journeyId))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    if (!DB_AVAILABLE) {
+      const shares = await jsonStore.findByField('journey_shares', 'journey_id', journeyId);
+      return res.json(toCamelCase(shares));
+    }
+    const result = await query('SELECT js.*, u.username as shared_with_username, u.email as shared_with_email FROM journey_shares js LEFT JOIN users u ON js.shared_with_user_id = u.id WHERE js.journey_id = $1 ORDER BY js.created_at DESC', [journeyId]);
+    return res.json(toCamelCase(result.rows));
+  } catch (error) {
+    console.error('Error listing shares:', error);
+    res.status(500).json({ message: 'Failed to list shares' });
+  }
+};
+
+// Update role for an existing share (only owner or manager)
+export const updateShareRole = async (req: Request, res: Response) => {
+  try {
+    const journeyId = parseInt(req.params.id);
+    const shareId = parseInt(req.params.shareId);
+    const { role } = req.body;
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!role || !['view', 'edit', 'manage'].includes(role)) return res.status(400).json({ message: 'Invalid role' });
+    if (!(await canManageShares(userId, journeyId))) return res.status(403).json({ message: 'Forbidden' });
+    if (!DB_AVAILABLE) {
+      const s = await jsonStore.getById('journey_shares', shareId);
+      if (!s || s.journey_id !== journeyId) return res.status(404).json({ message: 'Share not found' });
+      const updated = await jsonStore.updateById('journey_shares', shareId, { role });
+      return res.json(toCamelCase(updated));
+    }
+    const result = await query('UPDATE journey_shares SET role = $1 WHERE id = $2 RETURNING *', [role, shareId]);
+    if (!result.rows[0]) return res.status(404).json({ message: 'Share not found' });
+    return res.json(toCamelCase(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating share role:', error);
+    res.status(500).json({ message: 'Failed to update share role' });
+  }
+};
+
+// Remove (unshare) a user from a journey (owner or manager)
+export const removeShare = async (req: Request, res: Response) => {
+  try {
+    const journeyId = parseInt(req.params.id);
+    const shareId = parseInt(req.params.shareId);
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!(await canManageShares(userId, journeyId))) return res.status(403).json({ message: 'Forbidden' });
+    if (!DB_AVAILABLE) {
+      const s = await jsonStore.getById('journey_shares', shareId);
+      if (!s || s.journey_id !== journeyId) return res.status(404).json({ message: 'Share not found' });
+      await jsonStore.deleteById('journey_shares', shareId);
+      return res.json({ message: 'Share removed' });
+    }
+    const result = await query('DELETE FROM journey_shares WHERE id = $1 AND journey_id = $2 RETURNING *', [shareId, journeyId]);
+    if (!result.rows[0]) return res.status(404).json({ message: 'Share not found' });
+    return res.json({ message: 'Share removed' });
+  } catch (error) {
+    console.error('Error removing share:', error);
+    res.status(500).json({ message: 'Failed to remove share' });
   }
 };
 

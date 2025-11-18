@@ -64,6 +64,7 @@ export interface JourneyShare {
   createdAt: Date | string;
   acceptedAt?: Date | string;
   rejectedAt?: Date | string;
+  role?: 'view' | 'edit' | 'manage';
   // Additional fields from joined queries
   journeyTitle?: string;
   journeyDescription?: string;

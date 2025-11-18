@@ -67,6 +67,8 @@ interface JourneyMapProps {
   onMapClick?: (lat: number, lng: number) => void;
   center?: [number, number];
   zoom?: number;
+  journeyCurrency?: string | null;
+  ratesCache?: any;
 }
 
 function LocationMarker({ onMapClick }: { onMapClick?: (lat: number, lng: number) => void }) {
@@ -110,6 +112,8 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   onMapClick,
   center = [51.505, -0.09],
   zoom = 6,
+  journeyCurrency = 'PLN',
+  ratesCache = null,
 }) => {
   const { theme } = useTheme();
   const [mapCenter, setMapCenter] = useState<[number, number]>(center);
@@ -214,6 +218,22 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
                   {location.accommodationPrice != null && (
                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                       <span className="font-medium">Price:</span> {location.accommodationPrice} {(location as any).accommodationCurrency || 'PLN'}{(location as any).isPaid ? ' • Paid' : ''}
+                      {(location as any).accommodationPrice && (location as any).accommodationCurrency && journeyCurrency && ((location as any).accommodationCurrency !== journeyCurrency) && (
+                        (() => {
+                          try {
+                            const rates = ratesCache?.rates || {};
+                            const from = (location as any).accommodationCurrency;
+                            const to = journeyCurrency || 'PLN';
+                            const rateFrom = rates[from];
+                            const rateTo = rates[to];
+                            if (from === to || rateFrom == null || rateTo == null) return null;
+                            const conv = (1 / rateFrom) * rateTo * (location as any).accommodationPrice;
+                            return ` ≈ ${conv.toFixed(2)} ${to}`;
+                          } catch (e) {
+                            return ' (≈ conversion unavailable)';
+                          }
+                        })()
+                      )}
                     </p>
                   )}
                 </div>
@@ -271,6 +291,22 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
               {attraction.estimatedCost && attraction.estimatedCost > 0 && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   <span className="font-medium">Cost:</span> {attraction.estimatedCost} {(attraction as any).currency || 'PLN'}
+                  {(attraction as any).estimatedCost && (attraction as any).currency && journeyCurrency && ((attraction as any).currency !== journeyCurrency) && (
+                    (() => {
+                      try {
+                        const rates = ratesCache?.rates || {};
+                        const from = (attraction as any).currency;
+                        const to = journeyCurrency || 'PLN';
+                        const rateFrom = rates[from];
+                        const rateTo = rates[to];
+                        if (from === to || rateFrom == null || rateTo == null) return ' (≈ conversion unavailable)';
+                        const conv = (1 / rateFrom) * rateTo * (attraction as any).estimatedCost;
+                        return ` ≈ ${conv.toFixed(2)} ${to}`;
+                      } catch (e) {
+                        return ' (≈ conversion unavailable)';
+                      }
+                    })()
+                  )}
                 </p>
               )}
             </div>
