@@ -371,6 +371,48 @@ function App() {
     return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${toCurr}` : `${amount} ${fromCurr}`;
   };
 
+  // Prefer server-persisted converted values when available on items.
+  const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, l) => l.toUpperCase());
+  // Prefer server-stored converted values: accept either snake_case or camelCase field names
+  const getStoredConverted = (item: any, convertedField: string, convertedCurrencyField?: string) => {
+    if (!item) return null;
+    const variants = [convertedField, toCamel(convertedField)];
+    const currVariants = convertedCurrencyField ? [convertedCurrencyField, toCamel(convertedCurrencyField)] : [];
+    let v: any = null;
+    for (const key of variants) {
+      if (Object.prototype.hasOwnProperty.call(item, key) && item[key] != null) { v = item[key]; break; }
+    }
+    if (v == null) return null;
+    let c: any = null;
+    for (const key of currVariants) {
+      if (Object.prototype.hasOwnProperty.call(item, key) && item[key] != null) { c = item[key]; break; }
+    }
+    return { value: Number(v), currency: c || selectedJourney?.currency || 'PLN' };
+  };
+
+  const formatItemPrice = (amount: number | null | undefined, from: string | null | undefined, item: any, convertedField: string, convertedCurrencyField?: string) => {
+    if (amount == null) return null;
+    const stored = getStoredConverted(item, convertedField, convertedCurrencyField);
+    const fromCurr = from || selectedJourney?.currency || 'PLN';
+    const toCurr = selectedJourney?.currency || 'PLN';
+
+    // If target currency is the same as the source, don't display conversion
+    if (fromCurr === toCurr) {
+      return `${amount} ${fromCurr}`;
+    }
+    if (stored) {
+      // If server already persisted the converted value, show that as authoritative value
+      // But if stored value is the same currency as source, avoid showing redundant conversion
+      if (stored.currency === fromCurr) return `${amount} ${fromCurr}`;
+      // If the stored converted currency is equal to the target and its value equals the original amount,
+      // skip the redundant approx display
+      if (stored.currency === toCurr && Number(stored.value) === Number(amount)) return `${amount} ${fromCurr}`;
+      return `${amount} ${fromCurr} ≈ ${stored.value.toFixed(2)} ${stored.currency}`;
+    }
+    const conv = convertAmount(amount, fromCurr, selectedJourney?.currency || 'PLN');
+    return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${selectedJourney?.currency || 'PLN'}` : `${amount} ${fromCurr}`;
+  };
+
   useEffect(() => {
     // Only load journeys if user is authenticated
     if (user) {
@@ -405,178 +447,283 @@ function App() {
       warning('Journey deleted by another user');
     });
     
+    // Helper: fetch full journey from server (authoritative data)
+    const refreshJourneyFromServer = async (journeyId: number, setSelected = false) => {
+      try {
+        const fresh = await journeyService.getJourneyById(journeyId);
+        setJourneys(prev => prev.map(j => j.id === fresh.id ? fresh : j));
+        if (setSelected || selectedJourney?.id === fresh.id) setSelectedJourney(fresh);
+        return fresh;
+      } catch (err) {
+        // If we can't fetch, return null and let client compute as fallback
+        console.warn('Failed to refresh journey from server', err);
+        return null;
+      }
+    };
+
+    // Find journey id for a stop id from local state cache
+    const journeyIdFromStop = (stopId: number): number | null => {
+      const j = journeys.find(j => (j.stops || []).some(s => s.id === stopId));
+      return j ? j.id : null;
+    };
+
+    const journeyIdFromAttractionId = (attractionId: number): number | null => {
+      const j = journeys.find(j => (j.stops || []).some(s => (s.attractions || []).some(a => a.id === attractionId)));
+      return j ? j.id : null;
+    };
+
     // Listen for stop events
-    socketService.on('stop:created', (stop: Stop) => {
+    socketService.on('stop:created', async (stop: Stop) => {
       console.log('Real-time: Stop created', stop);
+      const refreshed = await refreshJourneyFromServer(stop.journeyId);
+      if (refreshed) return;
+
       setJourneys(prev => prev.map(j => {
-  if (j.id === stop.journeyId) {
-          return { ...j, stops: [...(j.stops || []), stop] };
+        if (j.id === stop.journeyId) {
+          const updated = { ...j, stops: [...(j.stops || []), stop] } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
         }
         return j;
       }));
-  if (selectedJourney?.id === stop.journeyId) {
-        setSelectedJourney(prev => prev ? { ...prev, stops: [...(prev.stops || []), stop] } : null);
+      if (selectedJourney?.id === stop.journeyId) {
+        setSelectedJourney(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, stops: [...(prev.stops || []), stop] } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        });
       }
       // Notification only for real-time updates from other users
     });
     
-    socketService.on('stop:updated', (stop: Stop) => {
+    socketService.on('stop:updated', async (stop: Stop) => {
       console.log('Real-time: Stop updated', stop);
+      const refreshed = await refreshJourneyFromServer(stop.journeyId);
+      if (refreshed) return;
+
       setJourneys(prev => prev.map(j => {
-  if (j.id === stop.journeyId) {
-          return { 
+        if (j.id === stop.journeyId) {
+          const updated = { 
             ...j, 
-            stops: (j.stops || []).map(s => s.id === stop.id ? stop : s) 
-          };
+            stops: (j.stops || []).map(s => s.id === stop.id ? stop : s)
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
         }
         return j;
       }));
-  if (selectedJourney?.id === stop.journeyId) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s)
-        } : null);
+      if (selectedJourney?.id === stop.journeyId) {
+        setSelectedJourney(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s) } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        });
       }
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('stop:deleted', ({ id }: { id: number }) => {
+    socketService.on('stop:deleted', async ({ id }: { id: number }) => {
       console.log('Real-time: Stop deleted', id);
-      setJourneys(prev => prev.map(j => ({
-        ...j,
-        stops: (j.stops || []).filter(s => s.id !== id)
-      })));
+      const journeyId = journeyIdFromStop(id);
+      const refreshed = journeyId ? await refreshJourneyFromServer(journeyId) : null;
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
+        const updated = { ...j, stops: (j.stops || []).filter(s => s.id !== id) } as Journey;
+        updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+        return updated;
+      }));
       if (selectedJourney) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          stops: (prev.stops || []).filter(s => s.id !== id)
-        } : null);
+        setSelectedJourney(prev => prev ? (() => {
+          const updated = { ...prev, stops: (prev.stops || []).filter(s => s.id !== id) } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        })() : null);
       }
       warning('Stop deleted');
     });
     
     // Listen for attraction events
-    socketService.on('attraction:created', (attraction: Attraction) => {
+    socketService.on('attraction:created', async (attraction: Attraction) => {
       console.log('Real-time: Attraction created', attraction);
-      setJourneys(prev => prev.map(j => ({
-        ...j,
-        stops: (j.stops || []).map(s => {
-          if (s.id === attraction.stopId) {
-            return { ...s, attractions: [...(s.attractions || []), attraction] };
-          }
-          return s;
-        })
-      })));
-      if (selectedJourney) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          stops: (prev.stops || []).map(s => {
+      const refreshed = await refreshJourneyFromServer(journeyIdFromStop(attraction.stopId)!);
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
+        const updated = {
+          ...j,
+          stops: (j.stops || []).map(s => {
             if (s.id === attraction.stopId) {
               return { ...s, attractions: [...(s.attractions || []), attraction] };
             }
             return s;
           })
-        } : null);
+        } as Journey;
+        updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+        return updated;
+      }));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? (() => {
+          const updated = {
+            ...prev,
+            stops: (prev.stops || []).map(s => {
+              if (s.id === attraction.stopId) {
+                return { ...s, attractions: [...(s.attractions || []), attraction] };
+              }
+              return s;
+            })
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          setSelectedJourney(updated);
+          return updated;
+        })() : null);
       }
       // Notification only for real-time updates from other users
     });
     
-    socketService.on('attraction:updated', (attraction: Attraction) => {
+    socketService.on('attraction:updated', async (attraction: Attraction) => {
       console.log('Real-time: Attraction updated', attraction);
-      setJourneys(prev => prev.map(j => ({
-        ...j,
-        stops: (j.stops || []).map(s => ({
-          ...s,
-          attractions: (s.attractions || []).map(a => a.id === attraction.id ? attraction : a)
-        }))
-      })));
-      if (selectedJourney) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          stops: (prev.stops || []).map(s => ({
+      const refreshed = await refreshJourneyFromServer(journeyIdFromAttractionId(attraction.id)!);
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
+        const updated = {
+          ...j,
+          stops: (j.stops || []).map(s => ({
             ...s,
             attractions: (s.attractions || []).map(a => a.id === attraction.id ? attraction : a)
           }))
-        } : null);
+        } as Journey;
+        updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+        return updated;
+      }));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? (() => {
+          const updated = {
+            ...prev,
+            stops: (prev.stops || []).map(s => ({
+              ...s,
+              attractions: (s.attractions || []).map(a => a.id === attraction.id ? attraction : a)
+            }))
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          setSelectedJourney(updated);
+          return updated;
+        })() : null);
       }
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('attraction:deleted', ({ id }: { id: number }) => {
+    socketService.on('attraction:deleted', async ({ id }: { id: number }) => {
       console.log('Real-time: Attraction deleted', id);
-      setJourneys(prev => prev.map(j => ({
-        ...j,
-        stops: (j.stops || []).map(s => ({
-          ...s,
-          attractions: (s.attractions || []).filter(a => a.id !== id)
-        }))
-      })));
-      if (selectedJourney) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          stops: (prev.stops || []).map(s => ({
+      const journeyId = journeyIdFromAttractionId(id);
+      const refreshed = journeyId ? await refreshJourneyFromServer(journeyId) : null;
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
+        const updated = {
+          ...j,
+          stops: (j.stops || []).map(s => ({
             ...s,
             attractions: (s.attractions || []).filter(a => a.id !== id)
           }))
-        } : null);
+        } as Journey;
+        updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+        return updated;
+      }));
+      if (selectedJourney) {
+        setSelectedJourney(prev => prev ? (() => {
+          const updated = {
+            ...prev,
+            stops: (prev.stops || []).map(s => ({
+              ...s,
+              attractions: (s.attractions || []).filter(a => a.id !== id)
+            }))
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          setSelectedJourney(updated);
+          return updated;
+        })() : null);
       }
       warning('Attraction deleted');
     });
     
     // Listen for transport events
-    socketService.on('transport:created', (transport: any) => {
+    socketService.on('transport:created', async (transport: any) => {
       console.log('Real-time: Transport created', transport);
-        setJourneys(prev => prev.map(j => {
+      const refreshed = await refreshJourneyFromServer(transport.journeyId);
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
           if (j.id === transport.journeyId) {
-          return { ...j, transports: [...(j.transports || []), transport] };
+            const updated = { ...j, transports: [...(j.transports || []), transport] } as Journey;
+            updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
         }
         return j;
       }));
       if (selectedJourney?.id === transport.journeyId) {
-        setSelectedJourney(prev => prev ? { 
-          ...prev, 
-          transports: [...(prev.transports || []), transport] 
-        } : null);
+        setSelectedJourney(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, transports: [...(prev.transports || []), transport] } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        });
       }
       // Notification only for real-time updates from other users
     });
     
-    socketService.on('transport:updated', (transport: any) => {
+    socketService.on('transport:updated', async (transport: any) => {
       console.log('Real-time: Transport updated', transport);
-        setJourneys(prev => prev.map(j => {
+      const refreshed = await refreshJourneyFromServer(transport.journeyId);
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
           if (j.id === transport.journeyId) {
-          return { 
+          const updated = { 
             ...j, 
             transports: (j.transports || []).map(t => t.id === transport.id ? transport : t)
-          };
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
         }
         return j;
       }));
   if (selectedJourney?.id === transport.journeyId) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          transports: (prev.transports || []).map(t => t.id === transport.id ? transport : t)
-        } : null);
+        setSelectedJourney(prev => {
+          if (!prev) return null;
+          const updated = { ...prev, transports: (prev.transports || []).map(t => t.id === transport.id ? transport : t) } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        });
       }
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('transport:deleted', ({ id, journeyId }: { id: number; journeyId: number }) => {
+    socketService.on('transport:deleted', async ({ id, journeyId }: { id: number; journeyId: number }) => {
       console.log('Real-time: Transport deleted', id);
-        setJourneys(prev => prev.map(j => {
+      const refreshed = await refreshJourneyFromServer(journeyId);
+      if (refreshed) return;
+
+      setJourneys(prev => prev.map(j => {
           if (j.id === journeyId) {
-          return {
+          const updated = {
             ...j,
             transports: (j.transports || []).filter(t => t.id !== id)
-          };
+          } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
         }
         return j;
       }));
       if (selectedJourney?.id === journeyId) {
-        setSelectedJourney(prev => prev ? {
-          ...prev,
-          transports: (prev.transports || []).filter(t => t.id !== id)
-        } : null);
+        setSelectedJourney(prev => prev ? (() => {
+          const updated = { ...prev, transports: (prev.transports || []).filter(t => t.id !== id) } as Journey;
+          updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
+          return updated;
+        })() : null);
       }
       warning('Transport deleted');
     });
@@ -1352,16 +1499,20 @@ function App() {
 
   // Calculate total estimated cost dynamically from stops, transports, and attractions
   const calculateJourneyTotalCost = (journey: Journey): number => {
-    // Prefer server-provided totalEstimatedCost when it's a positive value (authoritative).
-    // If it's 0 or missing but there are item-level prices, compute locally instead.
-    if (typeof journey.totalEstimatedCost === 'number' && journey.totalEstimatedCost > 0) {
-      return journey.totalEstimatedCost;
-    }
+    // Always compute totals from item-level prices on the client to ensure
+    // consistency between the journey list and the selected journey details.
     // Fallback: compute locally while converting per-item currencies to journey.currency when possible
     const mainCurr = journey.currency || 'PLN';
     const stopsCost = journey.stops?.reduce((sum, stop) => {
       const price = (stop as any).accommodationPrice ?? (stop as any).accommodation_price ?? 0;
       const from = (stop as any).accommodationCurrency || (stop as any).accommodation_currency || mainCurr;
+      const stored = getStoredConverted(stop, 'accommodation_price_converted', 'accommodation_price_converted_currency');
+      if (stored) {
+        // stored value should already be in journey currency or include currency metadata
+        if (stored.currency === mainCurr) return sum + stored.value;
+        const convStored = convertAmount(stored.value, stored.currency, mainCurr);
+        return sum + (convStored ?? stored.value);
+      }
       const conv = convertAmount(price || 0, from, mainCurr);
       return sum + (conv ?? price ?? 0);
     }, 0) || 0;
@@ -1370,6 +1521,12 @@ function App() {
       const attrSum = (stop.attractions || []).reduce((s, a) => {
         const price = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
         const from = (a as any).currency || (a as any).curr || mainCurr;
+        const stored = getStoredConverted(a, 'estimated_cost_converted', 'estimated_cost_converted_currency');
+        if (stored) {
+          if (stored.currency === mainCurr) return s + stored.value;
+          const convStored = convertAmount(stored.value, stored.currency, mainCurr);
+          return s + (convStored ?? stored.value);
+        }
         const conv = convertAmount(price || 0, from, mainCurr);
         return s + (conv ?? price ?? 0);
       }, 0);
@@ -1379,11 +1536,67 @@ function App() {
     const transportsCost = journey.transports?.reduce((sum, t) => {
       const price = (t as any).price ?? 0;
       const from = (t as any).currency || mainCurr;
+      const stored = getStoredConverted(t, 'price_converted', 'price_converted_currency');
+      if (stored) {
+        if (stored.currency === mainCurr) return sum + stored.value;
+        const convStored = convertAmount(stored.value, stored.currency, mainCurr);
+        return sum + (convStored ?? stored.value);
+      }
       const conv = convertAmount(price || 0, from, mainCurr);
       return sum + (conv ?? price ?? 0);
     }, 0) || 0;
 
     return stopsCost + attractionsCost + transportsCost;
+  };
+
+  // Calculate journey total converted to a provided base currency (used by the "No Journey Selected" summary)
+  const calculateJourneyTotalInBase = (journey: Journey, base: string): number => {
+    const mainCurr = journey.currency || base;
+    let total = 0;
+
+    (journey.stops || []).forEach(s => {
+      const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
+      const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
+      const stored = getStoredConverted(s, 'accommodation_price_converted', 'accommodation_price_converted_currency');
+      if (stored) {
+        const convStoredToBase = convertAmount(stored.value, stored.currency, base);
+        total += convStoredToBase ?? stored.value;
+      } else {
+        const conv = convertAmount(price || 0, from, base);
+        const eff = conv ?? price ?? 0;
+        total += eff;
+      }
+
+      (s.attractions || []).forEach(a => {
+        const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+        const afrom = (a as any).currency || mainCurr;
+        const storedA = getStoredConverted(a, 'estimated_cost_converted', 'estimated_cost_converted_currency');
+        if (storedA) {
+          const aconvStored = convertAmount(storedA.value, storedA.currency, base);
+          total += aconvStored ?? storedA.value;
+        } else {
+          const aconv = convertAmount(aprice || 0, afrom, base);
+          const ae = aconv ?? aprice ?? 0;
+          total += ae;
+        }
+      });
+    });
+
+    (journey.transports || []).forEach(t => {
+      const tprice = (t as any).price ?? 0;
+      const tfrom = (t as any).currency || mainCurr;
+      const storedT = getStoredConverted(t, 'price_converted', 'price_converted_currency');
+      if (storedT) {
+        const tconvStored = convertAmount(storedT.value, storedT.currency, base);
+        total += tconvStored ?? storedT.value;
+      } else {
+        const tconv = convertAmount(tprice || 0, tfrom, base);
+        const te = tconv ?? tprice ?? 0;
+        total += te;
+      }
+    });
+
+    return total;
   };
 
   // Share journey handler
@@ -1591,7 +1804,17 @@ function App() {
                       }`}
                     >
                       <div
-                        onClick={() => setSelectedJourney(journey)}
+                        onClick={() => {
+                          // Always refresh the journey from server when selecting — server is authoritative for converted fields
+                          void (async () => {
+                            try {
+                              await refreshJourneyFromServer(journey.id!, true);
+                            } catch (e) {
+                              // fallback to local object if refresh fails
+                              setSelectedJourney(journey);
+                            }
+                          })();
+                        }}
                         className="cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
@@ -1619,44 +1842,63 @@ function App() {
                             <span>Estimated Cost:</span>
                           </div>
                           <span className="text-sm font-semibold text-green-600 dark:text-[#30d158]">
-                            {calculateJourneyTotalCost(journey).toFixed(2)} {journey.currency}
+                            {/* Use same calculation as the global "No Journey Selected" summary (PLN base) */}
+                              {journey.totalEstimatedCost != null
+                                ? `${journey.totalEstimatedCost.toFixed(2)} ${journey.currency || 'PLN'}`
+                                : `${calculateJourneyTotalInBase(journey, 'PLN').toFixed(2)} PLN`}
                           </span>
                         </div>
                         
                         {/* Amount Due - Cost remaining after paid items (converted to journey currency when possible) */}
-                        {(() => {
+                          {(() => {
                           const mainCurr = journey.currency || 'PLN';
-                          // compute totals converting per-item currencies to journey currency when possible
-                          let total = 0;
+                          // compute total in the journey's currency (server-provided preferred)
+                          const total = journey.totalEstimatedCost != null
+                            ? journey.totalEstimatedCost
+                            : calculateJourneyTotalInBase(journey, mainCurr);
                           let paid = 0;
 
-                          // stops
+                          // compute paid amount (prefer server-persisted converted per-item values)
                           (journey.stops || []).forEach(s => {
-                            const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
-                            const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
-                            const conv = convertAmount(price || 0, from, mainCurr);
-                            const effective = conv ?? price ?? 0;
-                            total += effective;
-                            if (s.isPaid) paid += effective;
-                            // attractions
+                            const storedStop = getStoredConverted(s, 'accommodation_price_converted', 'accommodation_price_converted_currency');
+                            if (storedStop) {
+                              const effective = storedStop.currency === mainCurr ? storedStop.value : (convertAmount(storedStop.value, storedStop.currency, mainCurr) ?? storedStop.value);
+                              if (s.isPaid) paid += effective;
+                            } else {
+                              const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
+                              const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
+                              const conv = convertAmount(price || 0, from, mainCurr);
+                              const effective = conv ?? price ?? 0;
+                              if (s.isPaid) paid += effective;
+                            }
+
                             (s.attractions || []).forEach(a => {
-                              const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
-                              const afrom = (a as any).currency || mainCurr;
-                              const aconv = convertAmount(aprice || 0, afrom, mainCurr);
-                              const ae = aconv ?? aprice ?? 0;
-                              total += ae;
-                              if (a.isPaid) paid += ae;
+                              const storedA = getStoredConverted(a, 'estimated_cost_converted', 'estimated_cost_converted_currency');
+                              if (storedA) {
+                                const ae = storedA.currency === mainCurr ? storedA.value : (convertAmount(storedA.value, storedA.currency, mainCurr) ?? storedA.value);
+                                if (a.isPaid) paid += ae;
+                              } else {
+                                const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+                                const afrom = (a as any).currency || mainCurr;
+                                const aconv = convertAmount(aprice || 0, afrom, mainCurr);
+                                const ae = aconv ?? aprice ?? 0;
+                                if (a.isPaid) paid += ae;
+                              }
                             });
                           });
 
-                          // transports
                           (journey.transports || []).forEach(t => {
-                            const tprice = (t as any).price ?? 0;
-                            const tfrom = (t as any).currency || mainCurr;
-                            const tconv = convertAmount(tprice || 0, tfrom, mainCurr);
-                            const te = tconv ?? tprice ?? 0;
-                            total += te;
-                            if (t.isPaid) paid += te;
+                            const storedT = getStoredConverted(t, 'price_converted', 'price_converted_currency');
+                            if (storedT) {
+                              const te = storedT.currency === mainCurr ? storedT.value : (convertAmount(storedT.value, storedT.currency, mainCurr) ?? storedT.value);
+                              if (t.isPaid) paid += te;
+                            } else {
+                              const tprice = (t as any).price ?? 0;
+                              const tfrom = (t as any).currency || mainCurr;
+                              const tconv = convertAmount(tprice || 0, tfrom, mainCurr);
+                              const te = tconv ?? tprice ?? 0;
+                              if (t.isPaid) paid += te;
+                            }
                           });
 
                           const amountDue = Math.max(0, total - paid);
@@ -1803,7 +2045,7 @@ function App() {
                       <button onClick={toggleChecklistOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle checklist">
                         <span className="sr-only">Toggle checklist</span>
                         {checklistOpen ? (
-                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
                         ) : (
                           <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
                         )}
@@ -1910,7 +2152,7 @@ function App() {
                                     ><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </div>
-                                <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} — {formatDateForDisplay(stop.departureDate)}</p>
+                                <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} - {formatDateForDisplay(stop.departureDate)}</p>
 
                                 {stop.accommodationName && (
                                   <div className="mt-2 text-sm">
@@ -1924,31 +2166,21 @@ function App() {
 
                                 {stop.accommodationPrice != null && (
                                   <div className="mt-2 text-sm">
-                                    <span className="font-medium text-green-600 dark:text-[#30d158]">{formatPriceWithConversion(stop.accommodationPrice, stop.accommodationCurrency || selectedJourney.currency)}</span>
+                                    <span className="font-medium text-green-600 dark:text-[#30d158]">{formatItemPrice(stop.accommodationPrice, stop.accommodationCurrency || selectedJourney.currency, stop, 'accommodation_price_converted', 'accommodation_price_converted_currency')}</span>
                                     {/* Payment control moved to top-right action area to avoid layout shift */}
                                   </div>
                                 )}
 
                                 {stop.attractions && stop.attractions.length > 0 && (
                                   <div className="mt-2 text-sm">
-                                    <div className="flex justify-between items-center">
                                       <p className="font-medium text-gray-900 dark:text-[#ffffff]">Attractions</p>
-                                      <button
-                                        onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
-                                        className="gh-btn-secondary text-sm"
-                                        disabled={loading}
-                                      >
-                                        <Plus className="w-4 h-4" />
-                                        Add
-                                      </button>
-                                    </div>
-                                    <ul className="ml-0 mt-1 text-gray-600 dark:text-[#98989d]">
+                                    <ul className="list-disc pl-4 ml-0 mt-1 marker:text-blue-600 dark:marker:text-[#0a84ff] text-gray-600 dark:text-[#98989d]">
                                       {stop.attractions.map((a) => (
                                         <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
                                           <div className="flex items-center gap-2">
                                             <span className="text-sm text-gray-900 dark:text-[#ffffff]">{a.name}</span>
                                             {a.estimatedCost != null ? (
-                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatPriceWithConversion(a.estimatedCost, (a as any).currency || selectedJourney.currency)}</span>
+                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
                                             ) : null}
                                           </div>
                                           <div className="flex items-center gap-2">
@@ -1959,17 +2191,27 @@ function App() {
                                         </li>
                                       ))}
                                     </ul>
+                                    <div className="mt-2">
+                                      <button
+                                        onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
+                                        className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
+                                        aria-label="Add attraction"
+                                      >
+                                        <Plus className="w-4 h-4" />
+                                        Add Attraction
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                                 {!stop.attractions || stop.attractions.length === 0 ? (
                                   <div className="mt-2">
                                     <button
                                       onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
-                                      className="gh-btn-secondary text-sm"
-                                      disabled={loading}
+                                      className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
+                                      aria-label="Add attraction"
                                     >
                                       <Plus className="w-4 h-4" />
-                                      Add attraction
+                                      Add Attraction
                                     </button>
                                   </div>
                                 ) : null}
@@ -2061,13 +2303,7 @@ function App() {
                               </p>
                               <div className="text-sm mt-1 flex items-center justify-between">
                                 <p className="font-medium text-green-600 dark:text-[#30d158]">
-                                  {transport.price} {transport.currency}
-                                  {(transport.price && transport.currency && selectedJourney?.currency && transport.currency !== selectedJourney.currency) && (
-                                    (() => {
-                                      const conv = convertAmount(transport.price || 0, transport.currency || selectedJourney.currency, selectedJourney.currency || 'PLN');
-                                      return conv != null ? ` ≈ ${conv.toFixed(2)} ${selectedJourney.currency}` : ' (≈ conversion unavailable)';
-                                    })()
-                                  )}
+                                  {formatItemPrice(transport.price, transport.currency, transport, 'price_converted', 'price_converted_currency')}
                                 </p>
                                 <PaymentCheckbox
                                   id={`transport-payment-${transport.id}`}
@@ -2120,32 +2356,53 @@ function App() {
 
                     // stops
                     (j.stops || []).forEach(s => {
-                      const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
-                      const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
-                      const conv = convertAmount(price || 0, from, base);
-                      const eff = conv ?? price ?? 0;
-                      total += eff;
-                      if (s.isPaid) paid += eff;
+                      const storedStop = getStoredConverted(s, 'accommodation_price_converted', 'accommodation_price_converted_currency');
+                      if (storedStop) {
+                        const eff = storedStop.currency === base ? storedStop.value : (convertAmount(storedStop.value, storedStop.currency, base) ?? storedStop.value);
+                        total += eff;
+                        if (s.isPaid) paid += eff;
+                      } else {
+                        const price = (s as any).accommodationPrice ?? (s as any).accommodation_price ?? 0;
+                        const from = (s as any).accommodationCurrency || (s as any).accommodation_currency || mainCurr;
+                        const conv = convertAmount(price || 0, from, base);
+                        const eff = conv ?? price ?? 0;
+                        total += eff;
+                        if (s.isPaid) paid += eff;
+                      }
 
                       // attractions
                       (s.attractions || []).forEach(a => {
-                        const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
-                        const afrom = (a as any).currency || mainCurr;
-                        const aconv = convertAmount(aprice || 0, afrom, base);
-                        const ae = aconv ?? aprice ?? 0;
-                        total += ae;
-                        if (a.isPaid) paid += ae;
+                        const storedA = getStoredConverted(a, 'estimated_cost_converted', 'estimated_cost_converted_currency');
+                        if (storedA) {
+                          const ae = storedA.currency === base ? storedA.value : (convertAmount(storedA.value, storedA.currency, base) ?? storedA.value);
+                          total += ae;
+                          if (a.isPaid) paid += ae;
+                        } else {
+                          const aprice = (a as any).estimatedCost ?? (a as any).estimated_cost ?? 0;
+                          const afrom = (a as any).currency || mainCurr;
+                          const aconv = convertAmount(aprice || 0, afrom, base);
+                          const ae = aconv ?? aprice ?? 0;
+                          total += ae;
+                          if (a.isPaid) paid += ae;
+                        }
                       });
                     });
 
                     // transports
                     (j.transports || []).forEach(t => {
-                      const tprice = (t as any).price ?? 0;
-                      const tfrom = (t as any).currency || mainCurr;
-                      const tconv = convertAmount(tprice || 0, tfrom, base);
-                      const te = tconv ?? tprice ?? 0;
-                      total += te;
-                      if (t.isPaid) paid += te;
+                      const storedT = getStoredConverted(t, 'price_converted', 'price_converted_currency');
+                      if (storedT) {
+                        const te = storedT.currency === base ? storedT.value : (convertAmount(storedT.value, storedT.currency, base) ?? storedT.value);
+                        total += te;
+                        if (t.isPaid) paid += te;
+                      } else {
+                        const tprice = (t as any).price ?? 0;
+                        const tfrom = (t as any).currency || mainCurr;
+                        const tconv = convertAmount(tprice || 0, tfrom, base);
+                        const te = tconv ?? tprice ?? 0;
+                        total += te;
+                        if (t.isPaid) paid += te;
+                      }
                     });
                   });
 
@@ -2817,6 +3074,11 @@ function App() {
                           const mainCurr = editingJourney?.currency || selectedJourney?.currency || newJourney.currency || 'PLN';
                           const from = editingStop?.accommodationCurrency || mainCurr;
                           if (from === mainCurr) return null;
+                          const stored = getStoredConverted(editingStop, 'accommodation_price_converted', 'accommodation_price_converted_currency');
+                          if (stored) {
+                            const value = stored.currency === mainCurr ? stored.value : (convertAmount(stored.value, stored.currency, mainCurr) ?? stored.value);
+                            return <span>≈ {value.toFixed(2)} {mainCurr}</span>;
+                          }
                           const conv = convertAmount(editingStop!.accommodationPrice || 0, from, mainCurr);
                           if (conv == null) return <span>≈ conversion not available</span>;
                           return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;

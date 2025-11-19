@@ -57,6 +57,8 @@ const SettingsPage: React.FC = () => {
   const [adminLoading, setAdminLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
+  const [ratesLastUpdated, setRatesLastUpdated] = useState<number | null>(null);
+  const [ratesLoadingState, setRatesLoadingState] = useState(false);
   // Export/Import state
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -148,6 +150,27 @@ const SettingsPage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]); // loadAdminData is stable, no need to include
+
+  // Load cached rates info (timestamp) for admin UI
+  const loadRatesInfo = useCallback(async () => {
+    try {
+      setRatesLoadingState(true);
+      const data = await (await import('../services/currencyApi')).getRates('PLN');
+      // server returns timestamp in ms
+      setRatesLastUpdated(data.timestamp || null);
+    } catch (err: any) {
+      console.warn('Failed to load rates info', err);
+      setRatesLastUpdated(null);
+    } finally {
+      setRatesLoadingState(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      void loadRatesInfo();
+    }
+  }, [user?.role, loadRatesInfo]);
 
   // Load journey invitations on mount
   useEffect(() => {
@@ -828,6 +851,41 @@ const SettingsPage: React.FC = () => {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Rates Cache Control */}
+              <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-3">Rates Cache</h3>
+                <p className="text-sm text-gray-600 dark:text-[#98989d] mb-4">Cached exchange rates are used by the site. Click to force-update the cache.</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-700 dark:text-[#ffffff]">Last updated:</div>
+                    <div className="text-sm text-gray-600 dark:text-[#98989d]">
+                      {ratesLoadingState ? 'Loading...' : (ratesLastUpdated ? new Date(ratesLastUpdated).toLocaleString() : 'Not available')}
+                    </div>
+                  </div>
+                  <div className="w-40">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setRatesLoadingState(true);
+                          const resp = await (await import('../services/currencyApi')).refreshRates('PLN');
+                          setRatesLastUpdated(resp.timestamp || Date.now());
+                          toast.success('Rates cache refreshed');
+                        } catch (err: any) {
+                          console.error('Failed to refresh rates cache', err);
+                          toast.error(err.message || 'Failed to refresh rates');
+                        } finally {
+                          setRatesLoadingState(false);
+                        }
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg"
+                      disabled={ratesLoadingState}
+                    >
+                      {ratesLoadingState ? 'Updating...' : 'Update Cache'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

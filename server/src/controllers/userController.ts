@@ -65,7 +65,7 @@ export async function changePassword(req: Request, res: Response) {
 
     // Verify current password
     if (!currentHash) {
-      // No password hash present for user — treat as error
+      // No password hash present for user - treat as error
       return res.status(500).json({ error: 'User has no password set' });
     }
     const isValidPassword = await comparePassword(currentPassword, currentHash);

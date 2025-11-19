@@ -75,19 +75,28 @@ async function fetchLatestRates(base = 'PLN'): Promise<RatesCache> {
 }
 
 export async function getRates(base = 'PLN'): Promise<RatesCache> {
+  // Prefer cached values always. Only fetch from upstream when the requested base
+  // is not present in the cache at all. This keeps the app using only cached data
+  // unless a missing base is requested.
   const cache = await loadCache(base);
-  if (cache && cache.base === base && (Date.now() - cache.timestamp) < CACHE_TTL_MS) {
+  if (cache && cache.base === base) {
     return cache;
   }
   try {
     const fetched = await fetchLatestRates(base);
     return fetched;
   } catch (err) {
-    console.warn('Could not fetch latest rates, using cached if available', err);
+    console.warn('Could not fetch latest rates, and no cache available', err);
     if (cache) return cache;
     // fallback minimal rates
     return { base, timestamp: Date.now(), rates: { [base]: 1 } };
   }
+}
+
+// Return the cached rates if present, but do NOT trigger an upstream fetch.
+export async function getCachedRates(base = 'PLN'): Promise<RatesCache | null> {
+  const cache = await loadCache(base);
+  return cache || null;
 }
 
 export async function getRate(from: string, to: string): Promise<number> {

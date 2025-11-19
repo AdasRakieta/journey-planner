@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { query, DB_AVAILABLE } from '../config/db';
 import jsonStore from '../config/jsonStore';
+import { computeAndPersistTotal } from '../services/journeyService';
 import { scrapeTicketData } from '../services/ticketScraper';
 
 // Convert snake_case to camelCase and handle Date objects
@@ -92,6 +93,13 @@ export const createTransport = async (req: Request, res: Response) => {
       const transport = toCamelCase(newTransport);
       const io = req.app.get('io');
       io.emit('transport:created', transport);
+      try {
+        await computeAndPersistTotal(journeyId);
+        const journey = toCamelCase(await jsonStore.getById('journeys', journeyId));
+        io.emit('journey:updated', journey);
+      } catch (e) {
+        console.warn('Failed to recompute total after transport create (JSON):', e);
+      }
       return res.status(201).json(transport);
     }
     const result = await query(
@@ -112,6 +120,13 @@ export const createTransport = async (req: Request, res: Response) => {
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('transport:created', transport);
+    try {
+      await computeAndPersistTotal(journeyId);
+      const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
+      io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+    } catch (e) {
+      console.warn('Failed to recompute total after transport create (DB):', e);
+    }
     
     res.status(201).json(transport);
   } catch (error) {
@@ -134,6 +149,13 @@ export const updateTransport = async (req: Request, res: Response) => {
         const updatedCamel = toCamelCase(updated);
         const io = req.app.get('io');
         io.emit('transport:updated', updatedCamel);
+        try {
+          await computeAndPersistTotal(updated.journey_id);
+          const journey = toCamelCase(await jsonStore.getById('journeys', updated.journey_id));
+          io.emit('journey:updated', journey);
+        } catch (e) {
+          console.warn('Failed to recompute total after transport update (JSON, partial):', e);
+        }
         return res.json(updatedCamel);
       }
       const paidResult = await query(
@@ -148,6 +170,13 @@ export const updateTransport = async (req: Request, res: Response) => {
       console.log(`✅ Transport ${transportId} updated successfully, is_paid=${updated.isPaid}`);
       const io = req.app.get('io');
       io.emit('transport:updated', updated);
+      try {
+        await computeAndPersistTotal(updated.journeyId);
+        const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [updated.journeyId]);
+        io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+      } catch (e) {
+        console.warn('Failed to recompute total after transport update (DB, partial):', e);
+      }
       return res.json(updated);
     }
 
@@ -181,6 +210,13 @@ export const updateTransport = async (req: Request, res: Response) => {
       const transport = toCamelCase(updated);
       const io = req.app.get('io');
       io.emit('transport:updated', transport);
+      try {
+        await computeAndPersistTotal(transport.journeyId);
+        const journey = toCamelCase(await jsonStore.getById('journeys', transport.journeyId));
+        io.emit('journey:updated', journey);
+      } catch (e) {
+        console.warn('Failed to recompute total after transport update (JSON):', e);
+      }
       return res.json(transport);
     }
     const result = await query(
@@ -239,6 +275,13 @@ export const deleteTransport = async (req: Request, res: Response) => {
     // Emit Socket.IO event with journeyId for proper filtering
     const io = req.app.get('io');
     io.emit('transport:deleted', { id: transportId, journeyId });
+    try {
+      await computeAndPersistTotal(journeyId);
+      const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
+      io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+    } catch (e) {
+      console.warn('Failed to recompute total after transport delete (DB):', e);
+    }
     
     res.json({ message: 'Transport deleted successfully' });
   } catch (error) {

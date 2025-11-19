@@ -1,6 +1,7 @@
 ﻿import { Request, Response } from 'express';
 import { query, getClient, DB_AVAILABLE } from '../config/db';
 import jsonStore from '../config/jsonStore';
+import { computeAndPersistTotal } from '../services/journeyService';
 import { convert as convertCurrency } from '../services/currencyService';
 
 // Helper function to convert snake_case to camelCase
@@ -81,7 +82,7 @@ export const getAllJourneys = async (req: Request, res: Response) => {
   }
 };
 
-// Export journeys as JSON — single journey (id) or all owned by user
+// Export journeys as JSON - single journey (id) or all owned by user
 export const exportJourneys = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -250,7 +251,14 @@ export const createJourney = async (req: Request, res: Response) => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
-      const journey = toCamelCase(newJourney);
+      // Recompute and persist total from nested items
+      try {
+        await computeAndPersistTotal(newJourney.id);
+      } catch (e) {
+        console.warn('Failed to compute total on create:', e);
+      }
+
+      const journey = toCamelCase(await jsonStore.getById('journeys', newJourney.id));
       const io = req.app.get('io');
       io.emit('journey:created', journey);
       return res.status(201).json(journey);
@@ -270,7 +278,13 @@ export const updateJourney = async (req: Request, res: Response) => {
       if (checklist !== undefined) updateObj.checklist = checklist;
       const updated = await jsonStore.updateById('journeys', id, updateObj);
       if (!updated) return res.status(404).json({ message: 'Not found' });
-      const journey = toCamelCase(updated);
+      // Recompute total and persist
+      try {
+        await computeAndPersistTotal(id);
+      } catch (e) {
+        console.warn('Failed to compute total on update (JSON store):', e);
+      }
+      const journey = toCamelCase(await jsonStore.getById('journeys', id));
       const io = req.app.get('io');
       io.emit('journey:updated', journey);
       return res.json(journey);
@@ -292,7 +306,14 @@ export const updateJourney = async (req: Request, res: Response) => {
       [newTitle, newDescription, newStart, newEnd, newCurrency, newChecklist, id]
     );
     const updated = updatedRes.rows[0];
-    const journey = toCamelCase(updated);
+    try {
+      await computeAndPersistTotal(id);
+    } catch (e) {
+      console.warn('Failed to compute total on update (DB):', e);
+    }
+    // Fetch fresh row with updated total
+    const refreshed = await query('SELECT * FROM journeys WHERE id = $1', [id]);
+    const journey = toCamelCase(refreshed.rows[0]);
     const io = req.app.get('io');
     io.emit('journey:updated', journey);
     return res.json(journey);

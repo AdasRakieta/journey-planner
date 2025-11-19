@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-Journey Planner is a comprehensive travel planning application that helps you organize trips, manage accommodations, track transportation, plan attractions, and estimate costs—all in one place with an interactive map.
+Journey Planner is a comprehensive travel planning application that helps you organize trips, manage accommodations, track transportation, plan attractions, and estimate costs-all in one place with an interactive map.
 
 ## ✨ Features
 

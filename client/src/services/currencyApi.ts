@@ -8,11 +8,15 @@ export async function getRates(baseCurrency = 'USD') {
 }
 
 export async function refreshRates(baseCurrency = 'USD') {
+  const token = localStorage.getItem('accessToken');
   const res = await fetch(`${base}/currency/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
     body: JSON.stringify({ base: baseCurrency })
   });
-  if (!res.ok) throw new Error('Failed to refresh rates');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to refresh rates');
+  }
   return res.json();
 }

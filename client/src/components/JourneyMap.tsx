@@ -291,7 +291,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
               {attraction.estimatedCost && attraction.estimatedCost > 0 && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   <span className="font-medium">Cost:</span> {attraction.estimatedCost} {(attraction as any).currency || 'PLN'}
-                  {(attraction as any).estimatedCost && (attraction as any).currency && journeyCurrency && ((attraction as any).currency !== journeyCurrency) && (
+                  { /* prefer server-side persisted converted value when available */ }
+                  {((attraction as any).estimatedCostConverted != null) && (
+                    ` ≈ ${(attraction as any).estimatedCostConverted.toFixed(2)} ${(attraction as any).estimatedCostConvertedCurrency || journeyCurrency || 'PLN'}`
+                  )}
+                  {((attraction as any).estimated_cost_converted == null) && (attraction as any).estimatedCost && (attraction as any).currency && journeyCurrency && ((attraction as any).currency !== journeyCurrency) && (
                     (() => {
                       try {
                         const rates = ratesCache?.rates || {};

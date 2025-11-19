@@ -3,6 +3,7 @@ import { query, DB_AVAILABLE } from '../config/db';
 import jsonStore from '../config/jsonStore';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { computeAndPersistTotal } from '../services/journeyService';
 
 // Helper function to convert snake_case to camelCase
 const toCamelCase = (obj: any): any => {
@@ -92,6 +93,14 @@ export const createStop = async (req: Request, res: Response) => {
       const stop = toCamelCase(newStop);
       const io = req.app.get('io');
       io.emit('stop:created', stop);
+      // Recompute journey total and emit updated journey
+      try {
+        await computeAndPersistTotal(journeyId);
+        const journey = toCamelCase(await jsonStore.getById('journeys', journeyId));
+        io.emit('journey:updated', journey);
+      } catch (e) {
+        console.warn('Failed to recompute total after stop create (JSON):', e);
+      }
       return res.status(201).json(stop);
     }
     const result = await query(
@@ -114,7 +123,14 @@ export const createStop = async (req: Request, res: Response) => {
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('stop:created', stop);
-    
+    try {
+      await computeAndPersistTotal(journeyId);
+      const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
+      io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+    } catch (e) {
+      console.warn('Failed to recompute total after stop create (DB):', e);
+    }
+
     res.status(201).json(stop);
   } catch (error) {
     console.error('Error creating stop:', error);
@@ -136,6 +152,13 @@ export const updateStop = async (req: Request, res: Response) => {
         const updatedCamel = toCamelCase(updated);
         const io = req.app.get('io');
         io.emit('stop:updated', updatedCamel);
+        try {
+          await computeAndPersistTotal(updated.journey_id);
+          const journey = toCamelCase(await jsonStore.getById('journeys', updated.journey_id));
+          io.emit('journey:updated', journey);
+        } catch (e) {
+          console.warn('Failed to recompute total after stop update (JSON, partial):', e);
+        }
         return res.json(updatedCamel);
       }
       const paidResult = await query(
@@ -150,6 +173,13 @@ export const updateStop = async (req: Request, res: Response) => {
       console.log(`✅ Stop ${stopId} updated successfully, is_paid=${updated.isPaid}`);
       const io = req.app.get('io');
       io.emit('stop:updated', updated);
+      try {
+        await computeAndPersistTotal(updated.journeyId);
+        const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [updated.journeyId]);
+        io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+      } catch (e) {
+        console.warn('Failed to recompute total after stop update (DB, partial):', e);
+      }
       return res.json(updated);
     }
 
@@ -181,6 +211,13 @@ export const updateStop = async (req: Request, res: Response) => {
       const stop = toCamelCase(updated);
       const io = req.app.get('io');
       io.emit('stop:updated', stop);
+      try {
+        await computeAndPersistTotal(updated.journey_id);
+        const journey = toCamelCase(await jsonStore.getById('journeys', updated.journey_id));
+        io.emit('journey:updated', journey);
+      } catch (e) {
+        console.warn('Failed to recompute total after stop update (JSON):', e);
+      }
       return res.json(stop);
     }
     const result = await query(
@@ -207,7 +244,14 @@ export const updateStop = async (req: Request, res: Response) => {
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('stop:updated', stop);
-    
+    try {
+      await computeAndPersistTotal(stop.journeyId);
+      const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [stop.journeyId]);
+      io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+    } catch (e) {
+      console.warn('Failed to recompute total after stop update (DB):', e);
+    }
+
     res.json(stop);
   } catch (error) {
     console.error('Error updating stop:', error);
@@ -220,18 +264,39 @@ export const deleteStop = async (req: Request, res: Response) => {
   try {
     const stopId = parseInt(req.params.id);
     if (!DB_AVAILABLE) {
+      // read stop to get journey_id
+      const existing = await jsonStore.getById('stops', stopId);
+      if (!existing) return res.status(404).json({ message: 'Stop not found' });
       const ok = await jsonStore.deleteById('stops', stopId);
       if (!ok) return res.status(404).json({ message: 'Stop not found' });
       const io = req.app.get('io');
       io.emit('stop:deleted', { id: stopId });
+      try {
+        await computeAndPersistTotal(existing.journey_id);
+        const journey = toCamelCase(await jsonStore.getById('journeys', existing.journey_id));
+        io.emit('journey:updated', journey);
+      } catch (e) {
+        console.warn('Failed to recompute total after stop delete (JSON):', e);
+      }
       return res.json({ message: 'Stop deleted successfully' });
     }
+    // Read stop record to get journey id
+    const sRes = await query('SELECT * FROM stops WHERE id = $1', [stopId]);
+    if (!sRes.rows[0]) return res.status(404).json({ message: 'Stop not found' });
+    const journeyId = sRes.rows[0].journey_id;
     await query('DELETE FROM stops WHERE id = $1', [stopId]);
-    
+
     // Emit Socket.IO event
     const io = req.app.get('io');
     io.emit('stop:deleted', { id: stopId });
-    
+    try {
+      await computeAndPersistTotal(journeyId);
+      const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
+      io.emit('journey:updated', toCamelCase(journeyRes.rows[0]));
+    } catch (e) {
+      console.warn('Failed to recompute total after stop delete (DB):', e);
+    }
+
     res.json({ message: 'Stop deleted successfully' });
   } catch (error) {
     console.error('Error deleting stop:', error);

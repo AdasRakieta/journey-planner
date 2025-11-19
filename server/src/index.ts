@@ -88,7 +88,7 @@ const tryConnect = async () => {
   try {
     const ok = await tryConnect();
     if (!ok) {
-      console.warn('\nDatabase not reachable — server will run using JSON fallback. Continuing automatically.');
+      console.warn('\nDatabase not reachable - server will run using JSON fallback. Continuing automatically.');
     }
 
     // Ensure JSON users store has at least an admin account
@@ -114,7 +114,7 @@ const tryConnect = async () => {
       console.error('Failed to ensure admin user in JSON store:', e);
     }
 
-    // no interactive prompt — continue automatically
+    // no interactive prompt - continue automatically
 
     // Socket.IO connection handling
     io.on('connection', (socket) => {
@@ -135,11 +135,18 @@ const tryConnect = async () => {
     app.use('/api/transports', transportRoutes);
     app.use('/api/currency', currencyRoutes);
 
-    // Start periodic currency rates refresh (background)
+    // Start periodic currency rates refresh (background) only if explicitly enabled
+    // by environment variable ENABLE_RATES_AUTO_REFRESH=1. By default the app will
+    // use cached values and only fetch when a requested base is missing or when
+    // an admin triggers a manual refresh.
     try {
-      // Refresh once per day (24h) for PLN base to match provider daily updates and API limits
-      startAutoRefresh({ intervalMs: 24 * 60 * 60 * 1000, bases: ['PLN'] });
-      console.log('🕒 Currency auto-refresh started (daily) for PLN');
+      if (process.env.ENABLE_RATES_AUTO_REFRESH === '1') {
+        // Refresh once per day (24h) for PLN base to match provider daily updates and API limits
+        startAutoRefresh({ intervalMs: 24 * 60 * 60 * 1000, bases: ['PLN'] });
+        console.log('🕒 Currency auto-refresh started (daily) for PLN');
+      } else {
+        console.log('🕒 Currency auto-refresh is disabled (ENABLE_RATES_AUTO_REFRESH != 1)');
+      }
     } catch (e) {
       console.warn('Failed to start currency auto-refresh:', e);
     }

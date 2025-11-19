@@ -1,22 +1,5 @@
 [
   {
-    "id": 1,
-    "journey_id": 2,
-    "city": "Paryż",
-    "country": "Francja",
-    "latitude": 48.8534951,
-    "longitude": 2.3483915,
-    "arrival_date": "2333-03-12",
-    "departure_date": "3321-03-12",
-    "accommodation_name": "",
-    "accommodation_url": "",
-    "accommodation_price": 150,
-    "accommodation_currency": "USD",
-    "is_paid": true,
-    "check_in_time": "12:03",
-    "check_out_time": "12:03"
-  },
-  {
     "id": 2,
     "journey_id": 2,
     "city": "Warsaw",
@@ -32,6 +15,27 @@
     "check_in_time": "12:03",
     "check_out_time": "12:03",
     "created_at": "2025-11-17T12:16:46.368Z",
-    "is_paid": false
+    "is_paid": false,
+    "accommodation_price_converted": 123,
+    "accommodation_price_converted_currency": "EUR"
+  },
+  {
+    "id": 3,
+    "journey_id": 2,
+    "city": "asdasdasd",
+    "country": "asdasdad",
+    "latitude": 51.505,
+    "longitude": -0.09,
+    "arrival_date": "",
+    "departure_date": "",
+    "accommodation_name": "",
+    "accommodation_url": "",
+    "accommodation_price": 100,
+    "accommodation_currency": "USD",
+    "check_in_time": null,
+    "check_out_time": null,
+    "created_at": "2025-11-19T08:28:41.756Z",
+    "accommodation_price_converted": 86.07,
+    "accommodation_price_converted_currency": "EUR"
   }
 ]
