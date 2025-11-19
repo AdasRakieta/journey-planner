@@ -8,7 +8,7 @@ import ConfirmDialog from './components/ConfirmDialog';
 import ManageSharesModal from './components/ManageSharesModal';
 import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction, ChecklistItem } from './types/journey';
-import { journeyService, stopService, attractionService, transportService, journeyShareService } from './services/api';
+import { journeyService, stopService, attractionService, transportService, journeyShareService, attachmentService } from './services/api';
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
 import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
@@ -55,7 +55,13 @@ function App() {
   const { toasts, closeToast, success, error, warning, info } = useToast();
   const confirm = useConfirm();
   const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [journeySearch, setJourneySearch] = useState<string>('');
+  const [journeyPage, setJourneyPage] = useState<number>(1);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  // For file upload UI: keep server-side attachment persistent after upload
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState<any | null>(null);
   const [showNewJourneyForm, setShowNewJourneyForm] = useState(false);
   const [showStopForm, setShowStopForm] = useState(false);
   const [showTransportForm, setShowTransportForm] = useState(false);
@@ -163,6 +169,25 @@ function App() {
     return () => { mounted = false; };
   }, [selectedJourney?.id, selectedJourney?.currency]);
 
+  // Load attachments for currently selected journey
+  useEffect(() => {
+    let mounted = true;
+    const loadAttachments = async () => {
+      if (!selectedJourney?.id) {
+        if (mounted) setAttachments([]);
+        return;
+      }
+      try {
+        const list = await attachmentService.listAttachmentsForJourney(selectedJourney.id);
+        if (mounted) setAttachments(list);
+      } catch (e) {
+        console.warn('Failed to load attachments', e);
+      }
+    };
+    void loadAttachments();
+    return () => { mounted = false; };
+  }, [selectedJourney?.id]);
+
   const getRate = (from: string, to: string): number | null => {
     try {
       if (!ratesCache) return null;
@@ -191,6 +216,9 @@ function App() {
 
   // UI state for collapsible sections
   const [stopsOpen, setStopsOpen] = useState<boolean>(true);
+  const [stopSearch, setStopSearch] = useState<string>('');
+  const [stopPage, setStopPage] = useState<number>(1);
+  const [pagedStops, setPagedStops] = useState<any[] | null>(null);
   const [transportsOpen, setTransportsOpen] = useState<boolean>(true);
 
   // Checklist UI state
@@ -416,7 +444,7 @@ function App() {
   useEffect(() => {
     // Only load journeys if user is authenticated
     if (user) {
-      void loadJourneys();
+      void loadJourneys(journeyPage, journeySearch);
     }
     
     // Connect to Socket.IO for real-time updates
@@ -752,12 +780,28 @@ function App() {
     }
   }, [selectedJourney?.id]);
 
+  // Fetch paged stops when search or page changes
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!selectedJourney?.id || !stopsOpen) return;
+      try {
+        const list = await stopService.getStopsByJourneyIdPaged(selectedJourney.id, stopPage, 25, stopSearch);
+        if (mounted) setPagedStops(list);
+      } catch (e) {
+        setPagedStops(null);
+      }
+    };
+    void load();
+    return () => { mounted = false; };
+  }, [selectedJourney?.id, stopSearch, stopPage, stopsOpen]);
+
   // We no longer recompute totals client-side: the server is authoritative
 
-  const loadJourneys = async () => {
+  const loadJourneys = async (page: number = 1, q: string = '') => {
     try {
       setLoading(true);
-      const data = await journeyService.getAllJourneys();
+      const data = await journeyService.getAllJourneys(page, 25, q);
       setJourneys(data);
     } catch (err) {
       console.error('Failed to load journeys:', err);
@@ -1784,6 +1828,10 @@ function App() {
           <div className="lg:col-span-1">
             <div className="gh-card">
               <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-[#ffffff]">Your Journeys</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <input placeholder="Search journeys..." value={journeySearch} onChange={e => setJourneySearch(e.target.value)} className="gh-input flex-1 text-sm" />
+                <button onClick={() => { setJourneyPage(1); void loadJourneys(1, journeySearch); }} className="gh-btn-secondary text-sm">Search</button>
+              </div>
               <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2">
                 {loading && journeys.length === 0 ? (
                   <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-8">
@@ -2038,6 +2086,32 @@ function App() {
                   </div>
                 </div>
 
+                {attachments.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Attachments</h4>
+                    <ul className="space-y-2">
+                      {attachments.map(att => (
+                        <li key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-[#ffffff]">{att.originalFilename}</div>
+                            <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round(att.fileSize / 1024)} KB</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={async () => {
+                              try {
+                                await attachmentService.downloadAttachment(att.id, att.originalFilename);
+                              } catch (e) { error('Failed to download attachment'); }
+                            }} className="text-blue-600 dark:text-[#0a84ff] hover:underline">Download</button>
+                            <button onClick={async () => {
+                              try { if (!confirm('Delete attachment?')) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); }
+                            }} className="text-red-600 hover:text-red-700">Delete</button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Checklist */}
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-3">
@@ -2121,6 +2195,9 @@ function App() {
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
                     </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      <input type="text" placeholder="Search stops..." value={stopSearch} onChange={(e) => { setStopSearch(e.target.value); setStopPage(1); }} className="gh-input text-sm" />
+                    </div>
                     <button
                       onClick={() => setShowStopForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -2132,8 +2209,8 @@ function App() {
                   </div>
                   {stopsOpen && (
                     <div className="space-y-3">
-                      {selectedJourney.stops && selectedJourney.stops.length > 0 ? (
-                        selectedJourney.stops.map((stop, index) => (
+                      { (pagedStops || selectedJourney.stops) && (pagedStops || selectedJourney.stops).length > 0 ? (
+                        (pagedStops || selectedJourney.stops).map((stop, index) => (
                           <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
                             <div className="flex items-start gap-3">
                               <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
@@ -2702,8 +2779,8 @@ function App() {
           journeyId={selectedJourney.id!}
           isOpen={showManageSharesModal}
           onClose={() => setShowManageSharesModal(false)}
-          onUpdated={() => {
-            void loadJourneys();
+            onUpdated={() => {
+            void loadJourneys(journeyPage, journeySearch);
           }}
         />
       )}
@@ -2802,7 +2879,7 @@ function App() {
                   <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     📎 Quick Fill from Booking.com
                   </label>
-                  <div className="flex gap-2">
+                    <div className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Paste Booking.com URL here..."
@@ -2810,6 +2887,59 @@ function App() {
                       onChange={(e) => setBookingUrl(e.target.value)}
                       className="gh-input flex-1"
                     />
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setPendingFile(file);
+                        setUploadingAttachment(null);
+                        // upload immediately for easy UX
+                        (async () => {
+                          try {
+                            setLoading(true);
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            fd.append('journeyId', String(selectedJourney?.id));
+                            const resp = await attachmentService.uploadAttachment(fd);
+                            if (resp?.parsed?.flightNumber) {
+                              setNewTransport({ ...newTransport, flightNumber: resp.parsed.flightNumber });
+                              success('Attachment parsed and flight number autofilled');
+                            } else {
+                              success('Attachment uploaded');
+                            }
+                            // Show the new attachment in the attachments list immediately
+                            if (resp?.attachment) setAttachments(prev => [resp.attachment, ...(prev || [])]);
+                            if (resp?.attachment) setUploadingAttachment(resp.attachment);
+                          } catch (e) {
+                            error('Failed to upload attachment');
+                          } finally {
+                            setLoading(false);
+                          }
+                        })();
+                      }}
+                      className="gh-input"
+                    />
+                    {pendingFile && (
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                        <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setPendingFile(null);
+                              setUploadingAttachment(null);
+                            }}
+                            className="text-sm text-white hover:underline"
+                          >Cancel</button>
+                          {uploadingAttachment && (
+                            <>
+                              <button onClick={async () => { try { await attachmentService.downloadAttachment(uploadingAttachment.id); } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
+                              <button onClick={async () => { try { if (!confirm('Delete uploaded attachment?')) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={handleBookingUrlPaste}
                       disabled={loading || !bookingUrl}
@@ -3495,6 +3625,55 @@ function App() {
                     onChange={(e) => setEditingTransport({ ...editingTransport, bookingUrl: e.target.value })}
                     className="gh-input"
                   />
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setPendingFile(file);
+                      setUploadingAttachment(null);
+                      (async () => {
+                        try {
+                          setLoading(true);
+                          const fd = new FormData();
+                          fd.append('file', file);
+                          fd.append('journeyId', String(selectedJourney?.id));
+                          const resp = await attachmentService.uploadAttachment(fd);
+                          if (resp?.parsed?.flightNumber) {
+                            setEditingTransport({ ...editingTransport, flightNumber: resp.parsed.flightNumber });
+                            success('Attachment parsed and flight number autofilled');
+                          } else {
+                            success('Attachment uploaded');
+                          }
+                        } catch (e) {
+                          error('Failed to upload attachment');
+                        } finally {
+                          setLoading(false);
+                        }
+                          // keep pending file displayed until manually removed
+                      })();
+                    }}
+                    className="gh-input mt-2"
+                  />
+                    {uploadingAttachment ? (
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                        <div className="text-sm text-white">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={async () => { try { await attachmentService.downloadAttachment(uploadingAttachment.id, uploadingAttachment.originalFilename); } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
+                          <button onClick={async () => { try { if (!confirm('Delete uploaded attachment?')) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                        </div>
+                      </div>
+                    ) : pendingFile && (
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                        <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
+                            className="text-sm text-white hover:underline"
+                          >Cancel</button>
+                        </div>
+                      </div>
+                    )}
                 </div>
               </div>
               <div className="flex gap-3 mt-6">

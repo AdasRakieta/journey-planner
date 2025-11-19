@@ -46,16 +46,27 @@ export const getAllJourneys = async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
+    const page = parseInt((req.query.page as string) || '1');
+    const pageSize = parseInt((req.query.pageSize as string) || '25');
+    const q = (req.query.q as string || '').trim();
+
     if (!DB_AVAILABLE) {
       // Fallback: read from JSON store
       const journeysAll = await jsonStore.getAll('journeys');
       const shares = await jsonStore.getAll('journey_shares');
       // Filter journeys owned by user or shared and accepted
-      const journeys = journeysAll.filter((j: any) => {
+      let journeys = journeysAll.filter((j: any) => {
         if (j.created_by === userId) return true;
         const shared = shares.find((s: any) => s.journey_id === j.id && s.shared_with_user_id === userId && s.status === 'accepted');
         return !!shared;
       }).sort((a: any, b: any) => (new Date(b.created_at || 0).getTime()) - (new Date(a.created_at || 0).getTime()));
+
+      if (q) {
+        journeys = journeys.filter((j: any) => (j.title || '').toLowerCase().includes(q.toLowerCase()));
+      }
+
+      const start = (page - 1) * pageSize;
+      const paged = journeys.slice(start, start + pageSize);
 
       const enrichedJourneys = await Promise.all(journeys.map(async (journey: any) => {
         const stops = (await jsonStore.findByField('stops', 'journey_id', journey.id))
@@ -108,7 +119,22 @@ export const exportJourneys = async (req: Request, res: Response) => {
     }
 
     // DB flow: fetch user's journeys and their nested data
-    const result = await query('SELECT * FROM journeys WHERE created_by = $1', [userId]);
+    const qParam = (req.query.q || '').toString();
+    const page = parseInt((req.query.page as string) || '1');
+    const pageSize = parseInt((req.query.pageSize as string) || '25');
+    const offset = (page - 1) * pageSize;
+
+    const whereClause = `WHERE created_by = $1 OR id IN (SELECT journey_id FROM journey_shares WHERE shared_with_user_id = $1 AND status = 'accepted')`;
+    let baseQuery = `SELECT * FROM journeys ${whereClause}`;
+    const params: any[] = [userId];
+    if (qParam) {
+      baseQuery += ` AND title ILIKE $${params.length + 1}`;
+      params.push(`%${qParam}%`);
+    }
+    baseQuery += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(pageSize, offset);
+
+    const result = await query(baseQuery, params);
     const journeys = result.rows.filter((j: any) => !exportSingleId || j.id === exportSingleId);
     const payload = await Promise.all(journeys.map(async (j: any) => {
       const stopsRes = await query('SELECT * FROM stops WHERE journey_id = $1 ORDER BY arrival_date', [j.id]);
@@ -144,7 +170,7 @@ export const importJourneys = async (req: Request, res: Response) => {
         // stops
         if (Array.isArray(j.stops)) {
           for (const s of j.stops) {
-            const newStop = await jsonStore.insert('stops', { journey_id: newJourney.id, city: s.city, country: s.country, latitude: s.latitude, longitude: s.longitude, arrival_date: s.arrivalDate || s.arrival_date, departure_date: s.departureDate || s.departure_date, accommodation_name: s.accommodationName || s.accommodation_name, accommodation_url: s.accommodationUrl || s.accommodation_url, accommodation_price: s.accommodationPrice || s.accommodation_price, accommodation_currency: s.accommodationCurrency || s.accommodation_currency, notes: s.notes, is_paid: s.isPaid || s.is_paid || false });
+            const newStop = await jsonStore.insert('stops', { journey_id: newJourney.id, city: s.city, country: s.country, latitude: s.latitude, longitude: s.longitude, arrival_date: s.arrivalDate || s.arrival_date, departure_date: s.departureDate || s.departure_date, address_street: s.addressStreet || s.address_street || null, address_house_number: s.addressHouseNumber || s.address_house_number || null, address_postal_code: s.postalCode || s.postal_code || null, accommodation_name: s.accommodationName || s.accommodation_name, accommodation_url: s.accommodationUrl || s.accommodation_url, accommodation_price: s.accommodationPrice || s.accommodation_price, accommodation_currency: s.accommodationCurrency || s.accommodation_currency, notes: s.notes, is_paid: s.isPaid || s.is_paid || false });
             if (Array.isArray(s.attractions)) {
               for (const a of s.attractions) {
                 await jsonStore.insert('attractions', { stop_id: newStop.id, name: a.name, description: a.description, estimated_cost: a.estimatedCost || a.estimated_cost, duration: a.duration, currency: a.currency || a.currency || 'PLN', is_paid: a.isPaid || a.is_paid || false });
@@ -173,7 +199,7 @@ export const importJourneys = async (req: Request, res: Response) => {
         // stops
         if (Array.isArray(j.stops)) {
           for (const s of j.stops) {
-            const stopRes = await client.query('INSERT INTO stops (journey_id, city, country, latitude, longitude, arrival_date, departure_date, accommodation_name, accommodation_url, accommodation_price, accommodation_currency, notes, is_paid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *', [newJourney.id, s.city, s.country, s.latitude, s.longitude, s.arrivalDate || s.arrival_date, s.departureDate || s.departure_date, s.accommodationName || s.accommodation_name || null, s.accommodationUrl || s.accommodation_url || null, s.accommodationPrice || s.accommodation_price || null, s.accommodationCurrency || s.accommodation_currency || null, s.notes || null, s.isPaid || s.is_paid || false]);
+            const stopRes = await client.query('INSERT INTO stops (journey_id, city, country, latitude, longitude, arrival_date, departure_date, address_street, address_house_number, address_postal_code, accommodation_name, accommodation_url, accommodation_price, accommodation_currency, notes, is_paid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *', [newJourney.id, s.city, s.country, s.latitude, s.longitude, s.arrivalDate || s.arrival_date, s.departureDate || s.departure_date, s.addressStreet || s.address_street || null, s.addressHouseNumber || s.address_house_number || null, s.postalCode || s.postal_code || null, s.accommodationName || s.accommodation_name || null, s.accommodationUrl || s.accommodation_url || null, s.accommodationPrice || s.accommodation_price || null, s.accommodationCurrency || s.accommodation_currency || null, s.notes || null, s.isPaid || s.is_paid || false]);
             const newStop = stopRes.rows[0];
             if (Array.isArray(s.attractions)) {
               for (const a of s.attractions) {

@@ -2,6 +2,7 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 import { User } from './User';
 import { TransportAttachment } from './TransportAttachment';
+import { Attachment } from './Attachment';
 
 export interface StopAttributes {
   id?: number;
@@ -505,6 +506,19 @@ TransportAttachment.belongsTo(Transport, { foreignKey: 'transportId', as: 'trans
 
 TransportAttachment.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' });
 User.hasMany(TransportAttachment, { foreignKey: 'uploadedBy', as: 'uploadedAttachments' });
+
+// Generic attachments (can belong to journey, stop or transport)
+Journey.hasMany(Attachment, { foreignKey: 'journeyId', as: 'attachments' });
+Attachment.belongsTo(Journey, { foreignKey: 'journeyId', as: 'journey' });
+
+Stop.hasMany(Attachment, { foreignKey: 'stopId', as: 'attachments' });
+Attachment.belongsTo(Stop, { foreignKey: 'stopId', as: 'stop' });
+
+Transport.hasMany(Attachment, { foreignKey: 'transportId', as: 'attachments' });
+Attachment.belongsTo(Transport, { foreignKey: 'transportId', as: 'transport' });
+
+Attachment.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' });
+User.hasMany(Attachment, { foreignKey: 'uploadedBy', as: 'uploadedAttachments' });
 
 export default Journey;
 

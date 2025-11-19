@@ -22,6 +22,7 @@ import journeyRoutes from './routes/journeys';
 import stopRoutes from './routes/stops';
 import attractionRoutes from './routes/attractions';
 import transportRoutes from './routes/transports';
+import attachmentRoutes from './routes/attachments';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import userRoutes from './routes/user';
@@ -133,6 +134,7 @@ const tryConnect = async () => {
     app.use('/api/stops', stopRoutes);
     app.use('/api/attractions', attractionRoutes);
     app.use('/api/transports', transportRoutes);
+    app.use('/api/attachments', attachmentRoutes);
     app.use('/api/currency', currencyRoutes);
 
     // Start periodic currency rates refresh (background) only if explicitly enabled

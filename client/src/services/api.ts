@@ -12,9 +12,13 @@ const getAuthHeaders = () => {
 };
 
 export const journeyService = {
-  async getAllJourneys(): Promise<Journey[]> {
+  async getAllJourneys(page: number = 1, pageSize: number = 25, q: string = ''): Promise<Journey[]> {
     const token = localStorage.getItem('accessToken');
-    const response = await fetch(`${API_URL}/journeys`, {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (q) params.set('q', q);
+    const response = await fetch(`${API_URL}/journeys?${params.toString()}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -106,6 +110,20 @@ export const stopService = {
   async getStopsByJourneyId(journeyId: number) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch stops');
+    return response.json();
+  },
+  async getStopsByJourneyIdPaged(journeyId: number, page: number = 1, pageSize: number = 25, q: string = '') {
+    const token = localStorage.getItem('accessToken');
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (q) params.set('q', q);
+    const response = await fetch(`${API_URL}/stops/journey/${journeyId}?${params.toString()}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -284,6 +302,64 @@ export const transportService = {
     if (!response.ok) throw new Error('Failed to update payment status');
     return response.json();
   },
+};
+
+export const attachmentService = {
+  async uploadAttachment(formData: FormData) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      }
+    });
+    if (!response.ok) throw new Error('Failed to upload attachment');
+    return response.json();
+  },
+  async listAttachmentsForJourney(journeyId: number) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments/journey/${journeyId}`, {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error('Failed to list attachments');
+    return response.json();
+  },
+  async deleteAttachment(id: number) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments/${id}`, {
+      method: 'DELETE',
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error('Failed to delete attachment');
+    return response.json();
+  },
+  async applyAttachmentToTarget(id: number, targetType: 'transport'|'stop'|'journey', targetId: number) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments/${id}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ targetType, targetId })
+    });
+    if (!response.ok) throw new Error('Failed to apply attachment');
+    return response.json();
+  },
+  async downloadAttachment(id: number, filename?: string) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments/${id}/download`, {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error('Failed to download attachment');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'attachment';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }
 };
 
 // Journey Share Service

@@ -44,6 +44,10 @@ coverage/
 *.sqlite
 *.db
 
+# File uploads
+/app/uploads/
+uploads/
+
 # OS
 .DS_Store
 Thumbs.db

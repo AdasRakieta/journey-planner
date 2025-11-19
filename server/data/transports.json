@@ -10,7 +10,7 @@
     "price": 125,
     "currency": "GBP",
     "booking_url": "",
-    "flight_number": null,
+    "flight_number": "SR1",
     "train_number": null,
     "created_at": "2025-11-17T13:16:31.186Z",
     "is_paid": false,

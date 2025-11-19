@@ -44,15 +44,24 @@ const toCamelCase = (obj: any): any => {
 export const getStopsByJourneyId = async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.journeyId);
+    const page = parseInt((req.query.page as string) || '1');
+    const pageSize = parseInt((req.query.pageSize as string) || '25');
+    const q = (req.query.q as string || '').trim();
     if (!DB_AVAILABLE) {
       const stops = (await jsonStore.findByField('stops', 'journey_id', journeyId))
         .sort((a: any, b: any) => (new Date(a.arrival_date || 0).getTime()) - (new Date(b.arrival_date || 0).getTime()));
-      return res.json(toCamelCase(stops));
+      let filtered = stops;
+      if (q) filtered = filtered.filter((s: any) => ((s.city || '') + ' ' + (s.country || '')).toLowerCase().includes(q.toLowerCase()));
+      const start = (page - 1) * pageSize;
+      const paged = filtered.slice(start, start + pageSize);
+      return res.json(toCamelCase(paged));
     }
-    const result = await query(
-      'SELECT * FROM stops WHERE journey_id = $1 ORDER BY arrival_date ASC',
-      [journeyId]
-    );
+    let baseQuery = 'SELECT * FROM stops WHERE journey_id=$1';
+    const params: any[] = [journeyId];
+    if (q) { baseQuery += ` AND (city ILIKE $${params.length + 1} OR country ILIKE $${params.length + 1})`; params.push(`%${q}%`); }
+    baseQuery += ' ORDER BY arrival_date ASC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+    params.push(pageSize, (page - 1) * pageSize);
+    const result = await query(baseQuery, params);
     res.json(toCamelCase(result.rows));
   } catch (error) {
     console.error('Error fetching stops:', error);
@@ -79,12 +88,20 @@ export const createStop = async (req: Request, res: Response) => {
       checkInTime,
       checkOutTime
     } = req.body;
+    let { addressStreet, addressHouseNumber, postalCode } = req.body;
+    if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
+    if (addressHouseNumber === '' || addressHouseNumber === undefined) addressHouseNumber = null;
+    if (postalCode === '' || postalCode === undefined) postalCode = null;
     
     if (!DB_AVAILABLE) {
+      if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
+      if (addressHouseNumber === '' || addressHouseNumber === undefined) addressHouseNumber = null;
+      if (postalCode === '' || postalCode === undefined) postalCode = null;
       const newStop = await jsonStore.insert('stops', {
         journey_id: journeyId,
         city, country, latitude, longitude,
         arrival_date: arrivalDate, departure_date: departureDate,
+        address_street: addressStreet, address_house_number: addressHouseNumber, address_postal_code: postalCode,
         accommodation_name: accommodationName, accommodation_url: accommodationUrl,
         accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
         notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null,
@@ -109,14 +126,17 @@ export const createStop = async (req: Request, res: Response) => {
         arrival_date, departure_date, accommodation_name,
         accommodation_url, accommodation_price, accommodation_currency, notes,
         check_in_time, check_out_time
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+        , address_street, address_house_number, address_postal_code
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
       [
         journeyId, city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
         accommodationUrl, accommodationPrice, accommodationCurrency, notes,
-        checkInTime || null, checkOutTime || null
+        checkInTime || null, checkOutTime || null,
+          addressStreet || null, addressHouseNumber || null, postalCode || null
       ]
     );
+
     
     const stop = toCamelCase(result.rows[0]);
     
@@ -198,11 +218,16 @@ export const updateStop = async (req: Request, res: Response) => {
       checkInTime,
       checkOutTime
     } = req.body;
+    let { addressStreet, addressHouseNumber, postalCode } = req.body;
     
     if (!DB_AVAILABLE) {
+      if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
+      if (addressHouseNumber === '' || addressHouseNumber === undefined) addressHouseNumber = null;
+      if (postalCode === '' || postalCode === undefined) postalCode = null;
       const updated = await jsonStore.updateById('stops', stopId, {
         city, country, latitude, longitude,
         arrival_date: arrivalDate, departure_date: departureDate,
+        address_street: addressStreet, address_house_number: addressHouseNumber, address_postal_code: postalCode,
         accommodation_name: accommodationName, accommodation_url: accommodationUrl,
         accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
         notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null
@@ -226,12 +251,13 @@ export const updateStop = async (req: Request, res: Response) => {
         arrival_date=$5, departure_date=$6, accommodation_name=$7,
         accommodation_url=$8, accommodation_price=$9, accommodation_currency=$10, notes=$11,
         check_in_time=$12, check_out_time=$13
-      WHERE id=$14 RETURNING *`,
+        , address_street=$14, address_house_number=$15, address_postal_code=$16
+      WHERE id=$17 RETURNING *`,
       [
         city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
         accommodationUrl, accommodationPrice, accommodationCurrency, notes,
-        checkInTime || null, checkOutTime || null, stopId
+        checkInTime || null, checkOutTime || null, addressStreet || null, addressHouseNumber || null, postalCode || null, stopId
       ]
     );
     

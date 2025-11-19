@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS stops (
     accommodation_currency VARCHAR(3),
     notes TEXT,
     is_paid BOOLEAN DEFAULT FALSE
+    , address_street VARCHAR(255),
+    address_house_number VARCHAR(64),
+    address_postal_code VARCHAR(32)
 );
 
 -- Transports table
