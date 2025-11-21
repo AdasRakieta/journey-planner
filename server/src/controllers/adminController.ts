@@ -287,14 +287,44 @@ export async function approveRegistrationRequest(req: Request, res: Response) {
       // Mark request as approved
       await query("UPDATE registration_requests SET status = 'approved', reviewed_by = $1, reviewed_at = $2 WHERE id = $3", [req.user!.userId, new Date(), reqId]);
 
-      // Notify user
+      // Notify user with styled approval email
       const { sendEmail } = require('../services/emailService');
       try {
+        const signInUrl = `${process.env.FRONTEND_URL || 'http://localhost'}/login`;
+        const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height:1.6; color:#333; max-width:600px; margin:0 auto; padding:20px; }
+              .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align:center; }
+              .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+              .button { display:inline-block; background:#667eea; color: white; padding: 12px 24px; text-decoration:none; border-radius:8px; margin:18px 0; font-weight:600; }
+              .footer { text-align:center; margin-top:20px; font-size:12px; color:#6b7280; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>✅ Registration Approved</h1>
+              <p>Journey Planner</p>
+            </div>
+            <div class="content">
+              <p>Hello ${username},</p>
+              <p>Your registration request has been approved by an administrator. You can now sign in to Journey Planner.</p>
+              <center>
+                <a href="${signInUrl}" class="button">Sign in to Journey Planner</a>
+              </center>
+            </div>
+            <div class="footer">© ${new Date().getFullYear()} Journey Planner. All rights reserved.</div>
+          </body>
+          </html>
+        `;
+
         await sendEmail({
           to: email,
-          subject: 'Your registration has been approved',
-          html: `<p>Hello ${username},</p><p>Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.</p>`,
-          text: `Hello ${username}, Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.`
+          subject: 'Your registration has been approved - Journey Planner',
+          html,
+          text: `Hello ${username}, Your registration request has been approved. Sign in at: ${signInUrl}`
         });
       } catch (e) {
         console.error('Failed to send approval email:', e);
@@ -325,14 +355,44 @@ export async function approveRegistrationRequest(req: Request, res: Response) {
     // Update request status
     await jsonStore.updateById('registration_requests', reqId, { status: 'approved', reviewed_by: req.user!.userId, reviewed_at: new Date().toISOString() });
 
-    // Send notification email
+    // Send styled notification email (JSON fallback)
     const { sendEmail } = require('../services/emailService');
     try {
+      const signInUrl = `${process.env.FRONTEND_URL || 'http://localhost'}/login`;
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height:1.6; color:#333; max-width:600px; margin:0 auto; padding:20px; }
+            .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align:center; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .button { display:inline-block; background:#667eea; color: white; padding: 12px 24px; text-decoration:none; border-radius:8px; margin:18px 0; font-weight:600; }
+            .footer { text-align:center; margin-top:20px; font-size:12px; color:#6b7280; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>✅ Registration Approved</h1>
+            <p>Journey Planner</p>
+          </div>
+          <div class="content">
+            <p>Hello ${username},</p>
+            <p>Your registration request has been approved by an administrator. You can now sign in to Journey Planner.</p>
+            <center>
+              <a href="${signInUrl}" class="button">Sign in to Journey Planner</a>
+            </center>
+          </div>
+          <div class="footer">© ${new Date().getFullYear()} Journey Planner. All rights reserved.</div>
+        </body>
+        </html>
+      `;
+
       await sendEmail({
         to: email,
-        subject: 'Your registration has been approved',
-        html: `<p>Hello ${username},</p><p>Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.</p>`,
-        text: `Hello ${username}, Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.`
+        subject: 'Your registration has been approved - Journey Planner',
+        html,
+        text: `Hello ${username}, Your registration request has been approved. Sign in at: ${signInUrl}`
       });
     } catch (e) {
       console.error('Failed to send approval email:', e);

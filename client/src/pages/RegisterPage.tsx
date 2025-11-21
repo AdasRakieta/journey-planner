@@ -153,8 +153,8 @@ const RegisterPage: React.FC = () => {
                     <input id="code" type="text" value={code} onChange={(e) => setCode(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white" placeholder="Enter code from email" required />
                   </div>
                   <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => setStep('form')} className="px-4 py-3 bg-red-600 hover:bg-red-700 dark:bg-[#ff453a] dark:hover:bg-red-600 text-white rounded-xl transition-all">Back</button>
                     <button type="submit" disabled={codeLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl">{codeLoading ? 'Confirming...' : 'Confirm and Request Approval'}</button>
-                    <button type="button" onClick={() => setStep('form')} className="px-4 py-3 rounded-xl border border-gray-700 text-gray-300">Back</button>
                   </div>
                 </form>
               )}
