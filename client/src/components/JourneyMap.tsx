@@ -56,6 +56,9 @@ interface Stop {
   arrivalDate?: Date | string;
   departureDate?: Date | string;
   accommodationName?: string;
+  accommodationPrice?: number;
+  accommodationCurrency?: string;
+  isPaid?: boolean;
   checkInTime?: string;
   checkOutTime?: string;
   attractions?: Attraction[];

@@ -75,6 +75,7 @@ export interface JourneyShare {
   endDate?: Date | string;
   sharedByUsername?: string;
   sharedByEmail?: string;
+  sharedWithUsername?: string;
 }
 
 export interface Journey {

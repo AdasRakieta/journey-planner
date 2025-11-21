@@ -78,7 +78,7 @@ export async function geocodeAddress(
  * Debounced geocoding function to avoid excessive API calls
  * Use this when geocoding on user input
  */
-let geocodeTimeout: NodeJS.Timeout | null = null;
+let geocodeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function geocodeAddressDebounced(
   street?: string,

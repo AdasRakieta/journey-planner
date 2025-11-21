@@ -359,6 +359,35 @@ export const attachmentService = {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+  },
+  async extractAttachmentData(id: number, assign?: boolean) {
+    const token = localStorage.getItem('accessToken');
+    const query = assign ? '?assign=1' : '';
+    const response = await fetch(`${API_URL}/attachments/${id}/extract${query}`, {
+      method: 'POST',
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error('Failed to extract attachment');
+    return response.json();
+  },
+  async viewAttachment(id: number) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/attachments/${id}/view`, {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
+    if (!response.ok) throw new Error('Failed to view attachment');
+    const data = await response.json();
+    if (data.type === 'pdf' && data.url) {
+      // fetch the protected PDF via an authorized request and return a blob URL
+      const pdfResponse = await fetch(`${API_URL}/attachments/${id}/download?inline=1`, {
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      });
+      if (!pdfResponse.ok) throw new Error('Failed to fetch PDF preview');
+      const blob = await pdfResponse.blob();
+      const url = window.URL.createObjectURL(blob);
+      return { type: 'pdf', url };
+    }
+    return data;
   }
 };
 
@@ -380,6 +409,7 @@ export const journeyShareService = {
     }
     return response.json();
   },
+  
 
   async getSharesForJourney(journeyId: number): Promise<JourneyShare[]> {
     const token = localStorage.getItem('accessToken');

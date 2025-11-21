@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, Navigation, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
@@ -11,7 +11,7 @@ import type { Journey, Stop, Transport, Attraction, ChecklistItem } from './type
 import { journeyService, stopService, attractionService, transportService, journeyShareService, attachmentService } from './services/api';
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
-import { getPaymentSummary, calculateAmountDue } from './utils/paymentCalculations';
+// Payment calculation helpers (unused directly here) are available in services/utils; import when needed.
 import { useAuth } from './contexts/AuthContext';
 import { geocodeAddress } from './services/geocoding';
 
@@ -53,7 +53,7 @@ const formatDateForDisplay = (date: Date | string | undefined): string => {
 function App() {
   const { user, logout } = useAuth();
   const { toasts, closeToast, success, error, warning, info } = useToast();
-  const confirm = useConfirm();
+  const confirmHook = useConfirm();
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [journeySearch, setJourneySearch] = useState<string>('');
   const [journeyPage, setJourneyPage] = useState<number>(1);
@@ -61,6 +61,48 @@ function App() {
   const [attachments, setAttachments] = useState<any[]>([]);
   // For file upload UI: keep server-side attachment persistent after upload
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string | null>(null);
+  // Helper: fetch full journey from server (authoritative data)
+  const refreshJourneyFromServer = async (journeyId: number, setSelected = false) => {
+    try {
+      const fresh = await journeyService.getJourneyById(journeyId);
+      setJourneys(prev => prev.map(j => j.id === fresh.id ? fresh : j));
+      if (setSelected || selectedJourney?.id === fresh.id) setSelectedJourney(fresh);
+      return fresh;
+    } catch (err) {
+      // If we can't fetch, return null and let client compute as fallback
+      console.warn('Failed to refresh journey from server', err);
+      return null;
+    }
+  };
+
+  // Find journey id for a stop id from local state cache
+  const journeyIdFromStop = (stopId: number): number | null => {
+    const j = journeys.find(j => (j.stops || []).some(s => s.id === stopId));
+    return j ? (j.id ?? null) : null;
+  };
+
+  const journeyIdFromAttractionId = (attractionId: number): number | null => {
+    const j = journeys.find(j => (j.stops || []).some(s => (s.attractions || []).some(a => a.id === attractionId)));
+    return j ? (j.id ?? null) : null;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        try { window.URL.revokeObjectURL(previewUrl); } catch (e) { /* noop */ }
+      }
+    };
+  }, [previewUrl]);
+  const [extractModalOpen, setExtractModalOpen] = useState(false);
+  const [extractResult, setExtractResult] = useState<any | null>(null);
+  const bookingFileRef = useRef<HTMLInputElement | null>(null);
+  const transportFileRef = useRef<HTMLInputElement | null>(null);
+  const allowedPreviewTypes = '.pdf,.doc,.docx';
+  const allowedFileTypes = allowedPreviewTypes; // alias used in file input `accept`
   const [uploadingAttachment, setUploadingAttachment] = useState<any | null>(null);
   const [showNewJourneyForm, setShowNewJourneyForm] = useState(false);
   const [showStopForm, setShowStopForm] = useState(false);
@@ -216,9 +258,6 @@ function App() {
 
   // UI state for collapsible sections
   const [stopsOpen, setStopsOpen] = useState<boolean>(true);
-  const [stopSearch, setStopSearch] = useState<string>('');
-  const [stopPage, setStopPage] = useState<number>(1);
-  const [pagedStops, setPagedStops] = useState<any[] | null>(null);
   const [transportsOpen, setTransportsOpen] = useState<boolean>(true);
 
   // Checklist UI state
@@ -390,14 +429,7 @@ function App() {
     })();
   };
 
-  // Helper for displaying amounts with optional conversion to selected journey currency
-  const formatPriceWithConversion = (amount?: number | null, from?: string | null) => {
-    if (amount == null) return null;
-    const fromCurr = from || selectedJourney?.currency || 'PLN';
-    const toCurr = selectedJourney?.currency || 'PLN';
-    const conv = convertAmount(amount, fromCurr, toCurr);
-    return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${toCurr}` : `${amount} ${fromCurr}`;
-  };
+  // Helper for displaying amounts with optional conversion to selected journey currency (unused in current UI)
 
   // Prefer server-persisted converted values when available on items.
   const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, l) => l.toUpperCase());
@@ -475,34 +507,11 @@ function App() {
       warning('Journey deleted by another user');
     });
     
-    // Helper: fetch full journey from server (authoritative data)
-    const refreshJourneyFromServer = async (journeyId: number, setSelected = false) => {
-      try {
-        const fresh = await journeyService.getJourneyById(journeyId);
-        setJourneys(prev => prev.map(j => j.id === fresh.id ? fresh : j));
-        if (setSelected || selectedJourney?.id === fresh.id) setSelectedJourney(fresh);
-        return fresh;
-      } catch (err) {
-        // If we can't fetch, return null and let client compute as fallback
-        console.warn('Failed to refresh journey from server', err);
-        return null;
-      }
-    };
-
-    // Find journey id for a stop id from local state cache
-    const journeyIdFromStop = (stopId: number): number | null => {
-      const j = journeys.find(j => (j.stops || []).some(s => s.id === stopId));
-      return j ? j.id : null;
-    };
-
-    const journeyIdFromAttractionId = (attractionId: number): number | null => {
-      const j = journeys.find(j => (j.stops || []).some(s => (s.attractions || []).some(a => a.id === attractionId)));
-      return j ? j.id : null;
-    };
 
     // Listen for stop events
     socketService.on('stop:created', async (stop: Stop) => {
       console.log('Real-time: Stop created', stop);
+      if (!stop.journeyId) return;
       const refreshed = await refreshJourneyFromServer(stop.journeyId);
       if (refreshed) return;
 
@@ -527,6 +536,7 @@ function App() {
     
     socketService.on('stop:updated', async (stop: Stop) => {
       console.log('Real-time: Stop updated', stop);
+      if (!stop.journeyId) return;
       const refreshed = await refreshJourneyFromServer(stop.journeyId);
       if (refreshed) return;
 
@@ -576,7 +586,10 @@ function App() {
     // Listen for attraction events
     socketService.on('attraction:created', async (attraction: Attraction) => {
       console.log('Real-time: Attraction created', attraction);
-      const refreshed = await refreshJourneyFromServer(journeyIdFromStop(attraction.stopId)!);
+      if (!attraction.stopId) return;
+      const jId = journeyIdFromStop(attraction.stopId);
+      if (!jId) return;
+      const refreshed = await refreshJourneyFromServer(jId);
       if (refreshed) return;
 
       setJourneys(prev => prev.map(j => {
@@ -613,7 +626,10 @@ function App() {
     
     socketService.on('attraction:updated', async (attraction: Attraction) => {
       console.log('Real-time: Attraction updated', attraction);
-      const refreshed = await refreshJourneyFromServer(journeyIdFromAttractionId(attraction.id)!);
+      if (!attraction.id) return;
+      const jId = journeyIdFromAttractionId(attraction.id);
+      if (!jId) return;
+      const refreshed = await refreshJourneyFromServer(jId);
       if (refreshed) return;
 
       setJourneys(prev => prev.map(j => {
@@ -781,21 +797,6 @@ function App() {
   }, [selectedJourney?.id]);
 
   // Fetch paged stops when search or page changes
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      if (!selectedJourney?.id || !stopsOpen) return;
-      try {
-        const list = await stopService.getStopsByJourneyIdPaged(selectedJourney.id, stopPage, 25, stopSearch);
-        if (mounted) setPagedStops(list);
-      } catch (e) {
-        setPagedStops(null);
-      }
-    };
-    void load();
-    return () => { mounted = false; };
-  }, [selectedJourney?.id, stopSearch, stopPage, stopsOpen]);
-
   // We no longer recompute totals client-side: the server is authoritative
 
   const loadJourneys = async (page: number = 1, q: string = '') => {
@@ -841,7 +842,7 @@ function App() {
   };
 
   const handleDeleteJourney = async (id: number) => {
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmHook.confirm({
       title: 'Delete Journey',
       message: 'Are you sure you want to delete this journey? This action cannot be undone.',
       confirmText: 'Delete',
@@ -897,44 +898,7 @@ function App() {
     setShowStopForm(true);
   };
 
-  const handleGeocodeCity = async (city: string, country: string) => {
-    if (!city || !country) {
-      warning('Please enter both city and country');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const query = `${city}, ${country}`;
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'JourneyPlannerApp/1.0',
-          },
-        }
-      );
-      
-      const data = await response.json();
-      
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        setNewStop({
-          ...newStop,
-          latitude: parseFloat(lat),
-          longitude: parseFloat(lon),
-        });
-        success('Location found on map!');
-      } else {
-        warning('Location not found. Try a different spelling or click on the map.');
-      }
-    } catch (err) {
-      console.error('Geocoding failed:', err);
-      error('Failed to find location');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Geocoding helper removed - use `geocodeAddress` service for on-demand usage.
 
   const handleGeocodeAddress = async (street: string | undefined, house: string | undefined, postal: string | undefined, city: string | undefined, country: string | undefined) => {
     const parts = [] as string[];
@@ -1194,7 +1158,7 @@ function App() {
   const handleDeleteStop = async (stopId: number) => {
     if (!selectedJourney) return;
 
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmHook.confirm({
       title: 'Delete Stop',
       message: 'Are you sure you want to delete this stop? All attractions at this stop will also be deleted.',
       confirmText: 'Delete',
@@ -1225,7 +1189,7 @@ function App() {
   const handleDeleteAttraction = async (stopId: number, attractionId: number) => {
     if (!selectedJourney) return;
 
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmHook.confirm({
       title: 'Delete Attraction',
       message: 'Are you sure you want to delete this attraction?',
       confirmText: 'Delete',
@@ -1264,7 +1228,7 @@ function App() {
   const handleDeleteTransport = async (transportId: number) => {
     if (!selectedJourney) return;
 
-    const confirmed = await confirm.confirm({
+    const confirmed = await confirmHook.confirm({
       title: 'Delete Transport',
       message: 'Are you sure you want to delete this transport?',
       confirmText: 'Delete',
@@ -1683,6 +1647,66 @@ function App() {
                 ) : (
                   <Menu className="w-6 h-6 text-gray-900 dark:text-[#ffffff]" />
                 )}
+                {previewOpen && (
+                  <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
+                    <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-xl font-bold">Preview: {previewTitle}</h2>
+                          <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                        </div>
+                        <div className="mt-4">
+                          {previewUrl ? (
+                            <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
+                          ) : previewHtml ? (
+                            <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                          ) : (
+                            <div className="text-sm text-gray-500">No preview available</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {extractModalOpen && (
+                  <div className="gh-modal-overlay" onClick={() => setExtractModalOpen(false)}>
+                    <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                      <div className="p-6">
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-xl font-bold">Extracted data</h2>
+                          <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {(!extractResult || (!extractResult.flightNumber && !extractResult.price)) && (
+                            <div className="text-sm text-gray-500">No data found in attachment.</div>
+                          )}
+                          {extractResult?.flightNumber && (
+                            <div className="flex items-center justify-between">
+                              <div>Flight number: <strong>{extractResult.flightNumber}</strong></div>
+                              <div className="flex items-center gap-2">
+                                <button className="gh-btn" onClick={() => { setNewTransport(prev => ({ ...prev, flightNumber: extractResult.flightNumber })); success('Flight number applied to new transport'); }}>Apply to new transport</button>
+                                <button className="gh-btn" onClick={() => { setEditingTransport(prev => prev ? ({ ...prev, flightNumber: extractResult.flightNumber }) : prev); success('Flight number applied to editing transport'); }}>Apply to editing transport</button>
+                              </div>
+                            </div>
+                          )}
+                          {extractResult?.price && (
+                            <div className="flex items-center justify-between">
+                              <div>Price: <strong>{extractResult.price.amount} {extractResult.price.currency || ''}</strong></div>
+                              <div className="flex items-center gap-2">
+                                <button className="gh-btn" onClick={() => { setNewTransport(prev => ({ ...prev, price: extractResult.price.amount, currency: extractResult.price.currency || prev.currency })); success('Price applied to new transport'); }}>Apply to new transport</button>
+                                <button className="gh-btn" onClick={() => { setEditingTransport(prev => prev ? ({ ...prev, price: extractResult.price.amount, currency: extractResult.price.currency || prev.currency }) : prev); success('Price applied to editing transport'); }}>Apply to editing transport</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex justify-end mt-6">
+                          <button onClick={() => setExtractModalOpen(false)} className="gh-btn-secondary">Close</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </button>
               <h1 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff]">
                 🗺️ Journey Planner
@@ -1726,7 +1750,7 @@ function App() {
               {/* Logout Button */}
               <button
                 onClick={async () => {
-                  const confirmed = await confirm.confirm({
+                  const confirmed = await confirmHook.confirm({
                     title: 'Logout',
                     message: 'Are you sure you want to logout?',
                     confirmText: 'Logout',
@@ -1799,7 +1823,7 @@ function App() {
               {/* Logout Button */}
               <button
                 onClick={async () => {
-                  const confirmed = await confirm.confirm({
+                  const confirmed = await confirmHook.confirm({
                     title: 'Logout',
                     message: 'Are you sure you want to logout?',
                     confirmText: 'Logout',
@@ -2095,16 +2119,33 @@ function App() {
                           <div>
                             <div className="font-medium text-gray-900 dark:text-[#ffffff]">{att.originalFilename}</div>
                             <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round(att.fileSize / 1024)} KB</div>
+                            {att.parsedJson?.flightNumber && (
+                              <div className="text-xs text-gray-500 dark:text-[#98989d]">Flight: <strong>{att.parsedJson.flightNumber}</strong></div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
+                            <button onClick={async () => {
+                              try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); }
+                            }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5"/></button>
                             <button onClick={async () => {
                               try {
                                 await attachmentService.downloadAttachment(att.id, att.originalFilename);
                               } catch (e) { error('Failed to download attachment'); }
-                            }} className="text-blue-600 dark:text-[#0a84ff] hover:underline">Download</button>
+                            }} title="Download" className="text-gray-500 hover:text-gray-700"><DownloadCloud className="w-5 h-5"/></button>
                             <button onClick={async () => {
-                              try { if (!confirm('Delete attachment?')) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); }
-                            }} className="text-red-600 hover:text-red-700">Delete</button>
+                              try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete attachment?' }))) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); }
+                            }} title="Delete" className="text-red-600 hover:text-red-700"><Trash2 className="w-5 h-5"/></button>
+                            <button onClick={async () => {
+                              try {
+                                const shouldAssign = await confirmHook.confirm({ title: 'Auto-assign', message: 'Also auto-assign to matching transport if found?' });
+                                const resp = await attachmentService.extractAttachmentData(att.id, shouldAssign);
+                                setExtractResult(resp.parsed);
+                                if (resp.assignedTransport) {
+                                  success(`Assigned to transport ${resp.assignedTransport.id}`);
+                                }
+                                setExtractModalOpen(true);
+                              } catch (e) { error('Failed to extract data'); }
+                            }} title="Extract data" className="text-gray-500 hover:text-gray-700"><FileText className="w-5 h-5"/></button>
                           </div>
                         </li>
                       ))}
@@ -2147,8 +2188,8 @@ function App() {
                           <div key={item.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
                             <div className="flex items-center gap-3">
                               <div className="flex items-center gap-2">
-                                <PaymentCheckbox id={`check-bought-${item.id}`} checked={item.bought || false} onChange={(v) => toggleChecklistBought(item.id)} label="Bought" />
-                                <PaymentCheckbox id={`check-packed-${item.id}`} checked={item.packed || false} onChange={(v) => toggleChecklistPacked(item.id)} label="Packed" />
+                                <PaymentCheckbox id={`check-bought-${item.id}`} checked={item.bought || false} onChange={() => toggleChecklistBought(item.id)} label="Bought" />
+                                <PaymentCheckbox id={`check-packed-${item.id}`} checked={item.packed || false} onChange={() => toggleChecklistPacked(item.id)} label="Packed" />
                               </div>
                               {editingChecklistId === item.id ? (
                                 <input
@@ -2195,9 +2236,6 @@ function App() {
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
-                      <input type="text" placeholder="Search stops..." value={stopSearch} onChange={(e) => { setStopSearch(e.target.value); setStopPage(1); }} className="gh-input text-sm" />
-                    </div>
                     <button
                       onClick={() => setShowStopForm(true)}
                       className="gh-btn-secondary text-sm"
@@ -2209,16 +2247,16 @@ function App() {
                   </div>
                   {stopsOpen && (
                     <div className="space-y-3">
-                      { (pagedStops || selectedJourney.stops) && (pagedStops || selectedJourney.stops).length > 0 ? (
-                        (pagedStops || selectedJourney.stops).map((stop, index) => (
-                          <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                      { (selectedJourney?.stops || []).length > 0 ? (
+                        (selectedJourney?.stops || []).map((stop, index) => (
+                          <div key={stop.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
                             <div className="flex items-start gap-3">
                               <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start mb-1">
                                   <h4 className="font-semibold text-gray-900 dark:text-[#ffffff]">{stop.city}, {stop.country}</h4>
                                   <div className="flex items-center gap-2">
-                                    <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={(v) => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
+                                    <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
                                     <button
                                       onClick={() => { setEditingStop(stop); setShowEditStopForm(true); }}
                                       className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1"
@@ -2252,7 +2290,7 @@ function App() {
                                   <div className="mt-2 text-sm">
                                       <p className="font-medium text-gray-900 dark:text-[#ffffff]">Attractions</p>
                                     <ul className="list-disc pl-4 ml-0 mt-1 marker:text-blue-600 dark:marker:text-[#0a84ff] text-gray-600 dark:text-[#98989d]">
-                                      {stop.attractions.map((a) => (
+                                      {stop.attractions.map((a: Attraction) => (
                                         <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
                                           <div className="flex items-center gap-2">
                                             <span className="text-sm text-gray-900 dark:text-[#ffffff]">{a.name}</span>
@@ -2261,7 +2299,7 @@ function App() {
                                             ) : null}
                                           </div>
                                           <div className="flex items-center gap-2">
-                                            <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={(v) => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
+                                            <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
                                             <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="text-blue-600 hover:text-blue-700 p-1"><Edit2 className="w-4 h-4" /></button>
                                             <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="text-red-600 hover:text-red-700 p-1"><Trash2 className="w-4 h-4" /></button>
                                           </div>
@@ -2329,7 +2367,7 @@ function App() {
                     <div className="space-y-3">
                     {selectedJourney.transports && selectedJourney.transports.length > 0 ? (
                       selectedJourney.transports.map((transport, index) => (
-                        <div key={index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                        <div key={transport.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
                           <div className="flex items-start gap-3">
                             <div className="text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0">
                               {getTransportIcon(transport.type)}
@@ -2887,39 +2925,40 @@ function App() {
                       onChange={(e) => setBookingUrl(e.target.value)}
                       className="gh-input flex-1"
                     />
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setPendingFile(file);
-                        setUploadingAttachment(null);
-                        // upload immediately for easy UX
-                        (async () => {
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setPendingFile(file);
+                          setUploadingAttachment(null);
+                        }}
+                        ref={bookingFileRef}
+                        className="hidden"
+                        accept={allowedFileTypes}
+                      />
+                      <button onClick={() => bookingFileRef.current?.click()} className="gh-btn">Choose file</button>
+                      <button
+                        onClick={async () => {
+                          if (!pendingFile) { error('No file selected'); return; }
                           try {
                             setLoading(true);
                             const fd = new FormData();
-                            fd.append('file', file);
+                            fd.append('file', pendingFile);
                             fd.append('journeyId', String(selectedJourney?.id));
                             const resp = await attachmentService.uploadAttachment(fd);
-                            if (resp?.parsed?.flightNumber) {
-                              setNewTransport({ ...newTransport, flightNumber: resp.parsed.flightNumber });
-                              success('Attachment parsed and flight number autofilled');
-                            } else {
-                              success('Attachment uploaded');
-                            }
-                            // Show the new attachment in the attachments list immediately
+                            success('Attachment uploaded');
                             if (resp?.attachment) setAttachments(prev => [resp.attachment, ...(prev || [])]);
-                            if (resp?.attachment) setUploadingAttachment(resp.attachment);
-                          } catch (e) {
-                            error('Failed to upload attachment');
-                          } finally {
-                            setLoading(false);
-                          }
-                        })();
-                      }}
-                      className="gh-input"
-                    />
+                            setUploadingAttachment(resp?.attachment ?? null);
+                            setPendingFile(null);
+                          } catch (err) {
+                            error('Upload failed');
+                          } finally { setLoading(false); }
+                        }}
+                        className="gh-btn-primary bg-green-500 hover:bg-green-600"
+                      >Add</button>
+                    </div>
                     {pendingFile && (
                       <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
                         <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
@@ -2933,8 +2972,8 @@ function App() {
                           >Cancel</button>
                           {uploadingAttachment && (
                             <>
-                              <button onClick={async () => { try { await attachmentService.downloadAttachment(uploadingAttachment.id); } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
-                              <button onClick={async () => { try { if (!confirm('Delete uploaded attachment?')) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                              <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
+                              <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
                             </>
                           )}
                         </div>
@@ -3625,42 +3664,46 @@ function App() {
                     onChange={(e) => setEditingTransport({ ...editingTransport, bookingUrl: e.target.value })}
                     className="gh-input"
                   />
-                  <input
-                    type="file"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setPendingFile(file);
-                      setUploadingAttachment(null);
-                      (async () => {
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setPendingFile(file);
+                        setUploadingAttachment(null);
+                      }}
+                      ref={transportFileRef}
+                      className="hidden"
+                      accept={allowedFileTypes}
+                    />
+                    <button onClick={() => transportFileRef.current?.click()} className="gh-btn">Choose file</button>
+                    <button
+                      onClick={async () => {
+                        if (!pendingFile) { error('No file selected'); return; }
                         try {
                           setLoading(true);
                           const fd = new FormData();
-                          fd.append('file', file);
+                          fd.append('file', pendingFile);
                           fd.append('journeyId', String(selectedJourney?.id));
                           const resp = await attachmentService.uploadAttachment(fd);
-                          if (resp?.parsed?.flightNumber) {
-                            setEditingTransport({ ...editingTransport, flightNumber: resp.parsed.flightNumber });
-                            success('Attachment parsed and flight number autofilled');
-                          } else {
-                            success('Attachment uploaded');
-                          }
-                        } catch (e) {
-                          error('Failed to upload attachment');
-                        } finally {
-                          setLoading(false);
-                        }
-                          // keep pending file displayed until manually removed
-                      })();
-                    }}
-                    className="gh-input mt-2"
-                  />
+                          success('Attachment uploaded');
+                          if (resp?.attachment) setAttachments(prev => [resp.attachment, ...(prev || [])]);
+                          setUploadingAttachment(resp?.attachment ?? null);
+                          setPendingFile(null);
+                        } catch (err) {
+                          error('Upload failed');
+                        } finally { setLoading(false); }
+                      }}
+                      className="gh-btn-primary bg-green-500 hover:bg-green-600 mt-2"
+                    >Add</button>
+                  </div>
                     {uploadingAttachment ? (
                       <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
                         <div className="text-sm text-white">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
                         <div className="flex items-center gap-2">
-                          <button onClick={async () => { try { await attachmentService.downloadAttachment(uploadingAttachment.id, uploadingAttachment.originalFilename); } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
-                          <button onClick={async () => { try { if (!confirm('Delete uploaded attachment?')) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                          <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
+                          <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
                         </div>
                       </div>
                     ) : pendingFile && (
@@ -4131,14 +4174,14 @@ function App() {
 
       {/* Confirm Dialog */}
       <ConfirmDialog
-        isOpen={confirm.isOpen}
-        title={confirm.options.title}
-        message={confirm.options.message}
-        confirmText={confirm.options.confirmText}
-        cancelText={confirm.options.cancelText}
-        confirmVariant={confirm.options.confirmVariant}
-        onConfirm={confirm.handleConfirm}
-        onCancel={confirm.handleCancel}
+        isOpen={confirmHook.isOpen}
+        title={confirmHook.options.title}
+        message={confirmHook.options.message}
+        confirmText={confirmHook.options.confirmText}
+        cancelText={confirmHook.options.cancelText}
+        confirmVariant={confirmHook.options.confirmVariant}
+        onConfirm={confirmHook.handleConfirm}
+        onCancel={confirmHook.handleCancel}
       />
     </div>
   );

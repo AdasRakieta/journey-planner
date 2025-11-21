@@ -7,6 +7,7 @@ import { query, DB_AVAILABLE } from '../config/db';
 import jsonStore from '../config/jsonStore';
 import path from 'path';
 import mammoth from 'mammoth';
+import cheerio from 'cheerio';
 
 export interface ParsedAttachmentResult {
   flightNumber?: string;
@@ -83,6 +84,26 @@ export const parseDocxForFlightAndPrice = async (filePath: string): Promise<Pars
 export const docxToHtml = async (filePath: string): Promise<string> => {
   const out = await mammoth.convertToHtml({ path: filePath });
   return out.value || '';
+};
+
+export const sanitizeHtml = (html: string): string => {
+  const $ = cheerio.load(html, { xmlMode: false });
+  // Remove script/style tags
+  $('script, style').remove();
+  // Remove event handler attributes and javascript: URIs
+  $('*').each((_, el: any) => {
+    const attribs: Record<string, string> = (el && el.attribs) || {};
+    Object.keys(attribs).forEach(attr => {
+      if (attr.toLowerCase().startsWith('on')) {
+        $(el).removeAttr(attr);
+      }
+      const val = attribs[attr] || '';
+      if (typeof val === 'string' && val.trim().toLowerCase().startsWith('javascript:')) {
+        $(el).removeAttr(attr);
+      }
+    });
+  });
+  return $.html();
 };
 
 export const autoAssignToTransportIfFlightMatches = async (journeyId: number, flightNumber?: string) => {

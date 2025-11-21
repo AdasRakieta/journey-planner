@@ -8,7 +8,7 @@ import jsonStore from '../config/jsonStore';
 import { DB_AVAILABLE } from '../config/db';
 // Transport import not needed here
 import { encryptFile, decryptFileToStream } from '../utils/fileCrypto';
-import { parsePdfForFlightAndPrice, autoAssignToTransportIfFlightMatches, parseDocxForFlightAndPrice, docxToHtml } from '../services/attachmentParser';
+import { parsePdfForFlightAndPrice, autoAssignToTransportIfFlightMatches, parseDocxForFlightAndPrice, docxToHtml, sanitizeHtml } from '../services/attachmentParser';
 import { authenticateToken } from '../middleware/auth';
 import { query } from '../config/db';
 
@@ -84,7 +84,7 @@ export const uploadAttachmentHandler = [
           created_at: new Date().toISOString(),
         });
 
-        return res.status(201).json({ attachment: toCamelCase(newAttach), parsed });
+        return res.status(201).json({ attachment: toCamelCase(newAttach) });
       }
 
       // Persist metadata to DB
@@ -107,7 +107,7 @@ export const uploadAttachmentHandler = [
 
       // No auto-parsing or assignment here; extraction is manual.
 
-      res.status(201).json({ attachment: attachment.toJSON(), parsed });
+      res.status(201).json({ attachment: attachment.toJSON() });
     } catch (err) {
       console.error('File upload error', err);
       res.status(500).json({ message: 'Failed to upload file' });
@@ -146,13 +146,55 @@ export const downloadAttachment = async (req: Request, res: Response) => {
     const iv = (!DB_AVAILABLE) ? checkAttachment.iv : attachment.iv;
     const authTag = (!DB_AVAILABLE) ? checkAttachment.authTag : attachment.authTag;
 
+    const inline = req.query.inline === '1' || req.query.inline === 'true';
     const readStream = decryptFileToStream(filePath, iv || '', authTag || '');
-    res.setHeader('Content-Disposition', `attachment; filename="${checkAttachment.originalFilename}"`);
+    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${checkAttachment.originalFilename}"`);
     res.setHeader('Content-Type', checkAttachment.mimeType);
     readStream.pipe(res);
   } catch (err) {
     console.error('Download error', err);
     res.status(500).json({ message: 'Failed to download' });
+  }
+};
+
+// NOTE: extractAttachmentData provides the extraction via decryption to temp and parsing.
+
+export const previewAttachment = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    let attachment: any = null;
+    if (!DB_AVAILABLE) attachment = await jsonStore.getById('attachments', id);
+    else attachment = await Attachment.findByPk(id);
+    if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
+    const check = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
+
+    const userId = (req as any).user?.id;
+    if (check.uploadedBy !== userId) {
+      if (!check.journeyId) return res.status(403).json({ message: 'Access denied' });
+      if (!DB_AVAILABLE) {
+        const shares = await jsonStore.findByField('journey_shares', 'journey_id', check.journeyId);
+        const found = shares.find((s: any) => s.shared_with_user_id === userId && s.status === 'accepted');
+        if (!found) return res.status(403).json({ message: 'Access denied' });
+      } else {
+        const sRes = await query('SELECT * FROM journey_shares WHERE journey_id = $1 AND shared_with_user_id = $2 AND status = $3', [check.journeyId, userId, 'accepted']);
+        if (!sRes.rows.length) return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    const filePath = check.filePath;
+    const mime = check.mimeType || '';
+    if (mime.includes('pdf')) {
+      return res.json({ type: 'pdf', url: `/api/attachments/${id}/download?inline=1` });
+    }
+    if (mime.includes('officedocument') || mime.includes('msword') || mime.includes('word')) {
+      const htmlRaw = await docxToHtml(filePath);
+      const html = sanitizeHtml(htmlRaw);
+      return res.json({ type: 'docx', html });
+    }
+    res.status(400).json({ message: 'Preview not available' });
+  } catch (err) {
+    console.error('Preview error', err);
+    res.status(500).json({ message: 'Failed to preview' });
   }
 };
 
@@ -303,7 +345,7 @@ export const extractAttachmentData = async (req: Request, res: Response) => {
     await new Promise((resolve, reject) => {
       const out = fs.createWriteStream(tempPath);
       stream.pipe(out);
-      out.on('finish', resolve);
+      out.on('finish', () => resolve(undefined));
       out.on('error', reject);
     });
 
@@ -318,7 +360,35 @@ export const extractAttachmentData = async (req: Request, res: Response) => {
     // clean up temp
     try { fs.unlinkSync(tempPath); } catch (e) {}
 
-    return res.json({ parsed });
+    // Persist parsed results to attachment parsed_json
+    if (!DB_AVAILABLE) {
+      attachment.parsed_json = parsed;
+      await jsonStore.updateById('attachments', attachment.id, attachment);
+    } else {
+      attachment.parsedJson = parsed;
+      await attachment.save();
+    }
+
+    // If assign query param present, try to auto-assign to transport with matching flight number
+    const assign = (req.query.assign === '1' || req.query.assign === 'true' || req.body?.assign === true);
+    let assignedTransport: any = null;
+    if (assign && parsed?.flightNumber && checkAttachment.journeyId) {
+      const matched = await autoAssignToTransportIfFlightMatches(checkAttachment.journeyId, parsed.flightNumber);
+      if (matched) {
+        if (!DB_AVAILABLE) {
+          attachment.transport_id = matched.id;
+          await jsonStore.updateById('attachments', attachment.id, attachment);
+        } else {
+          attachment.transportId = matched.id;
+          await attachment.save();
+        }
+        assignedTransport = matched;
+        const io = req.app.get('io');
+        io.emit('attachment:applied', { attachmentId: attachment.id, targetType: 'transport', targetId: matched.id, byAutoAssign: true });
+      }
+    }
+
+    return res.json({ parsed, assignedTransport });
   } catch (err) {
     console.error('Extract error', err);
     res.status(500).json({ message: 'Failed to extract data' });
@@ -364,13 +434,14 @@ export const viewAttachment = async (req: Request, res: Response) => {
       const tempPath = path.join(uploadDir, `temp-${crypto.randomUUID()}${path.extname(checkAttachment.filename || checkAttachment.filePath || '') || ''}`);
       const stream = decryptFileToStream((!DB_AVAILABLE) ? checkAttachment.filePath : attachment.filePath, checkAttachment.iv || '', checkAttachment.authTag || checkAttachment.auth_tag || '');
       await new Promise((resolve, reject) => {
-        const out = fs.createWriteStream(tempPath);
-        stream.pipe(out);
-        out.on('finish', resolve);
-        out.on('error', reject);
-      });
+          const out = fs.createWriteStream(tempPath);
+          stream.pipe(out);
+          out.on('finish', () => resolve(undefined));
+          out.on('error', reject);
+        });
 
-      const html = await docxToHtml(tempPath);
+      const htmlRaw = await docxToHtml(tempPath);
+      const html = sanitizeHtml(htmlRaw);
       try { fs.unlinkSync(tempPath); } catch (e) {}
       res.setHeader('Content-Type', 'text/html');
       return res.send(html);
@@ -388,5 +459,7 @@ export default {
   downloadAttachment,
   deleteAttachment,
   listAttachmentsForJourney,
-  applyAttachmentToTarget
+    applyAttachmentToTarget,
+    extractAttachmentData,
+    viewAttachment
 };
