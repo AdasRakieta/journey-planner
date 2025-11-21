@@ -237,6 +237,172 @@ export async function cancelInvitation(req: Request, res: Response) {
   }
 }
 
+/**
+ * GET /api/admin/registration_requests
+ * List pending registration requests (admin only)
+ */
+export async function getRegistrationRequests(req: Request, res: Response) {
+  try {
+    if (DB_AVAILABLE) {
+      const result = await query(`SELECT id, email, name, provider, profile, status, created_at FROM registration_requests WHERE status = 'pending' ORDER BY created_at DESC`);
+      return res.json({ requests: result.rows });
+    }
+
+    const all = await jsonStore.getAll('registration_requests');
+    const pending = all.filter((r: any) => r.status === 'pending').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    res.json({ requests: pending });
+  } catch (error) {
+    console.error('Get registration requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch registration requests' });
+  }
+}
+
+/**
+ * POST /api/admin/registration_requests/:id/approve
+ * Approve a registration request and create a user
+ */
+export async function approveRegistrationRequest(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const reqId = parseInt(id);
+    if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
+
+    // Find request
+    if (DB_AVAILABLE) {
+      const r = await query('SELECT * FROM registration_requests WHERE id = $1', [reqId]);
+      if (r.rows.length === 0) return res.status(404).json({ error: 'Registration request not found' });
+      const request = r.rows[0];
+
+      // Create user
+      const username = request.name || request.email.split('@')[0];
+      const email = request.email;
+      const now = new Date();
+      let insert: any;
+      if (request.password_hash) {
+        insert = await query('INSERT INTO users (username, email, password_hash, role, is_active, email_verified, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, username, email', [username, email, request.password_hash, 'user', true, true, now, now]);
+      } else {
+        insert = await query('INSERT INTO users (username, email, role, is_active, email_verified, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, username, email', [username, email, 'user', true, true, now, now]);
+      }
+
+      // Mark request as approved
+      await query("UPDATE registration_requests SET status = 'approved', reviewed_by = $1, reviewed_at = $2 WHERE id = $3", [req.user!.userId, new Date(), reqId]);
+
+      // Notify user
+      const { sendEmail } = require('../services/emailService');
+      try {
+        await sendEmail({
+          to: email,
+          subject: 'Your registration has been approved',
+          html: `<p>Hello ${username},</p><p>Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.</p>`,
+          text: `Hello ${username}, Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.`
+        });
+      } catch (e) {
+        console.error('Failed to send approval email:', e);
+      }
+
+      return res.json({ message: 'Registration approved', user: insert.rows[0] });
+    }
+
+    // JSON fallback
+    const request = await jsonStore.getById('registration_requests', reqId);
+    if (!request) return res.status(404).json({ error: 'Registration request not found' });
+
+    const username = request.name || request.email.split('@')[0];
+    const email = request.email;
+    const nowIso = new Date().toISOString();
+
+    // Create user record
+    const newUser = await jsonStore.insert('users', {
+      username,
+      email,
+      role: 'user',
+      is_active: true,
+      email_verified: true,
+      created_at: nowIso,
+      updated_at: nowIso,
+    });
+
+    // Update request status
+    await jsonStore.updateById('registration_requests', reqId, { status: 'approved', reviewed_by: req.user!.userId, reviewed_at: new Date().toISOString() });
+
+    // Send notification email
+    const { sendEmail } = require('../services/emailService');
+    try {
+      await sendEmail({
+        to: email,
+        subject: 'Your registration has been approved',
+        html: `<p>Hello ${username},</p><p>Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.</p>`,
+        text: `Hello ${username}, Your registration request has been approved. You can now sign in to Journey Planner using Google Sign-In.`
+      });
+    } catch (e) {
+      console.error('Failed to send approval email:', e);
+    }
+
+    res.json({ message: 'Registration approved', user: newUser });
+  } catch (error) {
+    console.error('Approve registration request error:', error);
+    res.status(500).json({ error: 'Failed to approve registration request' });
+  }
+}
+
+/**
+ * POST /api/admin/registration_requests/:id/reject
+ * Reject a registration request
+ */
+export async function rejectRegistrationRequest(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const reqId = parseInt(id);
+    if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
+
+    if (DB_AVAILABLE) {
+      const r = await query('SELECT * FROM registration_requests WHERE id = $1', [reqId]);
+      if (r.rows.length === 0) return res.status(404).json({ error: 'Registration request not found' });
+      const request = r.rows[0];
+
+      await query("UPDATE registration_requests SET status = 'rejected', reviewed_by = $1, reviewed_at = $2 WHERE id = $3", [req.user!.userId, new Date(), reqId]);
+
+      // Optionally notify user
+      const { sendEmail } = require('../services/emailService');
+      try {
+        await sendEmail({
+          to: request.email,
+          subject: 'Your registration request was rejected',
+          html: `<p>Hello,</p><p>Your registration request has been reviewed and rejected by an administrator.</p>`,
+          text: `Your registration request has been reviewed and rejected by an administrator.`
+        });
+      } catch (e) {
+        console.error('Failed to send rejection email:', e);
+      }
+
+      return res.json({ message: 'Registration request rejected' });
+    }
+
+    const request = await jsonStore.getById('registration_requests', reqId);
+    if (!request) return res.status(404).json({ error: 'Registration request not found' });
+
+    await jsonStore.updateById('registration_requests', reqId, { status: 'rejected', reviewed_by: req.user!.userId, reviewed_at: new Date().toISOString() });
+
+    // Notify user
+    const { sendEmail } = require('../services/emailService');
+    try {
+      await sendEmail({
+        to: request.email,
+        subject: 'Your registration request was rejected',
+        html: `<p>Hello,</p><p>Your registration request has been reviewed and rejected by an administrator.</p>`,
+        text: `Your registration request has been reviewed and rejected by an administrator.`
+      });
+    } catch (e) {
+      console.error('Failed to send rejection email:', e);
+    }
+
+    res.json({ message: 'Registration request rejected' });
+  } catch (error) {
+    console.error('Reject registration request error:', error);
+    res.status(500).json({ error: 'Failed to reject registration request' });
+  }
+}
+
 export default {
   inviteUser,
   getAllUsers,
@@ -245,4 +411,7 @@ export default {
   toggleUserActive,
   getPendingInvitations,
   cancelInvitation,
+  getRegistrationRequests,
+  approveRegistrationRequest,
+  rejectRegistrationRequest,
 };

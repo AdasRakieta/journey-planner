@@ -53,6 +53,8 @@ const SettingsPage: React.FC = () => {
   // Admin Panel State
   const [users, setUsers] = useState<UserType[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [registrationRequests, setRegistrationRequests] = useState<any[]>([]);
+  const [regRequestsLoading, setRegRequestsLoading] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -137,6 +139,14 @@ const SettingsPage: React.FC = () => {
       ]);
       setUsers(usersResponse.data.users);
       setInvitations(invitationsResponse.data.invitations);
+      // fetch registration requests separately
+      try {
+        const rr = await adminAPI.getRegistrationRequests();
+        setRegistrationRequests(rr.data.requests || []);
+      } catch (err) {
+        console.warn('Failed to load registration requests', err);
+        setRegistrationRequests([]);
+      }
     } catch (error: any) {
       setAdminError('Failed to load admin data');
     } finally {
@@ -144,9 +154,23 @@ const SettingsPage: React.FC = () => {
     }
   }, []); // No dependencies - function doesn't change
 
+  const loadRegistrationRequests = useCallback(async () => {
+    setRegRequestsLoading(true);
+    try {
+      const resp = await adminAPI.getRegistrationRequests();
+      setRegistrationRequests(resp.data.requests || []);
+    } catch (err: any) {
+      console.error('Failed to load registration requests', err);
+      toast.error('Failed to load registration requests');
+    } finally {
+      setRegRequestsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminData();
+      loadRegistrationRequests();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]); // loadAdminData is stable, no need to include
@@ -797,6 +821,60 @@ const SettingsPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Pending Registration Requests */}
+              {registrationRequests.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4">Pending Registration Requests</h3>
+                  <div className="space-y-2">
+                    {registrationRequests.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a]">
+                        <div>
+                          <div className="text-gray-900 dark:text-[#ffffff] font-medium">{r.email}</div>
+                          <div className="text-xs text-gray-500 dark:text-[#636366]">{r.name || '—'} • {r.created_at ? new Date(r.created_at).toLocaleString() : ''}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              const confirmed = await confirmDialog.confirm({ title: 'Approve Registration', message: `Approve registration for ${r.email}?`, confirmText: 'Approve', cancelText: 'Cancel' });
+                              if (!confirmed) return;
+                              try {
+                                await adminAPI.approveRegistrationRequest(r.id);
+                                toast.success('Registration approved');
+                                await loadRegistrationRequests();
+                                await loadAdminData();
+                              } catch (err: any) {
+                                console.error('Approve failed', err);
+                                toast.error(err.response?.data?.error || 'Failed to approve registration');
+                              }
+                            }}
+                            className="px-3 py-2 text-sm bg-green-500 dark:bg-green-600 hover:bg-green-600 text-white rounded-lg transition-all"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const confirmed = await confirmDialog.confirm({ title: 'Reject Registration', message: `Reject registration for ${r.email}?`, confirmText: 'Reject', cancelText: 'Cancel', confirmVariant: 'danger' });
+                              if (!confirmed) return;
+                              try {
+                                await adminAPI.rejectRegistrationRequest(r.id);
+                                toast.success('Registration rejected');
+                                await loadRegistrationRequests();
+                              } catch (err: any) {
+                                console.error('Reject failed', err);
+                                toast.error(err.response?.data?.error || 'Failed to reject registration');
+                              }
+                            }}
+                            className="px-3 py-2 text-sm bg-red-100 dark:bg-red-900/20 text-red-600 rounded-lg transition-all"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Users List */}
               <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4">
@@ -849,6 +927,81 @@ const SettingsPage: React.FC = () => {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Registration Approvals Table (dedicated) */}
+              <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm p-6 border border-gray-200 dark:border-[#38383a] transition-colors duration-200 mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff] mb-4">Registration Approvals</h3>
+                {regRequestsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={28} className="animate-spin text-blue-500 dark:text-[#0a84ff]" />
+                  </div>
+                ) : registrationRequests.length === 0 ? (
+                  <div className="text-sm text-gray-600 dark:text-[#98989d]">No pending registration requests.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead>
+                        <tr className="text-xs text-gray-500 uppercase">
+                          <th className="px-4 py-2">Email</th>
+                          <th className="px-4 py-2">Name</th>
+                          <th className="px-4 py-2">Provider</th>
+                          <th className="px-4 py-2">Requested At</th>
+                          <th className="px-4 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {registrationRequests.map((r) => (
+                          <tr key={r.id} className="bg-gray-50 dark:bg-[#1c1c1e]">
+                            <td className="px-4 py-3 text-gray-900 dark:text-[#ffffff] align-top">{r.email}</td>
+                            <td className="px-4 py-3 text-gray-700 dark:text-[#98989d] align-top">{r.name || '—'}</td>
+                            <td className="px-4 py-3 text-gray-700 dark:text-[#98989d] align-top">{r.provider || (r.profile?.sub ? 'google' : 'unknown')}</td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-[#7e7e84] align-top">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const confirmed = await confirmDialog.confirm({ title: 'Approve Registration', message: `Approve registration for ${r.email}?`, confirmText: 'Approve', cancelText: 'Cancel' });
+                                    if (!confirmed) return;
+                                    try {
+                                      await adminAPI.approveRegistrationRequest(r.id);
+                                      toast.success('Registration approved');
+                                      await loadRegistrationRequests();
+                                      await loadAdminData();
+                                    } catch (err: any) {
+                                      console.error('Approve failed', err);
+                                      toast.error(err.response?.data?.error || 'Failed to approve registration');
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-md text-sm"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const confirmed = await confirmDialog.confirm({ title: 'Reject Registration', message: `Reject registration for ${r.email}?`, confirmText: 'Reject', cancelText: 'Cancel', confirmVariant: 'danger' });
+                                    if (!confirmed) return;
+                                    try {
+                                      await adminAPI.rejectRegistrationRequest(r.id);
+                                      toast.success('Registration rejected');
+                                      await loadRegistrationRequests();
+                                    } catch (err: any) {
+                                      console.error('Reject failed', err);
+                                      toast.error(err.response?.data?.error || 'Failed to reject registration');
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-red-100 dark:bg-red-900/20 text-red-600 rounded-md text-sm"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

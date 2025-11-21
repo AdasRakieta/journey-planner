@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import AuthCallback from './pages/AuthCallback';
 import ProtectedRoute from './components/ProtectedRoute';
 import './index.css';
 
@@ -21,6 +22,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />

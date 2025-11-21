@@ -61,6 +61,10 @@ export const authAPI = {
   
   register: (token: string, username: string, password: string) =>
     api.post('/auth/register', { token, username, password }),
+  registerRequest: (email: string, username: string, password: string) =>
+    api.post('/auth/register/request', { email, username, password }),
+  registerConfirm: (email: string, code: string) =>
+    api.post('/auth/register/confirm', { email, code }),
   
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
@@ -106,6 +110,12 @@ export const adminAPI = {
   
   cancelInvitation: (invitationId: number) =>
     api.delete(`/admin/invitations/${invitationId}`),
+  getRegistrationRequests: () =>
+    api.get('/admin/registration_requests'),
+  approveRegistrationRequest: (requestId: number) =>
+    api.post(`/admin/registration_requests/${requestId}/approve`),
+  rejectRegistrationRequest: (requestId: number) =>
+    api.post(`/admin/registration_requests/${requestId}/reject`),
 };
 
 export default api;

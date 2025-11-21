@@ -174,6 +174,31 @@ export async function sendInvitationEmail(
 }
 
 /**
+ * Send registration request notification to admin
+ */
+export async function sendRegistrationRequestEmail(
+  adminEmail: string,
+  requesterEmail: string,
+  requesterName?: string
+): Promise<void> {
+  const html = `
+    <p>A new registration request has been submitted.</p>
+    <ul>
+      <li><strong>Email:</strong> ${requesterEmail}</li>
+      <li><strong>Name:</strong> ${requesterName || 'N/A'}</li>
+    </ul>
+    <p>Please review and create an account for this user in the admin panel.</p>
+  `;
+
+  await sendEmail({
+    to: adminEmail,
+    subject: 'New Registration Request - Journey Planner',
+    html,
+    text: `New registration request: ${requesterEmail}`,
+  });
+}
+
+/**
  * Send password reset code email
  */
 export async function sendPasswordResetEmail(
@@ -262,6 +287,27 @@ export async function sendPasswordResetEmail(
     text: `Your password reset code is: ${resetCode}. This code expires in 15 minutes.`,
   });
 }
+
+/**
+ * Send registration verification code to user
+ */
+export async function sendRegistrationVerificationEmail(email: string, code: string): Promise<void> {
+  const html = `
+    <p>Hello,</p>
+    <p>Your verification code to request a Journey Planner account is:</p>
+    <div style="font-size:18px;font-weight:700;margin:12px 0;">${code}</div>
+    <p>This code will expire in 15 minutes.</p>
+  `;
+
+  await sendEmail({
+    to: email,
+    subject: 'Your Journey Planner verification code',
+    html,
+    text: `Your verification code is: ${code}. It expires in 15 minutes.`,
+  });
+}
+
+// Consolidated default export placed at the end of the file
 
 /**
  * Send journey sharing invitation email
@@ -368,5 +414,7 @@ export default {
   sendEmail,
   sendInvitationEmail,
   sendPasswordResetEmail,
+  sendRegistrationRequestEmail,
+  sendRegistrationVerificationEmail,
   sendJourneyInvitation,
 };

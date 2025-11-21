@@ -27,4 +27,10 @@ router.put('/users/:id/toggle-active', toggleUserActive);
 router.get('/invitations', getPendingInvitations);
 router.delete('/invitations/:id', cancelInvitation);
 
+// Registration requests (from social / google registration flow)
+import { getRegistrationRequests, approveRegistrationRequest, rejectRegistrationRequest } from '../controllers/adminController';
+router.get('/registration_requests', getRegistrationRequests);
+router.post('/registration_requests/:id/approve', approveRegistrationRequest);
+router.post('/registration_requests/:id/reject', rejectRegistrationRequest);
+
 export default router;

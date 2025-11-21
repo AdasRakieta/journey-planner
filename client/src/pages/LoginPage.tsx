@@ -119,6 +119,16 @@ const LoginPage: React.FC = () => {
                 'Sign In'
               )}
             </button>
+             {/* Register Button */}
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="w-full bg-[#8c3afc] hover:bg-[#732de6] text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all flex items-center justify-center gap-2"
+            >
+              Create Account
+            </button>
+          </div>
           </form>
 
           {/* Divider */}
@@ -132,11 +142,14 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* OAuth Buttons */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex justify-center">
             <button
               type="button"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-[#0d1117] border border-[#30363d] rounded-xl hover:bg-[#1c2128] transition-all duration-300 ease-in-out hover:shadow-lg font-medium text-gray-300"
-              onClick={() => alert('Google OAuth coming soon!')}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-[#0d1117] border border-[#30363d] rounded-xl hover:bg-[#1c2128] transition-all duration-300 ease-in-out hover:shadow-lg font-medium text-gray-300"
+              onClick={() => {
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+                window.location.href = `${apiBase.replace(/\/$/, '')}/auth/google`;
+              }}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -159,24 +172,9 @@ const LoginPage: React.FC = () => {
               Google
             </button>
 
-            <button
-              type="button"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-white text-black rounded-xl hover:bg-gray-100 transition-all duration-300 ease-in-out hover:shadow-lg font-medium"
-              onClick={() => alert('Apple OAuth coming soon!')}
-            >
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-              </svg>
-              Apple
-            </button>
           </div>
 
-          {/* Contact Admin Message */}
-          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800 rounded-xl">
-            <p className="text-sm text-blue-300 text-center">
-              Don't have an account? Contact an administrator to get invited.
-            </p>
-          </div>
+         
         </div>
 
         {/* Footer */}
