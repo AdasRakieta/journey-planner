@@ -48,6 +48,9 @@ coverage/
 /app/uploads/
 uploads/
 
+# Email previews stored by dev mode (do not commit)
+server/data/email_previews/
+
 # OS
 .DS_Store
 Thumbs.db
