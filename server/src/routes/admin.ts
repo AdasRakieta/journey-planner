@@ -8,6 +8,12 @@ import {
   getPendingInvitations,
   cancelInvitation,
 } from '../controllers/adminController';
+import {
+  listEmailPreviews,
+  getEmailPreview,
+  getEmailPreviewMeta,
+  deleteEmailPreview,
+} from '../controllers/emailPreviewController';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
 
 const router = express.Router();
@@ -32,5 +38,11 @@ import { getRegistrationRequests, approveRegistrationRequest, rejectRegistration
 router.get('/registration_requests', getRegistrationRequests);
 router.post('/registration_requests/:id/approve', approveRegistrationRequest);
 router.post('/registration_requests/:id/reject', rejectRegistrationRequest);
+
+// Email preview routes (admin only)
+router.get('/email-previews', listEmailPreviews);
+router.get('/email-previews/:id', getEmailPreview);
+router.get('/email-previews/:id/meta', getEmailPreviewMeta);
+router.delete('/email-previews/:id', deleteEmailPreview);
 
 export default router;

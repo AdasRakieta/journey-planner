@@ -8,7 +8,18 @@
     "invited_email": "szymon.przybysz@op.pl",
     "invitation_token": "1d2c3d9688ec7e272a1e7945ad39de3fc79cdf8f270a7849de5d320a266b0a27",
     "created_at": "2025-11-17T14:32:28.933Z",
-    "accepted_at": "2025-11-17T14:32:43.018Z"
-    ,"role": "edit"
+    "accepted_at": "2025-11-17T14:32:43.018Z",
+    "role": "edit"
+  },
+  {
+    "id": 2,
+    "journey_id": 3,
+    "shared_with_user_id": 2,
+    "shared_by_user_id": 1,
+    "status": "pending",
+    "invited_email": "szymon.przybysz2003@gmail.com",
+    "invitation_token": "e6f4a97f0ad3c57ecd16a52bdae5f4d29d13fe7fae4f231a6ee1017653b4f6bf",
+    "created_at": "2025-11-21T23:14:08.698Z",
+    "role": "manage"
   }
 ]

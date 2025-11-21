@@ -233,10 +233,13 @@ function App() {
   const getRate = (from: string, to: string): number | null => {
     try {
       if (!ratesCache) return null;
-      if (from === to) return 1;
       const rates = ratesCache.rates || {};
-      const rateFrom = rates[from];
-      const rateTo = rates[to];
+      const f = (from || '').toUpperCase().trim();
+      const t = (to || '').toUpperCase().trim();
+      if (!f || !t) return null;
+      if (f === t) return 1;
+      const rateFrom = rates[f];
+      const rateTo = rates[t];
       if (rateFrom == null || rateTo == null) return null;
       return (1 / rateFrom) * rateTo;
     } catch (e) {
@@ -245,7 +248,10 @@ function App() {
   };
 
   const convertAmount = (amount: number, from: string, to: string): number | null => {
-    const rate = getRate(from, to);
+    const f = (from || '').toUpperCase().trim();
+    const t = (to || '').toUpperCase().trim();
+    if (!f || !t) return null;
+    const rate = getRate(f, t);
     if (rate == null) return null;
     return amount * rate;
   };
@@ -447,14 +453,21 @@ function App() {
     for (const key of currVariants) {
       if (Object.prototype.hasOwnProperty.call(item, key) && item[key] != null) { c = item[key]; break; }
     }
-    return { value: Number(v), currency: c || selectedJourney?.currency || 'PLN' };
+    const currencyOut = (c || selectedJourney?.currency || 'PLN').toString().toUpperCase();
+    return { value: Number(v), currency: currencyOut };
   };
 
   const formatItemPrice = (amount: number | null | undefined, from: string | null | undefined, item: any, convertedField: string, convertedCurrencyField?: string) => {
     if (amount == null) return null;
-    const stored = getStoredConverted(item, convertedField, convertedCurrencyField);
-    const fromCurr = from || selectedJourney?.currency || 'PLN';
-    const toCurr = selectedJourney?.currency || 'PLN';
+    let stored = getStoredConverted(item, convertedField, convertedCurrencyField);
+    // If server stored conversion exists but is zero while original amount is non-zero,
+    // treat it as missing so client-side live conversion is used instead. This avoids
+    // showing "≈ 0.00 PLN" when stored conversions were not properly computed.
+    if (stored && Number(stored.value) === 0 && Number(amount) !== 0) {
+      stored = null;
+    }
+    const fromCurr = (from || selectedJourney?.currency || 'PLN').toString().toUpperCase();
+    const toCurr = (selectedJourney?.currency || 'PLN').toString().toUpperCase();
 
     // If target currency is the same as the source, don't display conversion
     if (fromCurr === toCurr) {
@@ -463,14 +476,14 @@ function App() {
     if (stored) {
       // If server already persisted the converted value, show that as authoritative value
       // But if stored value is the same currency as source, avoid showing redundant conversion
-      if (stored.currency === fromCurr) return `${amount} ${fromCurr}`;
+      if ((stored.currency || '').toString().toUpperCase() === fromCurr) return `${amount} ${fromCurr}`;
       // If the stored converted currency is equal to the target and its value equals the original amount,
       // skip the redundant approx display
-      if (stored.currency === toCurr && Number(stored.value) === Number(amount)) return `${amount} ${fromCurr}`;
-      return `${amount} ${fromCurr} ≈ ${stored.value.toFixed(2)} ${stored.currency}`;
+      if ((stored.currency || '').toString().toUpperCase() === toCurr && Number(stored.value) === Number(amount)) return `${amount} ${fromCurr}`;
+      return `${amount} ${fromCurr} ≈ ${stored.value.toFixed(2)} ${(stored.currency || '').toString().toUpperCase()}`;
     }
     const conv = convertAmount(amount, fromCurr, selectedJourney?.currency || 'PLN');
-    return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${selectedJourney?.currency || 'PLN'}` : `${amount} ${fromCurr}`;
+    return conv != null ? `${amount} ${fromCurr} ≈ ${conv.toFixed(2)} ${(selectedJourney?.currency || 'PLN').toString().toUpperCase()}` : `${amount} ${fromCurr}`;
   };
 
   useEffect(() => {
@@ -2175,7 +2188,10 @@ function App() {
                         onChange={(e) => setNewChecklistItemName(e.target.value)}
                         className="gh-input text-sm"
                       />
-                      <button onClick={addChecklistItem} className="gh-btn-primary text-sm">Add</button>
+                      <button onClick={addChecklistItem} className="gh-btn-secondary text-sm">
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
                     </div>
                   </div>
 
@@ -2293,9 +2309,10 @@ function App() {
                                       {stop.attractions.map((a: Attraction) => (
                                         <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
                                           <div className="flex items-center gap-2">
-                                            <span className="text-sm text-gray-900 dark:text-[#ffffff]">{a.name}</span>
+                                            <span className="text-gray-600 dark:text-[#98989d]">•</span>
+                                            <span className="text-sm text-gray-600 dark:text-[#98989d]">{a.name}</span>
                                             {a.estimatedCost != null ? (
-                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
+                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || (a as any).curr || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
                                             ) : null}
                                           </div>
                                           <div className="flex items-center gap-2">
@@ -2630,6 +2647,7 @@ function App() {
                     <option value="USD">USD (US Dollar)</option>
                     <option value="EUR">EUR (Euro)</option>
                     <option value="GBP">GBP (British Pound)</option>
+                    <option value="KRW">KRW (Korean Won)</option>
                   </select>
                 </div>
               </div>
@@ -2722,6 +2740,7 @@ function App() {
                     <option value="USD">USD (US Dollar)</option>
                     <option value="EUR">EUR (Euro)</option>
                     <option value="GBP">GBP (British Pound)</option>
+                    <option value="KRW">KRW (Korean Won)</option>
                   </select>
                 </div>
               </div>
@@ -2793,7 +2812,7 @@ function App() {
                     setShowShareModal(false);
                     setShareEmailOrUsername('');
                   }}
-                  className="gh-btn-secondary flex-1"
+                  className="gh-btn-danger flex-1"
                   disabled={loading}
                 >
                   Cancel
@@ -3055,6 +3074,7 @@ function App() {
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
                       <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
                     </select>
                   </div>
                 </div>
@@ -3268,6 +3288,7 @@ function App() {
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
                       <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
                     </select>
                   </div>
                 </div>
@@ -3442,6 +3463,7 @@ function App() {
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
                       <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
                     </select>
                   </div>
                 </div>
@@ -3650,6 +3672,7 @@ function App() {
                       <option value="USD">USD</option>
                       <option value="EUR">EUR</option>
                       <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
                     </select>
                   </div>
                 </div>
