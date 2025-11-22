@@ -385,130 +385,306 @@ export const reverseGeocode = async (req: Request, res: Response) => {
 export const scrapeBookingUrl = async (req: Request, res: Response) => {
   try {
     const { url } = req.body;
-    
-    if (!url || !url.includes('booking.com')) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Invalid Booking.com URL' 
-      });
-    }
+    if (!url || !url.includes('booking.com')) return res.status(400).json({ success: false, message: 'Invalid Booking.com URL' });
 
-    // Fetch HTML page
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      timeout: 10000,
-    });
+    // Static fetch
+    let html = '';
+    try {
+      const r = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US' }, timeout: 10000 });
+      html = r.data || '';
+    } catch (e) { html = ''; }
 
-    const $ = cheerio.load(response.data);
-    
-    // Extract hotel name - use title tag as fallback
-    let hotelName = $('h2[data-testid="title"]').text().trim();
-    if (!hotelName) hotelName = $('h2.pp-header__title').text().trim();
-    if (!hotelName) hotelName = $('h1').first().text().trim();
-    if (!hotelName) {
-      // Extract from page title
-      const title = $('title').text().trim();
-      if (title) {
-        hotelName = title.split(',')[0].trim();
-      }
-    }
-    
-    // Extract city and country from meta keywords or title
+    const $ = cheerio.load(html || '');
+    let hotelName = '';
     let city = '';
     let country = '';
     let address = '';
-    
-    // Try to extract from page title (most reliable)
-    const pageTitle = $('title').text().trim();
-    if (pageTitle) {
-      // Format: "Hotel Name, City (extra info)" or "Hotel Name, City, Country"
-      const titleParts = pageTitle.split(',').map(p => p.trim());
-      if (titleParts.length >= 2) {
-        city = titleParts[1].replace(/\([^)]*\)/g, '').trim(); // Remove parentheses
-      }
-    }
-    
-    // Try meta keywords for country
-    const keywords = $('meta[name="keywords"]').attr('content');
-    if (keywords) {
-      const parts = keywords.split(',').map(p => p.trim());
-      // Format: "Hotel Name, City, Country, District, Region"
-      if (parts.length >= 3) {
-        if (!city) city = parts[1]; // Fallback for city
-        country = parts[2]; // Third element is usually country
-      }
-    }
-    
-    // Fallback to location tooltip
-    if (!city) {
-      const locationText = $('span[data-node_tt_id="location_score_tooltip"]').text().trim();
-      if (locationText) {
-        const parts = locationText.split(',').map(p => p.trim());
-        if (parts.length >= 2) {
-          city = parts[0];
-          country = parts[parts.length - 1];
-        }
-      }
-    }
-    
-    // Try breadcrumb as last resort
-    if (!city) {
-      const breadcrumb = $('.bui-breadcrumb__text').last().text().trim();
-      if (breadcrumb) city = breadcrumb;
-    }
-    
-    // Extract address
-    address = $('span[data-node_tt_id="location_address"]').text().trim();
-    if (!address) address = $('.hp_address_subtitle').text().trim();
-    
-    // Extract price (may not always be available)
     let price: number | null = null;
     let currency = 'PLN';
-    
-    const priceText = $('span[data-testid="price-and-discounted-price"]').text().trim();
-    if (priceText) {
-      const priceMatch = priceText.match(/[\d\s,]+/);
-      if (priceMatch) {
-        price = parseFloat(priceMatch[0].replace(/\s/g, '').replace(',', '.'));
-      }
-      if (priceText.includes('zł')) currency = 'PLN';
-      else if (priceText.includes('€')) currency = 'EUR';
-      else if (priceText.includes('$')) currency = 'USD';
-    }
-    
-    // Parse URL for dates (fallback)
-    const urlObj = new URL(url);
-    const checkin = urlObj.searchParams.get('checkin') || '';
-    const checkout = urlObj.searchParams.get('checkout') || '';
 
-    // Return scraped data
-    res.json({
-      success: true,
-      data: toCamelCase({
-        accommodationName: hotelName || '',
-        accommodationUrl: url,
-        city: city || '',
-        country: country || '',
-        address: address || '',
-        arrivalDate: checkin,
-        departureDate: checkout,
-        accommodationPrice: price,
-        accommodationCurrency: currency
-      }),
-      message: hotelName 
-        ? `Hotel details extracted: ${hotelName}${city ? ' in ' + city : ''}${price ? `, ${price} ${currency}` : ''}`
-        : 'Could not extract all details. Please verify and fill manually.'
-    });
-    
+    // JSON-LD
+    try {
+      $('script[type="application/ld+json"]').each((i, el) => {
+        try {
+          const txt = $(el).contents().text();
+          if (!txt) return;
+          const parsed = JSON.parse(txt);
+          const items = Array.isArray(parsed) ? parsed : [parsed];
+          for (const item of items) {
+            if (!item || typeof item !== 'object') continue;
+            const types = (item['@type'] && (Array.isArray(item['@type']) ? item['@type'] : [item['@type']])) || [];
+            if (types.includes('Hotel') || types.includes('LodgingBusiness') || types.includes('Apartment') || types.includes('Place')) {
+              if (item.name) hotelName = String(item.name).trim();
+              if (item.address) {
+                const adr = item.address;
+                if (typeof adr === 'string') address = adr;
+                else if (typeof adr === 'object') {
+                  const streetAddr = adr.streetAddress || '';
+                  const locality = adr.addressLocality || adr.city || '';
+                  const countryName = adr.addressCountry || adr.country || '';
+                  const postal = adr.postalCode || adr.postcode || '';
+                  address = [streetAddr, locality, postal, countryName].filter(Boolean).join(', ');
+                  if (!city && locality) city = locality;
+                  if (!country && countryName) country = countryName;
+                }
+              }
+              if (item.offers) {
+                const offers: any = item.offers;
+                const p = offers.price || (offers.priceSpecification && offers.priceSpecification.price) || null;
+                const c = offers.priceCurrency || offers.currency || '';
+                if (p) { const pn = Number(p); if (!Number.isNaN(pn)) price = pn; if (c) currency = c; }
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+      });
+    } catch (e) { /* ignore */ }
+
+    // script blob scan
+    try {
+      $('script').each((i, el) => {
+        try {
+          const txt = $(el).html() || '';
+          if (!txt || txt.length < 40) return;
+          if (txt.includes('{') && txt.includes('}')) {
+            const m = txt.match(/\{[\s\S]*\}/);
+            if (!m) return;
+            let parsed: any = null;
+            try { parsed = JSON.parse(m[0]); } catch (e) {
+              try { parsed = JSON.parse(m[0].replace(/(['"])??([a-zA-Z0-9_]+)\1?:/g, '"$2":')); } catch (ee) { return; }
+            }
+            const walk = (obj: any) => {
+              if (!obj || typeof obj !== 'object') return;
+              if (!address && (obj.streetAddress || obj.address || obj.address_street || obj.location)) {
+                if (obj.streetAddress) address = obj.streetAddress; else if (typeof obj.address === 'string') address = obj.address;
+              }
+              if (!city && (obj.addressLocality || obj.city || (obj.address && obj.address.city))) city = obj.addressLocality || obj.city || (obj.address && obj.address.city) || city;
+              if (!country && (obj.addressCountry || (obj.address && obj.address.country))) country = obj.addressCountry || (obj.address && obj.address.country) || country;
+              if ((price == null) && (obj.price || obj.priceValue || (obj.offers && obj.offers.price))) { const p = obj.price || obj.priceValue || (obj.offers && obj.offers.price); const pn = Number(p); if (!Number.isNaN(pn)) price = pn; }
+              if (!hotelName && (obj.name || obj.hotelName || obj.title)) hotelName = obj.name || obj.hotelName || obj.title;
+              for (const k of Object.keys(obj)) { try { walk(obj[k]); } catch (e) { /* ignore */ } }
+            };
+            walk(parsed);
+          }
+        } catch (e) { /* ignore */ }
+      });
+    } catch (e) { /* ignore */ }
+
+    // cheerio fallbacks
+    try {
+      if (!hotelName) {
+        const og = $('meta[property="og:title"]').attr('content') || $('meta[name="title"]').attr('content');
+        if (og) hotelName = String(og).split('|')[0].split('-')[0].trim();
+      }
+      if (!address) {
+        const metaDesc = $('meta[name="description"]').attr('content') || $('meta[property="og:description"]').attr('content');
+        if (metaDesc && metaDesc.length > 20) {
+          const addrMatch = metaDesc.match(/\d{2}-\d{3}[^,\n]*[,\s]*[^,\n]*/);
+          if (addrMatch) address = addrMatch[0];
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    if (!hotelName) hotelName = $('h2[data-testid="title"]').text().trim() || $('h2.pp-header__title').text().trim() || $('h1').first().text().trim() || '';
+    if (!hotelName) { const ttl = $('title').text().trim(); if (ttl) hotelName = ttl.split(',')[0].trim(); }
+
+    const ptitle = $('title').text().trim(); if (ptitle) { const parts = ptitle.split(',').map(p => p.trim()); if (parts.length >= 2) city = city || parts[1].replace(/\([^)]*\)/g, '').trim(); }
+    const keywords = $('meta[name="keywords"]').attr('content'); if (keywords) { const parts = keywords.split(',').map(p => p.trim()); if (parts.length >= 3) { city = city || parts[1]; country = country || parts[2]; } }
+    if (!city) { const loc = $('span[data-node_tt_id="location_score_tooltip"]').text().trim(); if (loc) { const ps = loc.split(',').map(p => p.trim()); if (ps.length >= 2) { city = ps[0]; country = country || ps[ps.length - 1]; } } }
+    if (!city) { const bc = $('.bui-breadcrumb__text').last().text().trim(); if (bc) city = bc; }
+
+    address = address || $('span[data-node_tt_id="location_address"]').text().trim() || $('.hp_address_subtitle').text().trim() || '';
+
+    const ptext = $('span[data-testid="price-and-discounted-price"]').text().trim();
+    if ((price == null) && ptext) { const m = ptext.match(/[\d\s,]+/); if (m) price = parseFloat(m[0].replace(/\s/g, '').replace(',', '.')); if (ptext.includes('zł')) currency = 'PLN'; else if (ptext.includes('€')) currency = 'EUR'; else if (ptext.includes('$')) currency = 'USD'; }
+
+    // parse dates
+    let checkin = ''; let checkout = '';
+    try { const urlObj = new URL(url); checkin = urlObj.searchParams.get('checkin') || ''; checkout = urlObj.searchParams.get('checkout') || ''; } catch (e) { }
+
+    // Puppeteer fallback if needed
+    if ((!hotelName || !address || price == null)) {
+      try {
+        // @ts-ignore
+        const puppeteerModule: any = require('puppeteer');
+        const puppeteer = puppeteerModule && (puppeteerModule.default || puppeteerModule);
+        if (puppeteer) {
+          const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'], headless: true });
+          const page = await browser.newPage();
+          await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+          try {
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+            // Retry evaluate a few times in case the page navigates/reloads and invalidates the execution context
+            let rendered: any = null;
+            const waitSelectors = ['script[type="application/ld+json"]', 'h2[data-testid="title"]', '.hp_address_subtitle', 'span[data-node_tt_id="location_address"]'];
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                // Wait for at least one useful selector or JSON-LD script to appear
+                await Promise.race(waitSelectors.map(s => page.waitForSelector(s, { timeout: 6000 }).catch(() => null)));
+
+                rendered = await page.evaluate(() => {
+                  const doc: any = (globalThis as any).document;
+                  const getText = (sel: string) => { const el = doc.querySelector(sel); return el ? (el.textContent || '').trim() : ''; };
+                  let hotelName = getText('h2[data-testid="title"]') || getText('h2.pp-header__title') || getText('h1') || '';
+                  let address = getText('span[data-node_tt_id="location_address"]') || getText('.hp_address_subtitle') || '';
+                  let price: any = null; let currency = '';
+                  try {
+                    const scripts: any[] = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
+                    for (const s of scripts) {
+                      try {
+                        const txt = (s as any).textContent || '';
+                        if (!txt) continue;
+                        const parsed = JSON.parse(txt);
+                        const items = Array.isArray(parsed) ? parsed : [parsed];
+                        for (const item of items) {
+                          if (!item || typeof item !== 'object') continue;
+                          if (!hotelName && item.name) hotelName = String(item.name).trim();
+                          if (!address && item.address) {
+                            const adr = item.address;
+                            if (typeof adr === 'string') address = adr; else if (typeof adr === 'object') address = (adr.streetAddress || '') + (adr.addressLocality ? ', ' + adr.addressLocality : '') + (adr.postalCode ? ', ' + adr.postalCode : '') + (adr.addressCountry ? ', ' + (adr.addressCountry.name || adr.addressCountry) : '');
+                          }
+                          if (item.offers) { const offers: any = item.offers; const p = offers.price || (offers.priceSpecification && offers.priceSpecification.price) || null; const c = offers.priceCurrency || offers.currency || ''; if (p) price = Number(p); if (c) currency = c; }
+                        }
+                      } catch (e) { }
+                    }
+                  } catch (e) { }
+                  if (price == null) {
+                    const pt = getText('span[data-testid="price-and-discounted-price"]') || getText('.bui-price-display__value') || getText('.prco-valign-middle-helper');
+                    if (pt) { const m = pt.match(/[\d\s,]+/); if (m) price = Number(m[0].replace(/\s/g, '').replace(',', '.')); if (pt.includes('zł')) currency = 'PLN'; else if (pt.includes('€')) currency = 'EUR'; else if (pt.includes('$')) currency = 'USD'; }
+                  }
+                  if (!hotelName) { const mt = doc.querySelector('meta[property="og:title"]'); if (mt && (mt as any).content) hotelName = ((mt as any).content as string).split('|')[0].split('-')[0].trim(); if (!hotelName) hotelName = ((doc.title || '') as string).split(',')[0].trim(); }
+                  return { hotelName, address, price, currency };
+                });
+
+                // If evaluate succeeded, break retry loop
+                if (rendered) break;
+              } catch (e: any) {
+                // If execution context was destroyed, try again after a short wait
+                const msg = String(e && e.message ? e.message : e);
+                if (msg.includes('Execution context was destroyed') || msg.includes('Cannot find context') || msg.includes('Target closed')) {
+                  if (attempt < 2) { await page.waitForTimeout(1000); continue; }
+                }
+                // Other errors: rethrow
+                throw e;
+              }
+            }
+
+            if (rendered) {
+              if (!hotelName && rendered.hotelName) hotelName = rendered.hotelName;
+              if ((!address || address.length === 0) && rendered.address) address = rendered.address;
+              if ((price == null) && rendered.price != null) price = rendered.price;
+              if ((!currency || currency === '') && rendered.currency) currency = rendered.currency || currency;
+            }
+          } finally {
+            try { await browser.close(); } catch (e) { /* ignore close errors */ }
+          }
+        }
+      } catch (e) { console.warn('puppeteer fallback failed or not available:', String(e)); }
+    }
+
+    const parseAddress = (addr: string) => {
+      if (!addr || !addr.trim()) return {} as any;
+      // Normalize whitespace and split into comma-separated parts, preserving order
+      const normalized = addr.replace(/\s+/g, ' ').trim();
+      const rawParts = normalized.split(',').map(p => p.trim()).filter(Boolean);
+      const parts: string[] = [];
+      const seen = new Set<string>();
+      for (const p of rawParts) {
+        if (!seen.has(p)) { seen.add(p); parts.push(p); }
+      }
+
+      let street = '';
+      let house = '';
+      let postcode = '';
+      let city = '';
+      let country = '';
+
+      const postcodeRe = /\b\d{2}-\d{3}\b|\b\d{5}\b/;
+      const streetHouseRe = /^(.*?)(?:\s+)?(\d+[A-Za-z0-9\-\/]*)$/; // street name + number at end
+
+      for (const p of parts) {
+        // 1) postcode + city like "00-855 Warszawa"
+        const pcMatch = p.match(new RegExp(`(${postcodeRe.source})\\s*(.+)`));
+        if (pcMatch) {
+          postcode = postcode || pcMatch[1];
+          if (!city) city = pcMatch[2].trim();
+          continue;
+        }
+
+        // 2) standalone postcode
+        const pc2 = p.match(postcodeRe);
+        if (pc2) {
+          postcode = postcode || pc2[0];
+          const remainder = p.replace(pc2[0], '').trim();
+          if (remainder && !city) city = remainder;
+          continue;
+        }
+
+        // 3) street + house number
+        const sh = p.match(streetHouseRe);
+        if (sh) {
+          const possibleStreet = sh[1].replace(/^ul\.?\s*/i, '').replace(/^ulica\s*/i, '').trim();
+          const possibleHouse = sh[2];
+          if (!street) street = possibleStreet;
+          if (!house && /\d/.test(possibleHouse)) house = possibleHouse.replace(/\s+/g, '/');
+          continue;
+        }
+
+        // 4) country detection (simple check)
+        const lower = p.toLowerCase();
+        if (!country && (lower.includes('polska') || lower.includes('poland') || lower.includes('republika'))) {
+          country = p;
+          continue;
+        }
+
+        // 5) otherwise treat as city if it doesn't contain digits and looks like a place name
+        if (!city && !/\d/.test(p) && p.length < 60) {
+          city = p;
+          continue;
+        }
+      }
+
+      // Fallbacks: try to extract from first part if nothing found
+      if (!street && parts.length) {
+        const m = parts[0].match(streetHouseRe);
+        if (m) { street = m[1].replace(/^ul\.?\s*/i, '').trim(); house = house || m[2]; }
+      }
+
+      if (!city) {
+        // pick last non-country, non-postcode, non-street part
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const p = parts[i];
+          if (postcodeRe.test(p)) continue;
+          if (/\d/.test(p) && streetHouseRe.test(p)) continue;
+          const low = p.toLowerCase();
+          if (low.includes('polska') || low.includes('poland') || low.includes('republika')) continue;
+          city = p; break;
+        }
+      }
+
+      // If country still missing, try last part
+      if (!country && parts.length) {
+        const last = parts[parts.length - 1];
+        const low = last.toLowerCase();
+        if (low.includes('polska') || low.includes('poland')) country = last;
+      }
+
+      return {
+        address_street: street || null,
+        address_house_number: house || null,
+        address_postcode: postcode || null,
+        address_city: city || null,
+        address_country: country || null
+      } as any;
+    };
+
+    const parsed = parseAddress(address || '');
+    console.log('scrapeBookingUrl: extracted', { hotelName, city, country, address, arrivalDate: checkin, departureDate: checkout, price, currency });
+
+    return res.json({ success: true, data: toCamelCase({ accommodationName: hotelName || '', accommodationUrl: url, city: city || '', country: country || '', address: address || '', ...parsed, arrivalDate: checkin, departureDate: checkout, accommodationPrice: price, accommodationCurrency: currency }), message: hotelName ? `Hotel details extracted: ${hotelName}${city ? ' in ' + city : ''}${price ? `, ${price} ${currency}` : ''}` : 'Could not extract all details. Please verify and fill manually.' });
   } catch (error: any) {
-    console.error('Error scraping Booking URL:', error.message);
-    res.status(500).json({ 
-      success: false,
-      message: `Failed to scrape Booking.com page: ${error.message}. Please enter details manually.` 
-    });
+    console.error('Error scraping Booking URL:', error && error.message ? error.message : String(error));
+    return res.status(500).json({ success: false, message: `Failed to scrape Booking.com page: ${error && error.message ? error.message : String(error)}. Please enter details manually.` });
   }
 };

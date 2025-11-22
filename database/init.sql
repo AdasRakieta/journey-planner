@@ -84,8 +84,29 @@ CREATE TABLE IF NOT EXISTS attractions (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     estimated_cost DECIMAL(10, 2),
+    currency VARCHAR(3),
     duration VARCHAR(50), -- e.g., "2 hours", "30 minutes"
     is_paid BOOLEAN DEFAULT FALSE
+);
+
+-- Journey shares (sharing/collaboration on journeys)
+CREATE TABLE IF NOT EXISTS journey_shares (
+    id SERIAL PRIMARY KEY,
+    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(16) NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner','editor','viewer')),
+    accepted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Journey checklist items (per-journey todo/checklist)
+CREATE TABLE IF NOT EXISTS journey_checklist (
+    id SERIAL PRIMARY KEY,
+    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    item TEXT NOT NULL,
+    is_done BOOLEAN DEFAULT FALSE,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Transport attachments table

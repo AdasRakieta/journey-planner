@@ -110,6 +110,7 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bookingUrl, setBookingUrl] = useState('');
+  const [editBookingUrl, setEditBookingUrl] = useState('');
   
   const [newJourney, setNewJourney] = useState<Partial<Journey>>({
     title: '',
@@ -999,6 +1000,9 @@ function App() {
           accommodationName: result.data.accommodationName || newStop.accommodationName,
           accommodationUrl: result.data.accommodationUrl || newStop.accommodationUrl,
           city: result.data.city || newStop.city,
+          addressStreet: result.data.addressStreet || result.data.address || newStop.addressStreet,
+          addressHouseNumber: result.data.addressHouseNumber || newStop.addressHouseNumber,
+          postalCode: result.data.addressPostcode || newStop.postalCode,
           arrivalDate: result.data.arrivalDate || newStop.arrivalDate,
           departureDate: result.data.departureDate || newStop.departureDate,
           accommodationPrice: result.data.accommodationPrice || newStop.accommodationPrice,
@@ -1017,6 +1021,66 @@ function App() {
       setBookingUrl('');
     } catch (err) {
       console.error('Failed to scrape Booking URL:', err);
+      error('Failed to parse Booking.com URL. Please enter details manually.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBookingUrlPasteEdit = async () => {
+    if (!editBookingUrl || !editBookingUrl.includes('booking.com')) {
+      warning('Please enter a valid Booking.com URL');
+      return;
+    }
+
+    if (!editingStop) return;
+
+    try {
+      setLoading(true);
+      const result = await stopService.scrapeBookingUrl(editBookingUrl);
+
+      if (result.success && result.data) {
+        // Prefer parsed address components returned by server; fall back to raw address and heuristics
+        const addressStr: string = result.data.address || '';
+        const parsedStreet = result.data.addressStreet || null;
+        const parsedHouse = result.data.addressHouseNumber || null;
+        const parsedPostcode = result.data.addressPostcode || null;
+        let extractedPostal = parsedPostcode || '';
+        let extractedHouse = parsedHouse || '';
+        if ((!parsedPostcode || !parsedHouse) && addressStr) {
+          const postalMatch = addressStr.match(/\b\d{2}-\d{3}\b|\b\d{5}\b/);
+          if (postalMatch && !extractedPostal) extractedPostal = postalMatch[0];
+          const houseMatch = addressStr.match(/(\d+[A-Za-z0-9]*(?:[\s\/-]\d+)?)?/);
+          if (houseMatch && !extractedHouse) extractedHouse = (houseMatch[0] || '').replace(/\s+/g, '/');
+        }
+
+        setEditingStop({
+          ...editingStop,
+          accommodationName: result.data.accommodationName || editingStop.accommodationName,
+          accommodationUrl: result.data.accommodationUrl || editingStop.accommodationUrl,
+          city: result.data.city || editingStop.city,
+          country: result.data.country || editingStop.country,
+          addressStreet: parsedStreet || (addressStr ? addressStr : editingStop.addressStreet),
+          addressHouseNumber: extractedHouse || editingStop.addressHouseNumber,
+          postalCode: extractedPostal || editingStop.postalCode,
+          arrivalDate: result.data.arrivalDate || editingStop.arrivalDate,
+          departureDate: result.data.departureDate || editingStop.departureDate,
+          accommodationPrice: result.data.accommodationPrice ?? editingStop.accommodationPrice,
+          accommodationCurrency: result.data.accommodationCurrency || editingStop.accommodationCurrency,
+        });
+
+        if (result.data.arrivalDate && result.data.departureDate) {
+          success('Booking details extracted! Please verify and save.');
+        } else {
+          info('Hotel details extracted. Please verify address, dates and price.');
+        }
+      } else {
+        warning(result.message || 'Could not extract all details. Please fill manually.');
+      }
+
+      setEditBookingUrl('');
+    } catch (err) {
+      console.error('Failed to scrape Booking URL (edit):', err);
       error('Failed to parse Booking.com URL. Please enter details manually.');
     } finally {
       setLoading(false);
@@ -3170,6 +3234,31 @@ function App() {
                       Locate on Map
                     </button>
                   </div>
+                </div>
+                {/* Booking.com URL Auto-fill for Edit */}
+                <div className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    📎 Quick Fill from Booking.com (Edit)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste Booking.com URL here..."
+                      value={editBookingUrl}
+                      onChange={(e) => setEditBookingUrl(e.target.value)}
+                      className="gh-input flex-1"
+                    />
+                    <button
+                      onClick={handleBookingUrlPasteEdit}
+                      disabled={loading || !editBookingUrl}
+                      className="gh-btn-primary whitespace-nowrap"
+                    >
+                      Auto-fill
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-[#636366] mt-2">
+                    💡 Paste a Booking.com link to automatically extract hotel name, location and address. The address will populate street, house number and postal code when possible.
+                  </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
