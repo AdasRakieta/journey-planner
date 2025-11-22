@@ -69,15 +69,15 @@ export const uploadAttachmentHandler = [
       if (!DB_AVAILABLE) {
         // Save metadata in JSON store
         const newAttach = await jsonStore.insert('attachments', {
-          journey_id: journeyId || null,
-          stop_id: stopId || null,
-          transport_id: transportId || null,
+          journey_id: journeyId ? Number(journeyId) : null,
+          stop_id: stopId ? Number(stopId) : null,
+          transport_id: transportId ? Number(transportId) : null,
           filename: destFilename,
           original_filename: originalFilename,
           file_path: destPath,
           file_size: req.file.size,
           mime_type: req.file.mimetype,
-          uploaded_by: (req as any).user?.id || null,
+          uploaded_by: (req as any).user?.userId || null,
           is_encrypted: true,
           iv,
           auth_tag: authTag,
@@ -99,7 +99,7 @@ export const uploadAttachmentHandler = [
         filePath: destPath,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
-        uploadedBy: (req as any).user?.id || null,
+        uploadedBy: (req as any).user?.userId || null,
         isEncrypted: true,
         iv,
         authTag
@@ -127,7 +127,7 @@ export const downloadAttachment = async (req: Request, res: Response) => {
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
 
     // Check permissions: uploader or shared users
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
       // Check journey_shares (user accepted and accepted)
@@ -135,7 +135,10 @@ export const downloadAttachment = async (req: Request, res: Response) => {
       if (!DB_AVAILABLE) {
         const shares = await jsonStore.findByField('journey_shares', 'journey_id', checkAttachment.journeyId);
         const found = shares.find((s: any) => s.shared_with_user_id === userId && s.status === 'accepted');
-        if (!found) return res.status(403).json({ message: 'Access denied' });
+          if (!found) {
+            console.warn(`Preview access denied: user ${userId} not permitted for attachment ${id} (journey ${checkAttachment.journeyId})`);
+            return res.status(403).json({ message: 'Access denied' });
+          }
       } else {
         const shareRes = await query('SELECT * FROM journey_shares WHERE journey_id = $1 AND shared_with_user_id = $2 AND status = $3', [checkAttachment.journeyId, userId, 'accepted']);
         if (!shareRes.rows.length) return res.status(403).json({ message: 'Access denied' });
@@ -168,7 +171,7 @@ export const previewAttachment = async (req: Request, res: Response) => {
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
     const check = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
 
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     if (check.uploadedBy !== userId) {
       if (!check.journeyId) return res.status(403).json({ message: 'Access denied' });
       if (!DB_AVAILABLE) {
@@ -177,7 +180,10 @@ export const previewAttachment = async (req: Request, res: Response) => {
         if (!found) return res.status(403).json({ message: 'Access denied' });
       } else {
         const sRes = await query('SELECT * FROM journey_shares WHERE journey_id = $1 AND shared_with_user_id = $2 AND status = $3', [check.journeyId, userId, 'accepted']);
-        if (!sRes.rows.length) return res.status(403).json({ message: 'Access denied' });
+        if (!sRes.rows.length) {
+          console.warn(`Preview access denied: user ${userId} not permitted for attachment ${id} (journey ${check.journeyId})`);
+          return res.status(403).json({ message: 'Access denied' });
+        }
       }
     }
 
@@ -209,7 +215,7 @@ export const deleteAttachment = async (req: Request, res: Response) => {
     }
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
 
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     // Only uploader or journey owner or manager role can delete
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
@@ -244,12 +250,36 @@ export const listAttachmentsForJourney = async (req: Request, res: Response) => 
   try {
     const journeyId = parseInt(req.params.journeyId);
     if (!DB_AVAILABLE) {
-      const attachments = await jsonStore.findByField('attachments', 'journey_id', journeyId);
-      return res.json(toCamelCase(attachments));
+      // For JSON store, gather attachments with journey_id, or transport_id/stop_id that belong to this journey
+      const transports = await jsonStore.findByField('transports', 'journey_id', journeyId);
+      const stops = await jsonStore.findByField('stops', 'journey_id', journeyId);
+      const transportIds = transports.map((t: any) => t.id);
+      const stopIds = stops.map((s: any) => s.id);
+      const allAttachments = await jsonStore.getAll('attachments');
+      const attachmentsByJourney = allAttachments.filter((a: any) => Number(a.journey_id) === journeyId);
+      const attachmentsByTransport = transportIds.length ? allAttachments.filter((a: any) => transportIds.includes(Number(a.transport_id))) : [];
+      const attachmentsByStop = stopIds.length ? allAttachments.filter((a: any) => stopIds.includes(Number(a.stop_id))) : [];
+      const all = [...attachmentsByJourney, ...attachmentsByTransport, ...attachmentsByStop];
+      // Deduplicate by id
+      const uniq = Array.from(new Map(all.map((a: any) => [a.id, a])).values());
+      // Normalize numeric ID types for JSON store (may be strings)
+      const normalized = uniq.map((a: any) => ({
+        ...a,
+        journey_id: a.journey_id != null ? Number(a.journey_id) : null,
+        transport_id: a.transport_id != null ? Number(a.transport_id) : null,
+        stop_id: a.stop_id != null ? Number(a.stop_id) : null
+      }));
+      return res.json(toCamelCase(normalized));
     }
 
-    const attachments = await Attachment.findAll({ where: { journeyId } });
-    res.json(attachments.map(a => a.toJSON()));
+    // For DB-backed store, pick attachments where journeyId === $1 OR transport belongs to journey OR stop belongs to journey
+    const rows = await query(`
+      SELECT a.* FROM attachments a
+      LEFT JOIN transports t ON a.transport_id = t.id
+      LEFT JOIN stops s ON a.stop_id = s.id
+      WHERE a.journey_id = $1 OR (t.journey_id = $1) OR (s.journey_id = $1)
+    `, [journeyId]);
+    res.json(rows.rows.map((r: any) => toCamelCase(r)));
   } catch (err) {
     console.error('List attachments', err);
     res.status(500).json({ message: 'Failed to fetch attachments' });
@@ -269,7 +299,7 @@ export const applyAttachmentToTarget = async (req: Request, res: Response) => {
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
 
     // Check permission - user must be uploader or have manage rights
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
       if (!attachment.journeyId) return res.status(403).json({ message: 'Access denied' });
@@ -285,11 +315,43 @@ export const applyAttachmentToTarget = async (req: Request, res: Response) => {
 
     // Acceptable target types: transport, stop, journey
     if (targetType === 'transport') {
-      if (!DB_AVAILABLE) attachment.transport_id = targetId;
-      else attachment.transportId = targetId;
+      // Ensure we set both transportId and journeyId so journey-based listing picks it up
+      if (!DB_AVAILABLE) {
+      attachment.transport_id = Number(targetId);
+        // Lookup transport in JSON store to find journey id
+        const transport = await jsonStore.getById('transports', targetId);
+        if (transport && transport.journey_id) attachment.journey_id = transport.journey_id;
+      } else {
+        attachment.transportId = targetId;
+        // Lookup transport to derive journey id
+        try {
+          const tr = await query('SELECT journey_id FROM transports WHERE id = $1', [targetId]);
+          if (tr && tr.rows && tr.rows.length) {
+            const journeyIdFound = tr.rows[0].journey_id;
+            attachment.journeyId = journeyIdFound;
+          }
+        } catch (e) {
+          console.warn('Failed to lookup transport for attachment apply: ', e);
+        }
+      }
     } else if (targetType === 'stop') {
-      if (!DB_AVAILABLE) attachment.stop_id = targetId;
-      else attachment.stopId = targetId;
+      // Ensure we set both stopId and journeyId so journey-based listing picks it up
+      if (!DB_AVAILABLE) {
+      attachment.stop_id = Number(targetId);
+        const stop = await jsonStore.getById('stops', targetId);
+        if (stop && stop.journey_id) attachment.journey_id = stop.journey_id;
+      } else {
+        attachment.stopId = targetId;
+        try {
+          const s = await query('SELECT journey_id FROM stops WHERE id = $1', [targetId]);
+          if (s && s.rows && s.rows.length) {
+            const journeyIdFound = s.rows[0].journey_id;
+            attachment.journeyId = journeyIdFound;
+          }
+        } catch (e) {
+          console.warn('Failed to lookup stop for attachment apply: ', e);
+        }
+      }
     } else if (targetType === 'journey') {
       if (!DB_AVAILABLE) attachment.journey_id = targetId;
       else attachment.journeyId = targetId;
@@ -303,7 +365,11 @@ export const applyAttachmentToTarget = async (req: Request, res: Response) => {
     }
     const io = req.app.get('io');
     io.emit('attachment:applied', { attachmentId: attachment.id, targetType, targetId });
-    return res.json(!DB_AVAILABLE ? toCamelCase(attachment) : attachment);
+    if (!DB_AVAILABLE) {
+      const normalized = { ...attachment, journey_id: attachment.journey_id != null ? Number(attachment.journey_id) : null, transport_id: attachment.transport_id != null ? Number(attachment.transport_id) : null, stop_id: attachment.stop_id != null ? Number(attachment.stop_id) : null };
+      return res.json(toCamelCase(normalized));
+    }
+    return res.json(attachment);
   } catch (err) {
     console.error('Apply attach error', err);
     res.status(500).json({ message: 'Failed to apply attachment' });
@@ -319,7 +385,7 @@ export const extractAttachmentData = async (req: Request, res: Response) => {
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
 
     // Permission check (uploader or shared)
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
       if (!checkAttachment.journeyId) return res.status(403).json({ message: 'Access denied' });
@@ -375,8 +441,8 @@ export const extractAttachmentData = async (req: Request, res: Response) => {
     if (assign && parsed?.flightNumber && checkAttachment.journeyId) {
       const matched = await autoAssignToTransportIfFlightMatches(checkAttachment.journeyId, parsed.flightNumber);
       if (matched) {
-        if (!DB_AVAILABLE) {
-          attachment.transport_id = matched.id;
+          if (!DB_AVAILABLE) {
+          attachment.transport_id = Number(matched.id);
           await jsonStore.updateById('attachments', attachment.id, attachment);
         } else {
           attachment.transportId = matched.id;
@@ -404,7 +470,7 @@ export const viewAttachment = async (req: Request, res: Response) => {
     if (!attachment) return res.status(404).json({ message: 'Attachment not found' });
 
     // Permission: same as download
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
       if (!checkAttachment.journeyId) return res.status(403).json({ message: 'Access denied' });
@@ -461,5 +527,6 @@ export default {
   listAttachmentsForJourney,
     applyAttachmentToTarget,
     extractAttachmentData,
-    viewAttachment
+    viewAttachment,
+    previewAttachment
 };

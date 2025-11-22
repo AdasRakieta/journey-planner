@@ -375,7 +375,12 @@ export const attachmentService = {
     const response = await fetch(`${API_URL}/attachments/${id}/view`, {
       headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
     });
-    if (!response.ok) throw new Error('Failed to view attachment');
+    if (!response.ok) {
+      // Try to parse server error message
+      let errMsg = 'Failed to view attachment';
+      try { const errJson = await response.json(); errMsg = errJson.message || errJson.error || errMsg; } catch (e) {}
+      throw new Error(errMsg);
+    }
     const data = await response.json();
     if (data.type === 'pdf' && data.url) {
       // fetch the protected PDF via an authorized request and return a blob URL

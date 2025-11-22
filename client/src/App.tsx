@@ -99,6 +99,8 @@ function App() {
   }, [previewUrl]);
   const [extractModalOpen, setExtractModalOpen] = useState(false);
   const [extractResult, setExtractResult] = useState<any | null>(null);
+  const [openStopAttachments, setOpenStopAttachments] = useState<Record<number, boolean>>({});
+  const [openTransportAttachments, setOpenTransportAttachments] = useState<Record<number, boolean>>({});
   const bookingFileRef = useRef<HTMLInputElement | null>(null);
   const transportFileRef = useRef<HTMLInputElement | null>(null);
   const allowedPreviewTypes = '.pdf,.doc,.docx';
@@ -230,6 +232,23 @@ function App() {
     void loadAttachments();
     return () => { mounted = false; };
   }, [selectedJourney?.id]);
+
+  const toggleStopAttachments = (stopId: number) => setOpenStopAttachments(prev => ({ ...prev, [stopId]: !prev[stopId] }));
+  const toggleTransportAttachments = (transportId: number) => setOpenTransportAttachments(prev => ({ ...prev, [transportId]: !prev[transportId] }));
+
+  const renderAttachmentRow = (att: any) => (
+    <div key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+      <div className="min-w-0 mr-2">
+        <div className="font-medium text-gray-900 dark:text-[#ffffff] truncate">{att.originalFilename}</div>
+        <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round((att.fileSize || att.file_size || 0) / 1024)} KB</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
+        <button onClick={async () => { try { await attachmentService.downloadAttachment(att.id, att.originalFilename); } catch (e) { error('Failed to download attachment'); } }} title="Download" className="text-gray-500 hover:text-gray-700"><DownloadCloud className="w-5 h-5"/></button>
+        <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete attachment?' }))) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} title="Delete" className="text-red-600 hover:text-red-700"><Trash2 className="w-5 h-5"/></button>
+      </div>
+    </div>
+  );
 
   const getRate = (from: string, to: string): number | null => {
     try {
@@ -1106,6 +1125,18 @@ function App() {
       };
       setSelectedJourney(updatedJourney);
       setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+
+      // If there was a recently uploaded attachment, associate it with the newly created stop (if any)
+      if (uploadingAttachment && uploadingAttachment.id) {
+        try {
+          const applied = await attachmentService.applyAttachmentToTarget(uploadingAttachment.id, 'stop', createdStop.id);
+          setAttachments(prev => [applied, ...(prev || [])]);
+          setUploadingAttachment(null);
+          setPendingFile(null);
+        } catch (e) {
+          console.warn('Failed to associate uploaded attachment with stop', e);
+        }
+      }
       
       setNewStop({
         city: '',
@@ -1482,6 +1513,17 @@ function App() {
         trainNumber: '',
       });
       setShowTransportForm(false);
+      // If an attachment was uploaded before creating transport, associate it now
+      if (uploadingAttachment && uploadingAttachment.id) {
+        try {
+          const applied = await attachmentService.applyAttachmentToTarget(uploadingAttachment.id, 'transport', createdTransport.id);
+          setAttachments(prev => [applied, ...(prev || [])]);
+          setUploadingAttachment(null);
+          setPendingFile(null);
+        } catch (e) {
+          console.warn('Failed to associate uploaded attachment with transport', e);
+        }
+      }
       success('Transport added successfully!');
     } catch (err) {
       console.error('Failed to add transport:', err);
@@ -1724,40 +1766,40 @@ function App() {
                 ) : (
                   <Menu className="w-6 h-6 text-gray-900 dark:text-[#ffffff]" />
                 )}
-                {previewOpen && (
-                  <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
-                    <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
-                      <div className="p-4">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-xl font-bold">Preview: {previewTitle}</h2>
-                          <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
-                        </div>
-                        <div className="mt-4">
-                          {previewUrl ? (
-                            <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
-                          ) : previewHtml ? (
-                            <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                          ) : (
-                            <div className="text-sm text-gray-500">No preview available</div>
-                          )}
-                        </div>
+              {previewOpen && (
+                <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
+                  <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold">Preview: {previewTitle}</h2>
+                        <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                      </div>
+                      <div className="mt-4">
+                        {previewUrl ? (
+                          <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
+                        ) : previewHtml ? (
+                          <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                        ) : (
+                          <div className="text-sm text-gray-500">No preview available</div>
+                        )}
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {extractModalOpen && (
-                  <div className="gh-modal-overlay" onClick={() => setExtractModalOpen(false)}>
-                    <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
-                      <div className="p-6">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-xl font-bold">Extracted data</h2>
-                          <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
-                        </div>
-                        <div className="mt-4 space-y-3">
-                          {(!extractResult || (!extractResult.flightNumber && !extractResult.price)) && (
-                            <div className="text-sm text-gray-500">No data found in attachment.</div>
-                          )}
+              {extractModalOpen && (
+                <div className="gh-modal-overlay" onClick={() => setExtractModalOpen(false)}>
+                  <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-6">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold">Extracted data</h2>
+                        <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {(!extractResult || (!extractResult.flightNumber && !extractResult.price)) && (
+                          <div className="text-sm text-gray-500">No data found in attachment.</div>
+                        )}
                           {extractResult?.flightNumber && (
                             <div className="flex items-center justify-between">
                               <div>Flight number: <strong>{extractResult.flightNumber}</strong></div>
@@ -2192,9 +2234,9 @@ function App() {
                     <h4 className="text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Attachments</h4>
                     <ul className="space-y-2">
                       {attachments.map(att => (
-                        <li key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-[#ffffff]">{att.originalFilename}</div>
+                        <li key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+                          <div className="min-w-0 mr-2">
+                            <div className="font-medium text-gray-900 dark:text-[#ffffff] truncate">{att.originalFilename}</div>
                             <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round(att.fileSize / 1024)} KB</div>
                             {att.parsedJson?.flightNumber && (
                               <div className="text-xs text-gray-500 dark:text-[#98989d]">Flight: <strong>{att.parsedJson.flightNumber}</strong></div>
@@ -2202,8 +2244,8 @@ function App() {
                           </div>
                           <div className="flex items-center gap-2">
                             <button onClick={async () => {
-                              try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); }
-                            }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5"/></button>
+                              try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); }
+                            }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
                             <button onClick={async () => {
                               try {
                                 await attachmentService.downloadAttachment(att.id, att.originalFilename);
@@ -2347,6 +2389,27 @@ function App() {
                                     ><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </div>
+                              {/* Transport attachments toggle and list */}
+                              {attachments && (
+                                (() => {
+                                  const attForTransport = attachments.filter(a => Number(a.transportId ?? a.transport_id ?? a.transport) === (transport.id ?? null));
+                                  return (
+                                    <div className="mt-3">
+                                      <button onClick={() => toggleTransportAttachments(transport.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
+                                        <span className="text-xs">
+                                          {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                        </span>
+                                        <span>{attForTransport.length} Attachment{attForTransport.length !== 1 ? 's' : ''}</span>
+                                      </button>
+                                      {openTransportAttachments[transport.id!] && attForTransport.length > 0 && (
+                                        <div className="mt-2 space-y-2">
+                                          {attForTransport.map((att: any) => renderAttachmentRow(att))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()
+                              )}
                                 <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} - {formatDateForDisplay(stop.departureDate)}</p>
 
                                 {stop.accommodationName && (
@@ -2398,6 +2461,27 @@ function App() {
                                       </button>
                                     </div>
                                   </div>
+                                )}
+                                {/* Stop attachments toggle and list */}
+                                {attachments && (
+                                  (() => {
+                                    const attForStop = attachments.filter(a => Number(a.stopId ?? a.stop_id ?? a.stop) === (stop.id ?? null));
+                                    return (
+                                      <div className="mt-3">
+                                        <button onClick={() => toggleStopAttachments(stop.id)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
+                                          <span className="text-xs">
+                                            {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                          </span>
+                                          <span>{attForStop.length} Attachment{attForStop.length !== 1 ? 's' : ''}</span>
+                                        </button>
+                                        {openStopAttachments[stop.id!] && attForStop.length > 0 && (
+                                          <div className="mt-2 space-y-2">
+                                            {attForStop.map((att: any) => renderAttachmentRow(att))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()
                                 )}
                                 {!stop.attractions || stop.attractions.length === 0 ? (
                                   <div className="mt-2">
@@ -3000,7 +3084,7 @@ function App() {
                   <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     📎 Quick Fill from Booking.com
                   </label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-4">
                     <input
                       type="text"
                       placeholder="Paste Booking.com URL here..."
@@ -3008,7 +3092,7 @@ function App() {
                       onChange={(e) => setBookingUrl(e.target.value)}
                       className="gh-input flex-1"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-4 items-center">
                       <input
                         type="file"
                         onChange={(e) => {
@@ -3021,7 +3105,12 @@ function App() {
                         className="hidden"
                         accept={allowedFileTypes}
                       />
-                      <button onClick={() => bookingFileRef.current?.click()} className="gh-btn">Choose file</button>
+
+                      <div onClick={() => bookingFileRef.current?.click()} className="w-3/4 cursor-pointer bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a] flex items-center justify-between">
+                        <span className={pendingFile ? 'text-sm text-white' : 'text-sm text-gray-500'}>{pendingFile ? `${pendingFile.name} • ${Math.round(pendingFile.size / 1024)} KB` : 'Choose file...'}</span>
+                        <span className="text-sm text-gray-400">📎</span>
+                      </div>
+
                       <button
                         onClick={async () => {
                           if (!pendingFile) { error('No file selected'); return; }
@@ -3039,24 +3128,25 @@ function App() {
                             error('Upload failed');
                           } finally { setLoading(false); }
                         }}
-                        className="gh-btn-primary bg-green-500 hover:bg-green-600"
+                        className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600 flex items-center justify-center"
                       >Add</button>
                     </div>
                     {pendingFile && (
-                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
-                        <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+                        <div className="text-sm text-white truncate">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
                               setPendingFile(null);
                               setUploadingAttachment(null);
                             }}
-                            className="text-sm text-white hover:underline"
-                          >Cancel</button>
+                            className="text-gray-500 hover:text-gray-700"
+                            title="Cancel"
+                          ><X className="w-4 h-4" /></button>
                           {uploadingAttachment && (
                             <>
-                              <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
-                              <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                              <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
+                              <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
                             </>
                           )}
                         </div>
@@ -3561,13 +3651,13 @@ function App() {
                     Ticket URL/Attachment
                     <span className="text-xs text-gray-500 dark:text-[#98989d] ml-2">(Flight, train, or bus ticket link)</span>
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-4">
                     <input
                       type="url"
                       placeholder="https://ryanair.com/... or Booking.com link"
                       value={newTransport.bookingUrl}
                       onChange={(e) => setNewTransport({ ...newTransport, bookingUrl: e.target.value })}
-                      className="gh-input flex-1"
+                      className="gh-input flex-1 h-12"
                     />
                     <button
                       type="button"
@@ -3595,7 +3685,7 @@ function App() {
                           setLoading(false);
                         }
                       }}
-                      className="gh-btn-secondary px-4"
+                      className="gh-btn-secondary px-4 h-12"
                       disabled={loading || !newTransport.bookingUrl}
                     >
                       {loading ? '🔍' : '🎫 Auto-fill'}
@@ -3774,9 +3864,9 @@ function App() {
                     placeholder="https://..."
                     value={editingTransport.bookingUrl || ''}
                     onChange={(e) => setEditingTransport({ ...editingTransport, bookingUrl: e.target.value })}
-                    className="gh-input"
+                    className="gh-input h-12"
                   />
-                  <div className="flex gap-2">
+                  <div className="flex gap-4 items-center mt-4">
                     <input
                       type="file"
                       onChange={(e) => {
@@ -3789,7 +3879,12 @@ function App() {
                       className="hidden"
                       accept={allowedFileTypes}
                     />
-                    <button onClick={() => transportFileRef.current?.click()} className="gh-btn">Choose file</button>
+
+                    <div onClick={() => transportFileRef.current?.click()} className="w-3/4 cursor-pointer bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a] flex items-center justify-between">
+                      <span className={pendingFile ? 'text-sm text-white' : 'text-sm text-gray-500'}>{pendingFile ? `${pendingFile.name} • ${Math.round(pendingFile.size / 1024)} KB` : 'Choose file...'}</span>
+                      <span className="text-sm text-gray-400">📎</span>
+                    </div>
+
                     <button
                       onClick={async () => {
                         if (!pendingFile) { error('No file selected'); return; }
@@ -3798,6 +3893,7 @@ function App() {
                           const fd = new FormData();
                           fd.append('file', pendingFile);
                           fd.append('journeyId', String(selectedJourney?.id));
+                          if (editingTransport?.id) fd.append('transportId', String(editingTransport.id));
                           const resp = await attachmentService.uploadAttachment(fd);
                           success('Attachment uploaded');
                           if (resp?.attachment) setAttachments(prev => [resp.attachment, ...(prev || [])]);
@@ -3807,25 +3903,26 @@ function App() {
                           error('Upload failed');
                         } finally { setLoading(false); }
                       }}
-                      className="gh-btn-primary bg-green-500 hover:bg-green-600 mt-2"
+                      className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600"
                     >Add</button>
                   </div>
                     {uploadingAttachment ? (
-                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
-                        <div className="text-sm text-white">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+                        <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
                         <div className="flex items-center gap-2">
-                          <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e) { error('Failed to preview'); } }} className="text-sm text-white hover:underline">Preview</button>
-                          <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} className="text-sm text-red-600 hover:underline">Delete</button>
+                          <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
+                          <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
                         </div>
                       </div>
                     ) : pendingFile && (
-                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
                         <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
-                            className="text-sm text-white hover:underline"
-                          >Cancel</button>
+                            className="text-gray-500 hover:text-gray-700"
+                            title="Cancel"
+                          ><X className="w-4 h-4" /></button>
                         </div>
                       </div>
                     )}
