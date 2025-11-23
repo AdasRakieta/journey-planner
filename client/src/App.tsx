@@ -2406,17 +2406,17 @@ function App() {
                                     if (!attForStop || attForStop.length === 0) return null;
                                     return (
                                       <div className="mt-3">
-                                        <button onClick={() => toggleStopAttachments(stop.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
+                                        <button onClick={() => toggleStopAttachments(stop.id!)} className="group p-1 rounded flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]" aria-expanded={!!openStopAttachments[stop.id!]}>
                                           <span className="text-xs">
-                                            {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                            {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
                                           </span>
                                           <span>{attForStop.length} Attachment{attForStop.length !== 1 ? 's' : ''}</span>
                                         </button>
-                                        {openStopAttachments[stop.id!] && attForStop.length > 0 && (
-                                          <div className="mt-2 space-y-2">
+                                        <div className={`mt-2 transition-collapse overflow-hidden ${openStopAttachments[stop.id!] ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!openStopAttachments[stop.id!]}>
+                                          <div className="space-y-2">
                                             {attForStop.map((att: any) => renderAttachmentRow(att))}
                                           </div>
-                                        )}
+                                        </div>
                                       </div>
                                     );
                                   })()
@@ -2535,17 +2535,17 @@ function App() {
                                     if (!attForTransport || attForTransport.length === 0) return null;
                                     return (
                                       <div className="mt-3">
-                                        <button onClick={() => toggleTransportAttachments(transport.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
+                                        <button onClick={() => toggleTransportAttachments(transport.id!)} className="group p-1 rounded flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]" aria-expanded={!!openTransportAttachments[transport.id!]}>
                                           <span className="text-xs">
-                                            {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                            {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
                                           </span>
                                           <span>{attForTransport.length} Attachment{attForTransport.length !== 1 ? 's' : ''}</span>
                                         </button>
-                                        {openTransportAttachments[transport.id!] && attForTransport.length > 0 && (
-                                          <div className="mt-2 space-y-2">
+                                        <div className={`mt-2 transition-collapse overflow-hidden ${openTransportAttachments[transport.id!] ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!openTransportAttachments[transport.id!]}>
+                                          <div className="space-y-2">
                                             {attForTransport.map((att: any) => renderAttachmentRow(att))}
                                           </div>
-                                        )}
+                                        </div>
                                       </div>
                                     );
                                   })()
