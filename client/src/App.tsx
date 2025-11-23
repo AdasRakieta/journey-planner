@@ -246,6 +246,59 @@ function App() {
         <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
         <button onClick={async () => { try { await attachmentService.downloadAttachment(att.id, att.originalFilename); } catch (e) { error('Failed to download attachment'); } }} title="Download" className="text-gray-500 hover:text-gray-700"><DownloadCloud className="w-5 h-5"/></button>
         <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete attachment?' }))) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} title="Delete" className="text-red-600 hover:text-red-700"><Trash2 className="w-5 h-5"/></button>
+
+        {/* Extract data button - will call backend extract and open extract modal; when an item is being edited apply parsed fields */}
+        <button onClick={async () => {
+          try {
+            const shouldAssign = false;
+            const resp = await attachmentService.extractAttachmentData(att.id, shouldAssign);
+            const parsed = resp?.parsed || resp;
+            setExtractResult(parsed);
+            setExtractModalOpen(true);
+
+            // If editing a stop, apply likely stop fields defensively
+            if (editingStop) {
+              const parsedAddress = parsed?.address || parsed?.addressStreet || '';
+              const parsedPostal = parsed?.addressPostcode || parsed?.postalCode || '';
+              const parsedHouse = parsed?.addressHouseNumber || '';
+              setEditingStop(prev => prev ? ({
+                ...prev,
+                accommodationName: parsed?.accommodationName || parsed?.hotelName || prev.accommodationName,
+                accommodationUrl: parsed?.accommodationUrl || prev.accommodationUrl,
+                city: parsed?.city || prev.city,
+                country: parsed?.country || prev.country,
+                addressStreet: parsed?.addressStreet || (parsedAddress ? parsedAddress : prev.addressStreet),
+                addressHouseNumber: parsedHouse || prev.addressHouseNumber,
+                postalCode: parsedPostal || prev.postalCode,
+                arrivalDate: parsed?.arrivalDate || prev.arrivalDate,
+                departureDate: parsed?.departureDate || prev.departureDate,
+                accommodationPrice: parsed?.accommodationPrice ?? parsed?.price?.amount ?? prev.accommodationPrice,
+                accommodationCurrency: parsed?.accommodationCurrency || parsed?.price?.currency || prev.accommodationCurrency,
+              }) : prev);
+              success('Extracted data applied to editing stop (please verify)');
+            }
+
+            // If editing a transport, apply likely transport fields defensively
+            if (editingTransport) {
+              setEditingTransport(prev => prev ? ({
+                ...prev,
+                flightNumber: parsed?.flightNumber || parsed?.pnr || prev.flightNumber,
+                trainNumber: parsed?.trainNumber || prev.trainNumber,
+                price: parsed?.price?.amount ?? parsed?.priceAmount ?? prev.price,
+                currency: parsed?.price?.currency || parsed?.priceCurrency || prev.currency,
+                fromLocation: parsed?.from || parsed?.fromLocation || prev.fromLocation,
+                toLocation: parsed?.to || parsed?.toLocation || prev.toLocation,
+                departureDate: parsed?.departureDate || prev.departureDate,
+                arrivalDate: parsed?.arrivalDate || prev.arrivalDate,
+              }) : prev);
+              success('Extracted data applied to editing transport (please verify)');
+            }
+
+          } catch (e) {
+            console.error(e);
+            error('Failed to extract data from attachment');
+          }
+        }} title="Extract data" className="text-gray-500 hover:text-gray-700"><FileText className="w-5 h-5"/></button>
       </div>
     </div>
   );
@@ -1798,32 +1851,118 @@ function App() {
                         <h2 className="text-xl font-bold text-white">Extracted data</h2>
                         <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
                       </div>
+
                       <div className="mt-4 space-y-3">
-                        {(!extractResult || (!extractResult.flightNumber && !extractResult.price)) && (
+                        {!extractResult && (
                           <div className="text-sm text-gray-500">No data found in attachment.</div>
                         )}
-                          {extractResult?.flightNumber && (
-                            <div className="flex items-center justify-between">
-                              <div>Flight number: <strong>{extractResult.flightNumber}</strong></div>
-                              <div className="flex items-center gap-2">
-                                <button className="gh-btn" onClick={() => { setNewTransport(prev => ({ ...prev, flightNumber: extractResult.flightNumber })); success('Flight number applied to new transport'); }}>Apply to new transport</button>
-                                <button className="gh-btn" onClick={() => { setEditingTransport(prev => prev ? ({ ...prev, flightNumber: extractResult.flightNumber }) : prev); success('Flight number applied to editing transport'); }}>Apply to editing transport</button>
+
+                        {/* Build a normalized list of suggested fields to verify */}
+                        {extractResult && (() => {
+                          const fields: Array<{ key: string; label: string; value: any }> = [];
+                          const p: any = extractResult;
+                          if (p.flightNumber) fields.push({ key: 'flightNumber', label: 'Flight number', value: p.flightNumber });
+                          if (p.trainNumber) fields.push({ key: 'trainNumber', label: 'Train number', value: p.trainNumber });
+                          if (p.price) fields.push({ key: 'price', label: 'Price', value: p.price });
+                          if (p.accommodationName || p.hotelName) fields.push({ key: 'accommodationName', label: 'Accommodation', value: p.accommodationName || p.hotelName });
+                          if (p.city) fields.push({ key: 'city', label: 'City', value: p.city });
+                          if (p.country) fields.push({ key: 'country', label: 'Country', value: p.country });
+                          if (p.address || p.addressStreet) fields.push({ key: 'address', label: 'Address', value: p.address || p.addressStreet });
+                          if (p.addressHouseNumber) fields.push({ key: 'addressHouseNumber', label: 'House / Number', value: p.addressHouseNumber });
+                          if (p.postalCode || p.addressPostcode) fields.push({ key: 'postalCode', label: 'Postal code', value: p.postalCode || p.addressPostcode });
+                          if (p.arrivalDate) fields.push({ key: 'arrivalDate', label: 'Arrival date', value: p.arrivalDate });
+                          if (p.departureDate) fields.push({ key: 'departureDate', label: 'Departure date', value: p.departureDate });
+                          if (p.from) fields.push({ key: 'from', label: 'From', value: p.from });
+                          if (p.to) fields.push({ key: 'to', label: 'To', value: p.to });
+
+                          if (!fields.length) return <div className="text-sm text-gray-500">No extractable fields detected.</div>;
+
+                          return fields.map(f => (
+                            <div key={f.key} className="bg-white dark:bg-[#151517] rounded-lg p-3 border border-gray-200 dark:border-[#2b2b2d] flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-black dark:text-white truncate">{f.label}</div>
+                                <div className="text-xs text-gray-600 dark:text-white/60 truncate">{typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}</div>
+                              </div>
+                              <div className="flex items-center gap-2 ml-4">
+                                <button
+                                  title="Apply"
+                                  onClick={() => {
+                                    try {
+                                      const key = f.key;
+                                      // Apply to editing/new stop when relevant
+                                      if (editingStop) {
+                                        setEditingStop(prev => prev ? ({
+                                          ...prev,
+                                          accommodationName: key === 'accommodationName' ? f.value : prev.accommodationName,
+                                          city: key === 'city' ? f.value : prev.city,
+                                          country: key === 'country' ? f.value : prev.country,
+                                          addressStreet: key === 'address' ? f.value : prev.addressStreet,
+                                          addressHouseNumber: key === 'addressHouseNumber' ? f.value : prev.addressHouseNumber,
+                                          postalCode: key === 'postalCode' ? f.value : prev.postalCode,
+                                          arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
+                                          departureDate: key === 'departureDate' ? f.value : prev.departureDate,
+                                          accommodationPrice: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.accommodationPrice,
+                                          accommodationCurrency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.accommodationCurrency,
+                                        }) : prev);
+                                        success('Applied to editing stop. Please verify.');
+                                      }
+                                      if (editingTransport) {
+                                        setEditingTransport(prev => prev ? ({
+                                          ...prev,
+                                          flightNumber: key === 'flightNumber' ? f.value : prev.flightNumber,
+                                          trainNumber: key === 'trainNumber' ? f.value : prev.trainNumber,
+                                          price: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.price,
+                                          currency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.currency,
+                                          fromLocation: key === 'from' ? f.value : prev.fromLocation,
+                                          toLocation: key === 'to' ? f.value : prev.toLocation,
+                                          departureDate: key === 'departureDate' ? f.value : prev.departureDate,
+                                          arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
+                                        }) : prev);
+                                        success('Applied to editing transport. Please verify.');
+                                      }
+                                      // Also apply to new items if present
+                                      if (!editingStop && !editingTransport) {
+                                        // If user is creating a new transport and newTransport exists
+                                        try { setNewTransport(prev => ({ ...prev, ...(f.key === 'flightNumber' ? { flightNumber: f.value } : {}), ...(f.key === 'price' && typeof f.value === 'object' ? { price: f.value.amount, currency: f.value.currency } : {}) })); } catch (e) {}
+                                        try { setNewStop(prev => ({ ...prev, ...(f.key === 'accommodationName' ? { accommodationName: f.value } : {}), ...(f.key === 'city' ? { city: f.value } : {}) })); } catch (e) {}
+                                        success('Applied to new item (if present). Please verify.');
+                                      }
+                                    } catch (e) {
+                                      console.error(e);
+                                      error('Failed to apply field');
+                                    }
+                                  }}
+                                  className="p-2 rounded-md bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors"
+                                >
+                                  <CheckCircle2 className="w-5 h-5" />
+                                </button>
+
+                                <button
+                                  title="Reject"
+                                  onClick={() => {
+                                    // Remove this field from extractResult so user can dismiss it
+                                    try {
+                                      const copy = { ...extractResult };
+                                      delete copy[f.key];
+                                      setExtractResult(copy);
+                                      success('Suggestion dismissed');
+                                    } catch (e) {
+                                      console.error(e);
+                                      error('Failed to dismiss');
+                                    }
+                                  }}
+                                  className="p-2 rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
                               </div>
                             </div>
-                          )}
-                          {extractResult?.price && (
-                            <div className="flex items-center justify-between">
-                              <div>Price: <strong>{extractResult.price.amount} {extractResult.price.currency || ''}</strong></div>
-                              <div className="flex items-center gap-2">
-                                <button className="gh-btn" onClick={() => { setNewTransport(prev => ({ ...prev, price: extractResult.price.amount, currency: extractResult.price.currency || prev.currency })); success('Price applied to new transport'); }}>Apply to new transport</button>
-                                <button className="gh-btn" onClick={() => { setEditingTransport(prev => prev ? ({ ...prev, price: extractResult.price.amount, currency: extractResult.price.currency || prev.currency }) : prev); success('Price applied to editing transport'); }}>Apply to editing transport</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex justify-end mt-6">
-                          <button onClick={() => setExtractModalOpen(false)} className="gh-btn-secondary">Close</button>
-                        </div>
+                          ));
+                        })()}
+                      </div>
+
+                      <div className="flex justify-end mt-6">
+                        <button onClick={() => setExtractModalOpen(false)} className="gh-btn-secondary">Close</button>
                       </div>
                     </div>
                   </div>
