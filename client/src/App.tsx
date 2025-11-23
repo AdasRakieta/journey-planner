@@ -2261,8 +2261,7 @@ function App() {
                     </div>
                   </div>
 
-                  {checklistOpen && (
-                    <div className="space-y-2">
+                  <div className={`space-y-2 transition-collapse overflow-hidden ${checklistOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!checklistOpen}>
                       {(selectedJourney?.checklist || []).length === 0 ? (
                         <p className="text-sm text-gray-600 dark:text-[#98989d]">No checklist items yet.</p>
                       ) : (
@@ -2301,7 +2300,6 @@ function App() {
                         ))
                       )}
                     </div>
-                  )}
                 </div>
 
                 {/* Stops */}
@@ -2327,8 +2325,7 @@ function App() {
                       Add Stop
                     </button>
                   </div>
-                  {stopsOpen && (
-                    <div className="space-y-3">
+                  <div className={`space-y-3 transition-collapse overflow-hidden ${stopsOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!stopsOpen}>
                       { (selectedJourney?.stops || []).length > 0 ? (
                         (selectedJourney?.stops || []).map((stop, index) => (
                           <div key={stop.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
@@ -2444,7 +2441,6 @@ function App() {
                         <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">No stops yet. Click on the map to add your first stop!</p>
                       )}
                     </div>
-                  )}
 
                 {/* Transportation */}
                 <div className="mt-6">
