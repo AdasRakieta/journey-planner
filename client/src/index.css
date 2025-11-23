@@ -323,3 +323,22 @@
 .dark .prose, .dark .prose * {
   color: #fff !important;
 }
+
+/* Smooth collapse/expand helper for lists (max-height + opacity + transform) */
+.transition-collapse {
+  transition: max-height 280ms cubic-bezier(.4,0,.2,1), opacity 220ms ease, transform 220ms ease;
+}
+.transition-collapse.overflow-hidden {
+  overflow: hidden;
+}
+.collapse-hidden {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(-4px);
+}
+.collapse-visible {
+  /* large max-height to accommodate content; use a value that exceeds expected content height */
+  max-height: 2000px !important;
+  opacity: 1 !important;
+  transform: translateY(0);
+}

@@ -2469,8 +2469,7 @@ function App() {
                       Add Transport
                     </button>
                   </div>
-                  {transportsOpen && (
-                    <div className="space-y-3">
+                  <div className={`space-y-3 transition-collapse overflow-hidden ${transportsOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!transportsOpen}>
                     {selectedJourney.transports && selectedJourney.transports.length > 0 ? (
                       selectedJourney.transports.map((transport, index) => (
                         <div key={transport.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
@@ -2575,7 +2574,6 @@ function App() {
                       </p>
                     )}
                   </div>
-                  )}
                   </div>
                 </div>
               </div>
