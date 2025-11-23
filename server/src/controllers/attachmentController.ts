@@ -198,9 +198,25 @@ export const previewAttachment = async (req: Request, res: Response) => {
       return res.json({ type: 'pdf', url: `/api/attachments/${id}/download?inline=1` });
     }
     if (mime.includes('officedocument') || mime.includes('msword') || mime.includes('word')) {
-      const htmlRaw = await docxToHtml(filePath);
-      const html = sanitizeHtml(htmlRaw);
-      return res.json({ type: 'docx', html });
+      // Decrypt DOCX to a temp file before converting to HTML (docx is a ZIP archive)
+      const tempPath = path.join(uploadDir, `temp-${crypto.randomUUID()}${path.extname(check.filename || check.filePath || '') || ''}`);
+      const stream = decryptFileToStream((!DB_AVAILABLE) ? check.filePath : attachment.filePath, check.iv || attachment.iv || '', check.authTag || attachment.authTag || check.auth_tag || '');
+      await new Promise((resolve, reject) => {
+        const out = fs.createWriteStream(tempPath);
+        stream.pipe(out);
+        out.on('finish', () => resolve(undefined));
+        out.on('error', reject);
+      });
+
+      try {
+        const htmlRaw = await docxToHtml(tempPath);
+        const html = sanitizeHtml(htmlRaw);
+        try { fs.unlinkSync(tempPath); } catch (e) {}
+        return res.json({ type: 'docx', html });
+      } catch (e) {
+        try { fs.unlinkSync(tempPath); } catch (er) {}
+        throw e;
+      }
     }
     res.status(400).json({ message: 'Preview not available' });
   } catch (err) {
