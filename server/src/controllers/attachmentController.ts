@@ -130,15 +130,15 @@ export const downloadAttachment = async (req: Request, res: Response) => {
     const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
-      // Check journey_shares (user accepted and accepted)
+      // Allow access to any user the journey is shared with (presence of a journey_shares row).
       if (!checkAttachment.journeyId) return res.status(403).json({ message: 'Access denied' });
       if (!DB_AVAILABLE) {
         const shares = await jsonStore.findByField('journey_shares', 'journey_id', checkAttachment.journeyId);
         const found = shares.find((s: any) => s.shared_with_user_id === userId && s.status === 'accepted');
-          if (!found) {
-            console.warn(`Preview access denied: user ${userId} not permitted for attachment ${id} (journey ${checkAttachment.journeyId})`);
-            return res.status(403).json({ message: 'Access denied' });
-          }
+        if (!found) {
+          console.warn(`Download access denied: user ${userId} not permitted for attachment ${id} (journey ${checkAttachment.journeyId})`);
+          return res.status(403).json({ message: 'Access denied' });
+        }
       } else {
         const shareRes = await query('SELECT * FROM journey_shares WHERE journey_id = $1 AND shared_with_user_id = $2 AND status = $3', [checkAttachment.journeyId, userId, 'accepted']);
         if (!shareRes.rows.length) return res.status(403).json({ message: 'Access denied' });
@@ -151,8 +151,12 @@ export const downloadAttachment = async (req: Request, res: Response) => {
 
     const inline = req.query.inline === '1' || req.query.inline === 'true';
     const readStream = decryptFileToStream(filePath, iv || '', authTag || '');
-    res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${checkAttachment.originalFilename}"`);
-    res.setHeader('Content-Type', checkAttachment.mimeType);
+    // Support UTF-8 filenames in Content-Disposition using RFC 5987 (filename*)
+    const filename = (checkAttachment.originalFilename || checkAttachment.filename || 'attachment').toString();
+    const safeFilename = filename.replace(/\"/g, '');
+    const disposition = `${inline ? 'inline' : 'attachment'}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+    res.setHeader('Content-Disposition', disposition);
+    res.setHeader('Content-Type', checkAttachment.mimeType || 'application/octet-stream');
     readStream.pipe(res);
   } catch (err) {
     console.error('Download error', err);
@@ -173,6 +177,7 @@ export const previewAttachment = async (req: Request, res: Response) => {
 
     const userId = (req as any).user?.userId;
     if (check.uploadedBy !== userId) {
+      // Allow users who have the journey shared with them to preview
       if (!check.journeyId) return res.status(403).json({ message: 'Access denied' });
       if (!DB_AVAILABLE) {
         const shares = await jsonStore.findByField('journey_shares', 'journey_id', check.journeyId);
@@ -388,6 +393,7 @@ export const extractAttachmentData = async (req: Request, res: Response) => {
     const userId = (req as any).user?.userId;
     const checkAttachment = (!DB_AVAILABLE) ? toCamelCase(attachment) : attachment;
     if (checkAttachment.uploadedBy !== userId) {
+      // Allow extract for any user the journey is shared with
       if (!checkAttachment.journeyId) return res.status(403).json({ message: 'Access denied' });
       if (!DB_AVAILABLE) {
         const shares = await jsonStore.findByField('journey_shares', 'journey_id', checkAttachment.journeyId);
