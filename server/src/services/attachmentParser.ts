@@ -93,7 +93,7 @@ export const sanitizeHtml = (html: string): string => {
   // Remove script/style tags
   $('script, style').remove();
   // Remove event handler attributes and javascript: URIs
-  $('*').each((_, el: any) => {
+  $('*').each((i: number, el: any) => {
     const attribs: Record<string, string> = (el && el.attribs) || {};
     Object.keys(attribs).forEach(attr => {
       if (attr.toLowerCase().startsWith('on')) {
