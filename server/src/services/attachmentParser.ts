@@ -7,7 +7,9 @@ import { query, DB_AVAILABLE } from '../config/db';
 import jsonStore from '../config/jsonStore';
 import path from 'path';
 import mammoth from 'mammoth';
-import cheerio from 'cheerio';
+// Cheerio may be imported differently depending on module resolution; use require for runtime compatibility
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const cheerio: any = require('cheerio');
 
 export interface ParsedAttachmentResult {
   flightNumber?: string;

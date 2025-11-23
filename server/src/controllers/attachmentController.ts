@@ -53,7 +53,23 @@ export const uploadAttachmentHandler = [
       // If DB is not available, persist to JSON store instead
       const { journeyId, stopId, transportId } = req.body;
 
-      const originalFilename = req.file.originalname;
+      // Normalize filename encoding: some clients or previous imports may produce mojibake
+      const normalizeFilename = (n: any) => {
+        if (!n || typeof n !== 'string') return n;
+        // Common mojibake indicators: Ã, Â, Å
+        if (/Ã|Â|Å/.test(n)) {
+          try {
+            // Interpret the received string as latin1 and convert to utf8
+            const fixed = Buffer.from(n, 'latin1').toString('utf8');
+            return fixed;
+          } catch (e) {
+            return n;
+          }
+        }
+        return n;
+      };
+
+      const originalFilename = normalizeFilename(req.file.originalname);
       const filePath = req.file.path;
       const destFilename = `${req.file.filename}.enc`;
       const destPath = path.join(uploadDir, destFilename);
