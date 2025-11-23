@@ -3447,6 +3447,87 @@ function App() {
                     </select>
                   </div>
                 </div>
+                {/* Attachment chooser and existing attachments for Edit Stop (mirror Edit Transport) */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Attachment
+                  </label>
+                  <div className="flex gap-4 items-center mt-2">
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setPendingFile(file);
+                        setUploadingAttachment(null);
+                      }}
+                      ref={stopFileRef}
+                      className="hidden"
+                      accept={allowedFileTypes}
+                    />
+
+                    <div onClick={() => stopFileRef.current?.click()} className="w-3/4 cursor-pointer bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a] flex items-center justify-between">
+                      <span className={pendingFile ? 'text-sm text-white' : 'text-sm text-gray-500'}>{pendingFile ? `${pendingFile.name} • ${Math.round(pendingFile.size / 1024)} KB` : 'Choose file...'}</span>
+                      <span className="text-sm text-gray-400">📎</span>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        if (!pendingFile) { error('No file selected'); return; }
+                        try {
+                          setLoading(true);
+                          const fd = new FormData();
+                          fd.append('file', pendingFile);
+                          fd.append('journeyId', String(selectedJourney?.id));
+                          if (editingStop?.id) fd.append('stopId', String(editingStop.id));
+                          const resp = await attachmentService.uploadAttachment(fd);
+                          success('Attachment uploaded');
+                          if (resp?.attachment) setAttachments(prev => [resp.attachment, ...(prev || [])]);
+                          setUploadingAttachment(resp?.attachment ?? null);
+                          setPendingFile(null);
+                        } catch (err) {
+                          error('Upload failed');
+                        } finally { setLoading(false); }
+                      }}
+                      className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600"
+                    >Add</button>
+                  </div>
+
+                  {uploadingAttachment ? (
+                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+                      <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
+                        <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
+                      </div>
+                    </div>
+                  ) : pendingFile && (
+                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
+                      <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
+                          className="text-gray-500 hover:text-gray-700"
+                          title="Cancel"
+                        ><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Existing attachments for the stop being edited */}
+                  {(editingStop && attachments && attachments.length > 0) && (() => {
+                    const attForEditingStop = attachments.filter(a => Number(a.stopId ?? a.stop_id ?? a.stop) === (editingStop.id ?? null));
+                    if (!attForEditingStop || attForEditingStop.length === 0) return null;
+                    return (
+                      <div className="mt-3">
+                        <div className="text-sm text-gray-600 dark:text-[#98989d] mb-2">Existing attachments</div>
+                        <div className="space-y-2">
+                          {attForEditingStop.map((att: any) => renderAttachmentRow(att))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button
