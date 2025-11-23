@@ -1967,6 +1967,7 @@ function App() {
                     </div>
                   </div>
                 )}
+                )}
                   <h1 className="text-xl font-semibold text-black dark:text-white">
                 🗺️ Journey Planner
               </h1>
