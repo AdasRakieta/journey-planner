@@ -2138,7 +2138,7 @@ function App() {
                             {selectedJourney?.createdBy === user?.id && (
                               <button
                                 onClick={() => setShowManageSharesModal(true)}
-                                className="flex-1 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-[#2b2b2d] text-gray-900 dark:text-white rounded-lg transition-colors flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-[#232325]"
                               >
                                 <Users className="w-4 h-4" />
                                 Manage Shares
