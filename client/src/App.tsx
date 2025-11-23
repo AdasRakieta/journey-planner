@@ -239,8 +239,8 @@ function App() {
   const renderAttachmentRow = (att: any) => (
     <div key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
       <div className="min-w-0 mr-2">
-        <div className="font-medium text-gray-900 dark:text-[#ffffff] truncate">{att.originalFilename}</div>
-        <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round((att.fileSize || att.file_size || 0) / 1024)} KB</div>
+        <div className="font-medium text-black dark:text-white truncate">{att.originalFilename}</div>
+        <div className="text-xs text-black/60 dark:text-white/60">{att.mimeType} • {Math.round((att.fileSize || att.file_size || 0) / 1024)} KB</div>
       </div>
       <div className="flex items-center gap-2">
         <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
@@ -1773,7 +1773,7 @@ function App() {
                   <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
                     <div className="p-4">
                       <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Preview: {previewTitle}</h2>
+                        <h2 className="text-xl font-bold text-black dark:text-white">Preview: {previewTitle}</h2>
                         <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
                       </div>
                       <div className="mt-4">
@@ -1828,7 +1828,7 @@ function App() {
                     </div>
                   </div>
                 )}
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff]">
+                  <h1 className="text-xl font-semibold text-black dark:text-white">
                 🗺️ Journey Planner
               </h1>
             </div>
@@ -1839,7 +1839,7 @@ function App() {
               {user && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-[#38383a] rounded-lg border border-gray-200 dark:border-[#38383a]">
                   <User className="w-4 h-4 text-gray-600 dark:text-[#98989d]" />
-                  <span className="text-sm text-gray-900 dark:text-[#ffffff] font-medium">{user.username}</span>
+                  <span className="text-sm text-black dark:text-white font-medium">{user.username}</span>
                   {user.role === 'admin' && (
                     <span className="text-xs px-2 py-0.5 bg-blue-500 dark:bg-[#0a84ff] text-white rounded-full font-medium">
                       Admin
@@ -1851,7 +1851,7 @@ function App() {
               {/* Settings Button */}
               <Link
                 to="/settings"
-                className="px-4 py-2 bg-gray-200 dark:bg-[#38383a] hover:bg-gray-300 dark:hover:bg-[#1c1c1e] border border-gray-300 dark:border-[#38383a] text-gray-700 dark:text-[#ffffff] rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-gray-200 dark:bg-[#38383a] hover:bg-gray-300 dark:hover:bg-[#1c1c1e] border border-gray-300 dark:border-[#38383a] text-black dark:text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <Settings className="w-5 h-5" />
                 Settings

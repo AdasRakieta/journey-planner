@@ -305,3 +305,21 @@
 .dark .leaflet-popup-tip {
   background-color: #2c2c2e !important;
 }
+
+/* Ensure modal and rendered docx/html preview text follow theme: black in light, white in dark
+   We target typical text tags and .prose content inside modals/previews, excluding buttons
+   and explicitly-colored controls. */
+.gh-modal h1, .gh-modal h2, .gh-modal h3, .gh-modal h4, .gh-modal p, .gh-modal span, .gh-modal li, .gh-modal a, .gh-modal td, .gh-modal th, .gh-modal strong, .gh-modal em, .gh-modal .prose, .gh-modal .prose * {
+  color: #000 !important;
+}
+.dark .gh-modal h1, .dark .gh-modal h2, .dark .gh-modal h3, .dark .gh-modal h4, .dark .gh-modal p, .dark .gh-modal span, .dark .gh-modal li, .dark .gh-modal a, .dark .gh-modal td, .dark .gh-modal th, .dark .gh-modal strong, .dark .gh-modal em, .dark .gh-modal .prose, .dark .gh-modal .prose * {
+  color: #fff !important;
+}
+
+/* Also make global .prose content theme-adaptive (docx/html renderings use .prose) */
+.prose, .prose * {
+  color: #000 !important;
+}
+.dark .prose, .dark .prose * {
+  color: #fff !important;
+}
