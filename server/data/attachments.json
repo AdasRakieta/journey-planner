@@ -160,59 +160,19 @@
     "created_at": "2025-11-22T09:48:04.547Z"
   },
   {
-    "id": 11,
-    "journey_id": "3",
-    "stop_id": null,
-    "transport_id": null,
-    "filename": "c44a1c43-fd38-427e-be1c-ff51724d1f8b-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "original_filename": "Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf",
-    "file_path": "\\app\\uploads\\attachments\\c44a1c43-fd38-427e-be1c-ff51724d1f8b-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "file_size": 164914,
-    "mime_type": "application/pdf",
-    "uploaded_by": 1,
-    "is_encrypted": true,
-    "iv": "78a25236de454c0d2b4ba6b7",
-    "auth_tag": "4c73907579fb5cd55d482c0230506ee5",
-    "created_at": "2025-11-22T10:11:51.901Z",
-    "parsed_json": {
-      "matches": [
-        "202"
-      ],
-      "price": {
-        "amount": 202
-      }
-    }
-  },
-  {
     "id": 12,
-    "journey_id": "3",
+    "journey_id": 3,
     "stop_id": null,
-    "transport_id": "2",
-    "filename": "259da2e0-098a-4735-a012-6dcab33358ef-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "original_filename": "Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf",
-    "file_path": "\\app\\uploads\\attachments\\259da2e0-098a-4735-a012-6dcab33358ef-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "file_size": 164914,
-    "mime_type": "application/pdf",
+    "transport_id": 3,
+    "filename": "d8577921-b54c-404f-8e54-6598ff907503-Formularz zgÅoszeniowy Lidl Plus OK.docx.enc",
+    "original_filename": "Formularz zgÅoszeniowy Lidl Plus OK.docx",
+    "file_path": "\\app\\uploads\\attachments\\d8577921-b54c-404f-8e54-6598ff907503-Formularz zgÅoszeniowy Lidl Plus OK.docx.enc",
+    "file_size": 3468561,
+    "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "uploaded_by": 1,
     "is_encrypted": true,
-    "iv": "905ae4ea0750a2e29cfac6f9",
-    "auth_tag": "bb1c5216159917fded096bce05d7d579",
-    "created_at": "2025-11-22T10:39:39.528Z"
-  },
-  {
-    "id": 13,
-    "journey_id": "3",
-    "stop_id": null,
-    "transport_id": "2",
-    "filename": "fa880fc1-170f-4f0c-a116-818157c47101-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "original_filename": "Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf",
-    "file_path": "\\app\\uploads\\attachments\\fa880fc1-170f-4f0c-a116-818157c47101-Polecenia_PO_NSt_Inf4Rok_2025_2026.pdf.enc",
-    "file_size": 164914,
-    "mime_type": "application/pdf",
-    "uploaded_by": 1,
-    "is_encrypted": true,
-    "iv": "9343dd08f0cc14e986a07e0a",
-    "auth_tag": "c9c5ecaad154e1386008d1f8b60a8b22",
-    "created_at": "2025-11-22T10:39:56.072Z"
+    "iv": "9f631dc69526037a8d684340",
+    "auth_tag": "f76d2e4f20a589ea5e16c98965f180a8",
+    "created_at": "2025-11-23T08:07:42.315Z"
   }
 ]

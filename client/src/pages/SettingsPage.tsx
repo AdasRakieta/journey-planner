@@ -54,7 +54,6 @@ const SettingsPage: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [registrationRequests, setRegistrationRequests] = useState<any[]>([]);
-  const [regRequestsLoading, setRegRequestsLoading] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -155,7 +154,6 @@ const SettingsPage: React.FC = () => {
   }, []); // No dependencies - function doesn't change
 
   const loadRegistrationRequests = useCallback(async () => {
-    setRegRequestsLoading(true);
     try {
       const resp = await adminAPI.getRegistrationRequests();
       setRegistrationRequests(resp.data.requests || []);
@@ -163,7 +161,6 @@ const SettingsPage: React.FC = () => {
       console.error('Failed to load registration requests', err);
       toast.error('Failed to load registration requests');
     } finally {
-      setRegRequestsLoading(false);
     }
   }, []);
 

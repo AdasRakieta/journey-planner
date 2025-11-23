@@ -1,3 +1,7 @@
+// This is a placeholder for the patch context
+// This is a placeholder for the patch context
+// This is a placeholder for the patch context
+// This is a placeholder for the patch context
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText } from 'lucide-react';
@@ -101,6 +105,7 @@ function App() {
   const [extractResult, setExtractResult] = useState<any | null>(null);
   const [openStopAttachments, setOpenStopAttachments] = useState<Record<number, boolean>>({});
   const [openTransportAttachments, setOpenTransportAttachments] = useState<Record<number, boolean>>({});
+  const [openJourneyAttachments, setOpenJourneyAttachments] = useState<boolean>(false);
   const bookingFileRef = useRef<HTMLInputElement | null>(null);
   const transportFileRef = useRef<HTMLInputElement | null>(null);
   const allowedPreviewTypes = '.pdf,.doc,.docx';
@@ -224,7 +229,10 @@ function App() {
       }
       try {
         const list = await attachmentService.listAttachmentsForJourney(selectedJourney.id);
-        if (mounted) setAttachments(list);
+        if (mounted) {
+          setAttachments(list);
+          console.debug('Loaded attachments for journey', selectedJourney?.id, list);
+        }
       } catch (e) {
         console.warn('Failed to load attachments', e);
       }
@@ -803,6 +811,18 @@ function App() {
         })() : null);
       }
       warning('Transport deleted');
+    });
+
+    socketService.on('attachment:applied', async (payload: any) => {
+      console.log('Real-time: Attachment applied', payload);
+      if (selectedJourney?.id) {
+        try {
+          const list = await attachmentService.listAttachmentsForJourney(selectedJourney.id);
+          setAttachments(list);
+        } catch (e) {
+          console.warn('Failed to reload attachments after apply event', e);
+        }
+      }
     });
     
     // Cleanup on unmount
@@ -1766,14 +1786,12 @@ function App() {
                 ) : (
                   <Menu className="w-6 h-6 text-gray-900 dark:text-[#ffffff]" />
                 )}
-              </button>
-              {/* Modals moved outside the mobile menu button to avoid nested buttons */}
               {previewOpen && (
                 <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
                   <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
                     <div className="p-4">
                       <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Preview: {previewTitle}</h2>
+                        <h2 className="text-xl font-bold">Preview: {previewTitle}</h2>
                         <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
                       </div>
                       <div className="mt-4">
@@ -1795,7 +1813,7 @@ function App() {
                   <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
                     <div className="p-6">
                       <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Extracted data</h2>
+                        <h2 className="text-xl font-bold">Extracted data</h2>
                         <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
                       </div>
                       <div className="mt-4 space-y-3">
@@ -1828,6 +1846,7 @@ function App() {
                     </div>
                   </div>
                 )}
+              </button>
               <h1 className="text-xl font-semibold text-gray-900 dark:text-[#ffffff]">
                 🗺️ Journey Planner
               </h1>
@@ -2368,7 +2387,7 @@ function App() {
                       Add Stop
                     </button>
                   </div>
-                  {stopsOpen && (
+                  {false && ( /* stopsOpen && ( - temporarily disabled for debug */
                     <div className="space-y-3">
                       { (selectedJourney?.stops || []).length > 0 ? (
                         (selectedJourney?.stops || []).map((stop, index) => (
@@ -2390,25 +2409,11 @@ function App() {
                                     ><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </div>
-                              {/* Transport attachments not shown here - per-stop/transport attachments rendered in their respective sections */}
-                                <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} - {formatDateForDisplay(stop.departureDate)}</p>
-
-                                {stop.accommodationName && (
-                                  <div className="mt-2 text-sm">
-                                    <p className="font-medium text-gray-900 dark:text-[#ffffff]">Accommodation</p>
-                                    <p className="text-gray-600 dark:text-[#98989d]">{stop.accommodationName}</p>
-                                    {stop.accommodationUrl && (
-                                      <a href={stop.accommodationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-[#0a84ff] hover:underline">View booking →</a>
-                                    )}
-                                  </div>
-                                )}
-
-                                {stop.accommodationPrice != null && (
-                                  <div className="mt-2 text-sm">
+                              {/* Transport attachments toggle and list */}
+                              {/* Journey-level attachments are displayed below transports/stops as a final collapsible list */}
                                     <span className="font-medium text-green-600 dark:text-[#30d158]">{formatItemPrice(stop.accommodationPrice, stop.accommodationCurrency || selectedJourney.currency, stop, 'accommodation_price_converted', 'accommodation_price_converted_currency')}</span>
                                     {/* Payment control moved to top-right action area to avoid layout shift */}
                                   </div>
-                                )}
 
                                 {stop.attractions && stop.attractions.length > 0 && (
                                   <div className="mt-2 text-sm">
@@ -2449,7 +2454,7 @@ function App() {
                                     const attForStop = attachments.filter(a => Number(a.stopId ?? a.stop_id ?? a.stop) === (stop.id ?? null));
                                     return (
                                       <div className="mt-3">
-                                        <button onClick={() => toggleStopAttachments(stop.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
+                                        <button onClick={() => toggleStopAttachments(stop.id)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
                                           <span className="text-xs">
                                             {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                           </span>
@@ -2573,27 +2578,6 @@ function App() {
                                   disabled={loading}
                                 />
                               </div>
-                                {/* Transport attachments toggle and list */}
-                                {attachments && (
-                                  (() => {
-                                    const attForTransport = attachments.filter(a => Number(a.transportId ?? a.transport_id ?? a.transport) === (transport.id ?? null));
-                                    return (
-                                      <div className="mt-3">
-                                        <button onClick={() => toggleTransportAttachments(transport.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
-                                          <span className="text-xs">
-                                            {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                          </span>
-                                          <span>{attForTransport.length} Attachment{attForTransport.length !== 1 ? 's' : ''}</span>
-                                        </button>
-                                        {openTransportAttachments[transport.id!] && attForTransport.length > 0 && (
-                                          <div className="mt-2 space-y-2">
-                                            {attForTransport.map((att: any) => renderAttachmentRow(att))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })()
-                                )}
                               {transport.bookingUrl && (
                                 <a
                                   href={transport.bookingUrl}
@@ -2617,6 +2601,26 @@ function App() {
                   )}
                   </div>
                 </div>
+              {/* Journey-level attachments at the end */}
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Attachments</h4>
+                {(() => {
+                  const journeyLevelAttachments = attachments.filter(a => !(a.transportId || a.stopId) && Number(a.journeyId ?? a.journey_id ?? a.journey) === selectedJourney.id);
+                  return (
+                    <div>
+                      <button onClick={() => setOpenJourneyAttachments(prev => !prev)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d] mb-2">
+                        <span className="text-xs">{openJourneyAttachments ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
+                        <span>{journeyLevelAttachments.length} Attachment{journeyLevelAttachments.length !== 1 ? 's' : ''}</span>
+                      </button>
+                      {openJourneyAttachments && journeyLevelAttachments.length > 0 && (
+                        <div className="space-y-2">
+                          {journeyLevelAttachments.map(att => renderAttachmentRow(att))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
               </div>
             ) : (
               <div className="gh-card text-center py-6">
