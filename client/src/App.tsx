@@ -2230,48 +2230,7 @@ function App() {
                   </div>
                 </div>
 
-                {attachments.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">Attachments</h4>
-                    <ul className="space-y-2">
-                      {attachments.map(att => (
-                        <li key={att.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                          <div className="min-w-0 mr-2">
-                            <div className="font-medium text-gray-900 dark:text-[#ffffff] truncate">{att.originalFilename}</div>
-                            <div className="text-xs text-gray-500 dark:text-[#98989d]">{att.mimeType} • {Math.round(att.fileSize / 1024)} KB</div>
-                            {att.parsedJson?.flightNumber && (
-                              <div className="text-xs text-gray-500 dark:text-[#98989d]">Flight: <strong>{att.parsedJson.flightNumber}</strong></div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={async () => {
-                              try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); }
-                            }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
-                            <button onClick={async () => {
-                              try {
-                                await attachmentService.downloadAttachment(att.id, att.originalFilename);
-                              } catch (e) { error('Failed to download attachment'); }
-                            }} title="Download" className="text-gray-500 hover:text-gray-700"><DownloadCloud className="w-5 h-5"/></button>
-                            <button onClick={async () => {
-                              try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete attachment?' }))) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); }
-                            }} title="Delete" className="text-red-600 hover:text-red-700"><Trash2 className="w-5 h-5"/></button>
-                            <button onClick={async () => {
-                              try {
-                                const shouldAssign = await confirmHook.confirm({ title: 'Auto-assign', message: 'Also auto-assign to matching transport if found?' });
-                                const resp = await attachmentService.extractAttachmentData(att.id, shouldAssign);
-                                setExtractResult(resp.parsed);
-                                if (resp.assignedTransport) {
-                                  success(`Assigned to transport ${resp.assignedTransport.id}`);
-                                }
-                                setExtractModalOpen(true);
-                              } catch (e) { error('Failed to extract data'); }
-                            }} title="Extract data" className="text-gray-500 hover:text-gray-700"><FileText className="w-5 h-5"/></button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                {/* Journey-level attachments removed: attachments are shown under each Stop/Transport only. */}
 
                 {/* Checklist */}
                 <div className="mb-6">
@@ -2447,6 +2406,7 @@ function App() {
                                 {attachments && (
                                   (() => {
                                     const attForStop = attachments.filter(a => Number(a.stopId ?? a.stop_id ?? a.stop) === (stop.id ?? null));
+                                    if (!attForStop || attForStop.length === 0) return null;
                                     return (
                                       <div className="mt-3">
                                         <button onClick={() => toggleStopAttachments(stop.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
@@ -2577,6 +2537,7 @@ function App() {
                                 {attachments && (
                                   (() => {
                                     const attForTransport = attachments.filter(a => Number(a.transportId ?? a.transport_id ?? a.transport) === (transport.id ?? null));
+                                    if (!attForTransport || attForTransport.length === 0) return null;
                                     return (
                                       <div className="mt-3">
                                         <button onClick={() => toggleTransportAttachments(transport.id!)} className="flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]">
