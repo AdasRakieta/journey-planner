@@ -1821,153 +1821,6 @@ function App() {
                 )}
               </button>
               {/* Modals moved outside the mobile menu button to avoid nested buttons */}
-              {previewOpen && (
-                <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
-                  <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-black dark:text-white">Preview: {previewTitle}</h2>
-                        <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
-                      </div>
-                      <div className="mt-4">
-                        {previewUrl ? (
-                          <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
-                        ) : previewHtml ? (
-                          <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                        ) : (
-                          <div className="text-sm text-gray-500">No preview available</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {extractModalOpen && (
-                <div className="gh-modal-overlay" onClick={() => setExtractModalOpen(false)}>
-                  <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
-                    <div className="p-6">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-white">Extracted data</h2>
-                        <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
-                      </div>
-
-                      <div className="mt-4 space-y-3">
-                        {!extractResult && (
-                          <div className="text-sm text-gray-500">No data found in attachment.</div>
-                        )}
-
-                        {/* Build a normalized list of suggested fields to verify */}
-                        {extractResult && (() => {
-                          const fields: Array<{ key: string; label: string; value: any }> = [];
-                          const p: any = extractResult;
-                          if (p.flightNumber) fields.push({ key: 'flightNumber', label: 'Flight number', value: p.flightNumber });
-                          if (p.trainNumber) fields.push({ key: 'trainNumber', label: 'Train number', value: p.trainNumber });
-                          if (p.price) fields.push({ key: 'price', label: 'Price', value: p.price });
-                          if (p.accommodationName || p.hotelName) fields.push({ key: 'accommodationName', label: 'Accommodation', value: p.accommodationName || p.hotelName });
-                          if (p.city) fields.push({ key: 'city', label: 'City', value: p.city });
-                          if (p.country) fields.push({ key: 'country', label: 'Country', value: p.country });
-                          if (p.address || p.addressStreet) fields.push({ key: 'address', label: 'Address', value: p.address || p.addressStreet });
-                          if (p.addressHouseNumber) fields.push({ key: 'addressHouseNumber', label: 'House / Number', value: p.addressHouseNumber });
-                          if (p.postalCode || p.addressPostcode) fields.push({ key: 'postalCode', label: 'Postal code', value: p.postalCode || p.addressPostcode });
-                          if (p.arrivalDate) fields.push({ key: 'arrivalDate', label: 'Arrival date', value: p.arrivalDate });
-                          if (p.departureDate) fields.push({ key: 'departureDate', label: 'Departure date', value: p.departureDate });
-                          if (p.from) fields.push({ key: 'from', label: 'From', value: p.from });
-                          if (p.to) fields.push({ key: 'to', label: 'To', value: p.to });
-
-                          if (!fields.length) return <div className="text-sm text-gray-500">No extractable fields detected.</div>;
-
-                          return fields.map(f => (
-                            <div key={f.key} className="bg-white dark:bg-[#151517] rounded-lg p-3 border border-gray-200 dark:border-[#2b2b2d] flex items-center justify-between">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium text-black dark:text-white truncate">{f.label}</div>
-                                <div className="text-xs text-gray-600 dark:text-white/60 truncate">{typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}</div>
-                              </div>
-                              <div className="flex items-center gap-2 ml-4">
-                                <button
-                                  title="Apply"
-                                  onClick={() => {
-                                    try {
-                                      const key = f.key;
-                                      // Apply to editing/new stop when relevant
-                                      if (editingStop) {
-                                        setEditingStop(prev => prev ? ({
-                                          ...prev,
-                                          accommodationName: key === 'accommodationName' ? f.value : prev.accommodationName,
-                                          city: key === 'city' ? f.value : prev.city,
-                                          country: key === 'country' ? f.value : prev.country,
-                                          addressStreet: key === 'address' ? f.value : prev.addressStreet,
-                                          addressHouseNumber: key === 'addressHouseNumber' ? f.value : prev.addressHouseNumber,
-                                          postalCode: key === 'postalCode' ? f.value : prev.postalCode,
-                                          arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
-                                          departureDate: key === 'departureDate' ? f.value : prev.departureDate,
-                                          accommodationPrice: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.accommodationPrice,
-                                          accommodationCurrency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.accommodationCurrency,
-                                        }) : prev);
-                                        success('Applied to editing stop. Please verify.');
-                                      }
-                                      if (editingTransport) {
-                                        setEditingTransport(prev => prev ? ({
-                                          ...prev,
-                                          flightNumber: key === 'flightNumber' ? f.value : prev.flightNumber,
-                                          trainNumber: key === 'trainNumber' ? f.value : prev.trainNumber,
-                                          price: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.price,
-                                          currency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.currency,
-                                          fromLocation: key === 'from' ? f.value : prev.fromLocation,
-                                          toLocation: key === 'to' ? f.value : prev.toLocation,
-                                          departureDate: key === 'departureDate' ? f.value : prev.departureDate,
-                                          arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
-                                        }) : prev);
-                                        success('Applied to editing transport. Please verify.');
-                                      }
-                                      // Also apply to new items if present
-                                      if (!editingStop && !editingTransport) {
-                                        // If user is creating a new transport and newTransport exists
-                                        try { setNewTransport(prev => ({ ...prev, ...(f.key === 'flightNumber' ? { flightNumber: f.value } : {}), ...(f.key === 'price' && typeof f.value === 'object' ? { price: f.value.amount, currency: f.value.currency } : {}) })); } catch (e) {}
-                                        try { setNewStop(prev => ({ ...prev, ...(f.key === 'accommodationName' ? { accommodationName: f.value } : {}), ...(f.key === 'city' ? { city: f.value } : {}) })); } catch (e) {}
-                                        success('Applied to new item (if present). Please verify.');
-                                      }
-                                    } catch (e) {
-                                      console.error(e);
-                                      error('Failed to apply field');
-                                    }
-                                  }}
-                                  className="p-2 rounded-md bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors"
-                                >
-                                  <CheckCircle2 className="w-5 h-5" />
-                                </button>
-
-                                <button
-                                  title="Reject"
-                                  onClick={() => {
-                                    // Remove this field from extractResult so user can dismiss it
-                                    try {
-                                      const copy = { ...extractResult };
-                                      delete copy[f.key];
-                                      setExtractResult(copy);
-                                      success('Suggestion dismissed');
-                                    } catch (e) {
-                                      console.error(e);
-                                      error('Failed to dismiss');
-                                    }
-                                  }}
-                                  className="p-2 rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
-                                >
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-
-                      <div className="flex justify-end mt-6">
-                        <button onClick={() => setExtractModalOpen(false)} className="gh-btn-secondary">Close</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                )}
                   <h1 className="text-xl font-semibold text-black dark:text-white">
                 🗺️ Journey Planner
               </h1>
@@ -2104,6 +1957,155 @@ function App() {
           </div>
         )}
       </header>
+
+      {/* Modals (moved out of header to avoid JSX nesting issues) */}
+      {previewOpen && (
+        <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
+          <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-black dark:text-white">Preview: {previewTitle}</h2>
+                <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+              </div>
+              <div className="mt-4">
+                {previewUrl ? (
+                  <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
+                ) : previewHtml ? (
+                  <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                ) : (
+                  <div className="text-sm text-gray-500">No preview available</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {extractModalOpen && (
+        <div className="gh-modal-overlay" onClick={() => setExtractModalOpen(false)}>
+          <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">Extracted data</h2>
+                <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {!extractResult && (
+                  <div className="text-sm text-gray-500">No data found in attachment.</div>
+                )}
+
+                {/* Build a normalized list of suggested fields to verify */}
+                {extractResult ? (() => {
+                  const fields: Array<{ key: string; label: string; value: any }> = [];
+                  const p: any = extractResult;
+                  if (p.flightNumber) fields.push({ key: 'flightNumber', label: 'Flight number', value: p.flightNumber });
+                  if (p.trainNumber) fields.push({ key: 'trainNumber', label: 'Train number', value: p.trainNumber });
+                  if (p.price) fields.push({ key: 'price', label: 'Price', value: p.price });
+                  if (p.accommodationName || p.hotelName) fields.push({ key: 'accommodationName', label: 'Accommodation', value: p.accommodationName || p.hotelName });
+                  if (p.city) fields.push({ key: 'city', label: 'City', value: p.city });
+                  if (p.country) fields.push({ key: 'country', label: 'Country', value: p.country });
+                  if (p.address || p.addressStreet) fields.push({ key: 'address', label: 'Address', value: p.address || p.addressStreet });
+                  if (p.addressHouseNumber) fields.push({ key: 'addressHouseNumber', label: 'House / Number', value: p.addressHouseNumber });
+                  if (p.postalCode || p.addressPostcode) fields.push({ key: 'postalCode', label: 'Postal code', value: p.postalCode || p.addressPostcode });
+                  if (p.arrivalDate) fields.push({ key: 'arrivalDate', label: 'Arrival date', value: p.arrivalDate });
+                  if (p.departureDate) fields.push({ key: 'departureDate', label: 'Departure date', value: p.departureDate });
+                  if (p.from) fields.push({ key: 'from', label: 'From', value: p.from });
+                  if (p.to) fields.push({ key: 'to', label: 'To', value: p.to });
+
+                  if (!fields.length) return <div className="text-sm text-gray-500">No extractable fields detected.</div>;
+
+                  return fields.map(f => (
+                    <div key={f.key} className="bg-white dark:bg-[#151517] rounded-lg p-3 border border-gray-200 dark:border-[#2b2b2d] flex items-center justify-between">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-black dark:text-white truncate">{f.label}</div>
+                        <div className="text-xs text-gray-600 dark:text-white/60 truncate">{typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}</div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          title="Apply"
+                          onClick={() => {
+                            try {
+                              const key = f.key;
+                              // Apply to editing/new stop when relevant
+                              if (editingStop) {
+                                setEditingStop(prev => prev ? ({
+                                  ...prev,
+                                  accommodationName: key === 'accommodationName' ? f.value : prev.accommodationName,
+                                  city: key === 'city' ? f.value : prev.city,
+                                  country: key === 'country' ? f.value : prev.country,
+                                  addressStreet: key === 'address' ? f.value : prev.addressStreet,
+                                  addressHouseNumber: key === 'addressHouseNumber' ? f.value : prev.addressHouseNumber,
+                                  postalCode: key === 'postalCode' ? f.value : prev.postalCode,
+                                  arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
+                                  departureDate: key === 'departureDate' ? f.value : prev.departureDate,
+                                  accommodationPrice: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.accommodationPrice,
+                                  accommodationCurrency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.accommodationCurrency,
+                                }) : prev);
+                                success('Applied to editing stop. Please verify.');
+                              }
+                              if (editingTransport) {
+                                setEditingTransport(prev => prev ? ({
+                                  ...prev,
+                                  flightNumber: key === 'flightNumber' ? f.value : prev.flightNumber,
+                                  trainNumber: key === 'trainNumber' ? f.value : prev.trainNumber,
+                                  price: key === 'price' && typeof f.value === 'object' && f.value.amount ? f.value.amount : prev.price,
+                                  currency: key === 'price' && typeof f.value === 'object' && f.value.currency ? f.value.currency : prev.currency,
+                                  fromLocation: key === 'from' ? f.value : prev.fromLocation,
+                                  toLocation: key === 'to' ? f.value : prev.toLocation,
+                                  departureDate: key === 'departureDate' ? f.value : prev.departureDate,
+                                  arrivalDate: key === 'arrivalDate' ? f.value : prev.arrivalDate,
+                                }) : prev);
+                                success('Applied to editing transport. Please verify.');
+                              }
+                              // Also apply to new items if present
+                              if (!editingStop && !editingTransport) {
+                                // If user is creating a new transport and newTransport exists
+                                try { setNewTransport(prev => ({ ...prev, ...(f.key === 'flightNumber' ? { flightNumber: f.value } : {}), ...(f.key === 'price' && typeof f.value === 'object' ? { price: f.value.amount, currency: f.value.currency } : {}) })); } catch (e) {}
+                                try { setNewStop(prev => ({ ...prev, ...(f.key === 'accommodationName' ? { accommodationName: f.value } : {}), ...(f.key === 'city' ? { city: f.value } : {}) })); } catch (e) {}
+                                success('Applied to new item (if present). Please verify.');
+                              }
+                            } catch (e) {
+                              console.error(e);
+                              error('Failed to apply field');
+                            }
+                          }}
+                          className="p-2 rounded-md bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors"
+                        >
+                          <CheckCircle2 className="w-5 h-5" />
+                        </button>
+
+                        <button
+                          title="Reject"
+                          onClick={() => {
+                            // Remove this field from extractResult so user can dismiss it
+                            try {
+                              const copy = { ...extractResult };
+                              delete copy[f.key];
+                              setExtractResult(copy);
+                              success('Suggestion dismissed');
+                            } catch (e) {
+                              console.error(e);
+                              error('Failed to dismiss');
+                            }
+                          }}
+                          className="p-2 rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                })() : null}
+              </div>
+
+              <div className="flex justify-end mt-6">
+                <button onClick={() => setExtractModalOpen(false)} className="gh-btn-secondary">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
