@@ -39,7 +39,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           onClick={onCancel}
           className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
         >
-          <X size={20} />
+          <X size={20} className="text-black dark:text-white" />
         </button>
 
         {/* Icon */}

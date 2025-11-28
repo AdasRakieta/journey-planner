@@ -76,7 +76,7 @@ const Toast: React.FC<ToastProps> = ({ id, message, type, duration = 5000, onClo
         }}
         className="p-1 rounded hover:bg-white/10 transition-colors"
       >
-        <X className="w-4 h-4" />
+        <X className="w-4 h-4 text-black dark:text-white" />
       </button>
     </div>
   );

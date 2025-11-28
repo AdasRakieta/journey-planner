@@ -69,7 +69,7 @@ const ManageSharesModal: React.FC<Props> = ({ journeyId, isOpen, onClose, onUpda
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Shares</h2>
             <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]">
-              <X />
+              <X className="w-4 h-4 text-black dark:text-white" />
             </button>
           </div>
 

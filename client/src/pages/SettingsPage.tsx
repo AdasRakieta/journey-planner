@@ -590,7 +590,7 @@ const SettingsPage: React.FC = () => {
                             onClick={() => handleRejectInvitation(invitation.id!)}
                             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
                           >
-                            <X size={16} />
+                            <X size={16} className="text-black dark:text-white" />
                             Reject
                           </button>
                         </div>
@@ -810,7 +810,7 @@ const SettingsPage: React.FC = () => {
                           className="p-2 text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-300 ease-in-out"
                           title="Cancel invitation"
                         >
-                          <X size={20} />
+                          <X size={20} className="text-black dark:text-white" />
                         </button>
                       </div>
                     ))}

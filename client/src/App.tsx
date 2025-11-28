@@ -23,24 +23,25 @@ const formatDateForInput = (date: Date | string | undefined): string => {
   return d.toISOString().split('T')[0];
 };
 
-// Helper function to format datetime for datetime-local input
+// Helper function to format datetime for datetime-local input (local time)
 const formatDateTimeForInput = (date: Date | string | undefined): string => {
   if (!date) return '';
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  // Format: YYYY-MM-DDTHH:MM
-  return d.toISOString().slice(0, 16);
+  // Create local YYYY-MM-DDTHH:MM (datetime-local expects local time)
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Helper function to format time for time input (HH:MM)
-const formatTimeForInput = (time: string | undefined): string => {
-  if (!time) return '';
-  // If it's already in HH:MM format, return as is
-  if (/^\d{2}:\d{2}$/.test(time)) return time;
-  // Otherwise, try to parse and format
-  const match = time.match(/(\d{2}):(\d{2})/);
-  return match ? `${match[1]}:${match[2]}` : '';
-};
+// Validate HH:MM time string (24-hour)
+const isValidTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+
+// (removed validateAndFormatTime - using isValidTime for strict validation)
 
 // Helper function to format date for display
 const formatDateForDisplay = (date: Date | string | undefined): string => {
@@ -48,6 +49,14 @@ const formatDateForDisplay = (date: Date | string | undefined): string => {
   const d = new Date(date);
   if (isNaN(d.getTime())) return 'Invalid date';
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+// Helper to format date+time for display without seconds
+const formatDateTimeForDisplay = (date: Date | string | undefined): string => {
+  if (!date) return 'Not set';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'Invalid date';
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 function App() {
@@ -65,6 +74,75 @@ function App() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
+  
+  // Open preview for an attachment. For PDFs we use iframe (previewUrl).
+  // For other types, backend may provide HTML. If the file is a DOCX, try
+  // client-side conversion using `mammoth` for a nicer visual preview.
+  const openAttachmentPreview = async (att: any) => {
+    try {
+      const preview = await attachmentService.viewAttachment(att.id);
+      const filename = (att.originalFilename || '').toLowerCase();
+      if (preview.type === 'pdf' || (preview.url && preview.type === 'pdf')) {
+        setPreviewUrl(preview.url);
+        setPreviewTitle(att.originalFilename || preview.title || 'Preview');
+        setPreviewHtml(null);
+        setPreviewOpen(true);
+        return;
+      }
+
+      // If it's a docx and we have a URL, try to fetch and convert with mammoth
+      if ((preview.type === 'docx' || filename.endsWith('.docx')) && preview.url) {
+        try {
+          const mammoth = await import('mammoth');
+          const res = await fetch(preview.url);
+          const arrayBuffer = await res.arrayBuffer();
+          // Use styleMap to improve readability: add paragraph breaks, bold headings, table borders
+          const result = await mammoth.convertToHtml({ arrayBuffer }, {
+            styleMap: [
+              "p => p:fresh ",
+              "b => strong",
+              "i => em",
+              "table => table.table-auto border border-gray-300 dark:border-gray-600 my-4",
+              "tr => tr border-b border-gray-200 dark:border-gray-700",
+              "td => td px-2 py-1 border border-gray-200 dark:border-gray-700",
+              "th => th px-2 py-1 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 font-semibold",
+              "h1 => h1 text-xl font-bold mt-4 mb-2",
+              "h2 => h2 text-lg font-bold mt-3 mb-1",
+              "h3 => h3 text-base font-semibold mt-2 mb-1"
+            ]
+          });
+          // Add extra CSS for better spacing and readability
+          const styledHtml = `
+            <style>
+              .docx-preview p { margin: 0.5em 0; }
+              .docx-preview table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+              .docx-preview th, .docx-preview td { border: 1px solid #ccc; padding: 0.4em 0.7em; }
+              .docx-preview th { background: #f3f4f6; font-weight: 600; }
+              .dark .docx-preview th { background: #23232b; color: #fff; }
+              .docx-preview h1, .docx-preview h2, .docx-preview h3 { margin-top: 1em; margin-bottom: 0.5em; }
+            </style>
+            <div class="docx-preview">${result.value}</div>
+          `;
+          setPreviewHtml(styledHtml);
+          setPreviewTitle(att.originalFilename || 'Document');
+          setPreviewUrl(null);
+          setPreviewOpen(true);
+          return;
+        } catch (e) {
+          // fallthrough to server-provided HTML if conversion fails
+          console.warn('mammoth conversion failed, falling back to server HTML', e);
+        }
+      }
+
+      // Default: server-provided HTML (if any) or a simple message
+      setPreviewHtml(preview.html || '<div class="text-sm text-gray-500">No preview available</div>');
+      setPreviewTitle(att.originalFilename || 'Preview');
+      setPreviewUrl(null);
+      setPreviewOpen(true);
+    } catch (e: any) {
+      error(e?.message || 'Failed to preview');
+    }
+  };
   // Helper: fetch full journey from server (authoritative data)
   const refreshJourneyFromServer = async (journeyId: number, setSelected = false) => {
     try {
@@ -243,7 +321,7 @@ function App() {
         <div className="text-xs text-black/60 dark:text-white/60">{att.mimeType} • {Math.round((att.fileSize || att.file_size || 0) / 1024)} KB</div>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(att.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(att.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(att.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
+        <button onClick={() => void openAttachmentPreview(att)} title="Preview" className="text-gray-500 hover:text-gray-700"><Eye className="w-5 h-5" /></button>
         <button onClick={async () => { try { await attachmentService.downloadAttachment(att.id, att.originalFilename); } catch (e) { error('Failed to download attachment'); } }} title="Download" className="text-gray-500 hover:text-gray-700"><DownloadCloud className="w-5 h-5"/></button>
         <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete attachment?' }))) return; await attachmentService.deleteAttachment(att.id); setAttachments(prev => prev.filter(a => a.id !== att.id)); success('Attachment deleted'); } catch (e) { error('Failed to delete'); } }} title="Delete" className="text-red-600 hover:text-red-700"><Trash2 className="w-5 h-5"/></button>
 
@@ -1965,13 +2043,13 @@ function App() {
             <div className="p-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-black dark:text-white">Preview: {previewTitle}</h2>
-                <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                <button onClick={() => setPreviewOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X className="w-4 h-4 text-black dark:text-white" /></button>
               </div>
               <div className="mt-4">
                 {previewUrl ? (
                   <iframe src={previewUrl} title={previewTitle || 'Preview'} width="100%" height="600px" />
                 ) : previewHtml ? (
-                  <div className="prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
                 ) : (
                   <div className="text-sm text-gray-500">No preview available</div>
                 )}
@@ -1987,7 +2065,7 @@ function App() {
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Extracted data</h2>
-                <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X /></button>
+                <button onClick={() => setExtractModalOpen(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#2b2b2d]"><X className="w-4 h-4 text-black dark:text-white" /></button>
               </div>
 
               <div className="mt-4 space-y-3">
@@ -2241,7 +2319,7 @@ function App() {
                           return amountDue > 0 ? (
                             <div className="flex items-center justify-between mt-2">
                               <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
-                                <XCircle className="w-4 h-4" />
+                                <XCircle className="w-4 h-4 text-black dark:text-white" />
                                 <span>Amount Due:</span>
                               </div>
                               <span className="text-sm font-semibold text-red-600 dark:text-[#ff453a]">
@@ -2433,8 +2511,12 @@ function App() {
                                 </>
                               ) : (
                                 <>
-                                  <button onClick={() => startEditChecklistItem(item.id, item.name)} className="text-blue-600 hover:text-blue-700" title="Edit item"><Edit2 className="w-4 h-4" /></button>
-                                  <button onClick={() => removeChecklistItem(item.id)} className="text-red-600 hover:text-red-700" title="Remove item"><Trash2 className="w-4 h-4" /></button>
+                                  <button onClick={() => startEditChecklistItem(item.id, item.name)} className="group text-blue-600 hover:bg-blue-600 rounded p-1" title="Edit item">
+                                    <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                  </button>
+                                  <button onClick={() => removeChecklistItem(item.id)} className="group text-red-600 hover:bg-red-600 rounded p-1" title="Remove item">
+                                    <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                  </button>
                                 </>
                               )}
                             </div>
@@ -2480,16 +2562,22 @@ function App() {
                                     <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
                                     <button
                                       onClick={() => { setEditingStop(stop); setShowEditStopForm(true); }}
-                                      className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1"
-                                    ><Edit2 className="w-4 h-4" /></button>
+                                      className="group text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] rounded p-1"
+                                    >
+                                      <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                    </button>
                                     <button
                                       onClick={() => handleDeleteStop(stop.id!)}
-                                      className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1"
-                                    ><Trash2 className="w-4 h-4" /></button>
+                                      className="group text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] rounded p-1"
+                                    >
+                                      <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                    </button>
                                   </div>
                                 </div>
                               {/* Transport attachments not shown here - per-stop/transport attachments rendered in their respective sections */}
-                                <p className="text-sm text-gray-600 dark:text-[#98989d]">{formatDateForDisplay(stop.arrivalDate)} - {formatDateForDisplay(stop.departureDate)}</p>
+                                <p className="text-sm text-gray-600 dark:text-[#98989d]">
+                                  {formatDateForDisplay(stop.arrivalDate)}{stop.checkInTime ? `, ${stop.checkInTime}` : ''} - {formatDateForDisplay(stop.departureDate)}{stop.checkOutTime ? `, ${stop.checkOutTime}` : ''}
+                                </p>
 
                                 {stop.accommodationName && (
                                   <div className="mt-2 text-sm">
@@ -2523,8 +2611,12 @@ function App() {
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
-                                            <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="text-blue-600 hover:text-blue-700 p-1"><Edit2 className="w-4 h-4" /></button>
-                                            <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="text-red-600 hover:text-red-700 p-1"><Trash2 className="w-4 h-4" /></button>
+                                            <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="group text-blue-600 hover:bg-blue-600 rounded p-1">
+                                              <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                            </button>
+                                            <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="group text-red-600 hover:bg-red-600 rounded p-1">
+                                              <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                            </button>
                                           </div>
                                         </li>
                                       ))}
@@ -2636,19 +2728,19 @@ function App() {
                                       setEditingTransport(transport);
                                       setShowEditTransportForm(true);
                                     }}
-                                    className="text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
+                                    className="group text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                     disabled={loading}
                                     title="Edit transport"
                                   >
-                                    <Edit2 className="w-4 h-4" />
+                                    <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteTransport(transport.id!)}
-                                    className="text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] hover:text-white rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
+                                    className="group text-red-600 dark:text-[#ff453a] hover:bg-red-600 dark:hover:bg-[#ff453a] rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                     disabled={loading}
                                     title="Delete transport"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
                                   </button>
                                 </div>
                               </div>
@@ -2656,8 +2748,7 @@ function App() {
                                 {transport.fromLocation} → {transport.toLocation}
                               </p>
                               <p className="text-sm text-gray-600 dark:text-[#98989d] mt-1">
-                                {new Date(transport.departureDate).toLocaleString()} -{' '}
-                                {new Date(transport.arrivalDate).toLocaleString()}
+                                {formatDateTimeForDisplay(transport.departureDate)} - {formatDateTimeForDisplay(transport.arrivalDate)}
                               </p>
                               <div className="text-sm mt-1 flex items-center justify-between">
                                 <p className="font-medium text-green-600 dark:text-[#30d158]">
@@ -2670,6 +2761,18 @@ function App() {
                                   disabled={loading}
                                 />
                               </div>
+                                {/* Transport booking link (show above attachments and attractions) */}
+                                {transport.bookingUrl && (
+                                  <a
+                                    href={transport.bookingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-blue-600 dark:text-[#0a84ff] hover:underline"
+                                  >
+                                    View booking →
+                                  </a>
+                                )}
+
                                 {/* Transport attachments toggle and list */}
                                 {attachments && (
                                   (() => {
@@ -2692,16 +2795,6 @@ function App() {
                                     );
                                   })()
                                 )}
-                              {transport.bookingUrl && (
-                                <a
-                                  href={transport.bookingUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-blue-600 dark:text-[#0a84ff] hover:underline"
-                                >
-                                  View booking →
-                                </a>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -2802,7 +2895,7 @@ function App() {
                         {amountDue > 0 ? (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
-                              <XCircle className="w-4 h-4" />
+                              <XCircle className="w-4 h-4 text-black dark:text-white" />
                               <span>Amount Due:</span>
                             </div>
                             <span className="text-sm font-semibold text-red-600 dark:text-[#ff453a]">{amountDue.toFixed(2)} {base}</span>
@@ -3315,23 +3408,12 @@ function App() {
                       className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600 flex items-center justify-center"
                     >Add</button>
                   </div>
-                  {uploadingAttachment ? (
+                  {uploadingAttachment && (
                     <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
                       <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
                       <div className="flex items-center gap-2">
-                        <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
+                        <button onClick={() => void openAttachmentPreview(uploadingAttachment)} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
                         <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
-                      </div>
-                    </div>
-                  ) : pendingFile && (
-                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                      <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
-                          className="text-gray-500 hover:text-gray-700"
-                          title="Cancel"
-                        ><X className="w-4 h-4" /></button>
                       </div>
                     </div>
                   )}
@@ -3348,7 +3430,6 @@ function App() {
                       </div>
                     );
                   })()}
-                </div>
                 <div className="bg-gray-50 dark:bg-[#1c1c1e] p-3 rounded-lg border border-gray-200 dark:border-[#38383a]">
                   <p className="text-sm text-gray-600 dark:text-[#98989d]">
                     📍 Coordinates: {newStop.latitude?.toFixed(4)}, {newStop.longitude?.toFixed(4)}
@@ -3374,6 +3455,7 @@ function App() {
                   {loading ? 'Adding...' : 'Add Stop'}
                 </button>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -3499,10 +3581,13 @@ function App() {
                     </label>
                     <input
                       type="time"
-                      value={formatTimeForInput(editingStop.checkInTime)}
+                      value={editingStop.checkInTime ?? ''}
                       onChange={(e) => setEditingStop({ ...editingStop, checkInTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingStop) setEditingStop({ ...editingStop, checkInTime: isValidTime(v) ? v : '' });
+                      }}
                       className="gh-input"
-                      placeholder="HH:MM"
                     />
                   </div>
                   <div>
@@ -3511,10 +3596,13 @@ function App() {
                     </label>
                     <input
                       type="time"
-                      value={formatTimeForInput(editingStop.checkOutTime)}
+                      value={editingStop.checkOutTime ?? ''}
                       onChange={(e) => setEditingStop({ ...editingStop, checkOutTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingStop) setEditingStop({ ...editingStop, checkOutTime: isValidTime(v) ? v : '' });
+                      }}
                       className="gh-input"
-                      placeholder="HH:MM"
                     />
                   </div>
                 </div>
@@ -3639,7 +3727,7 @@ function App() {
                     <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
                       <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
                       <div className="flex items-center gap-2">
-                        <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
+                        <button onClick={() => void openAttachmentPreview(uploadingAttachment)} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
                         <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
                       </div>
                     </div>
@@ -3651,7 +3739,7 @@ function App() {
                           onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
                           className="text-gray-500 hover:text-gray-700"
                           title="Cancel"
-                        ><X className="w-4 h-4" /></button>
+                        ><X className="w-4 h-4 text-black dark:text-white" /></button>
                       </div>
                     </div>
                   )}
@@ -3787,8 +3875,23 @@ function App() {
                     <input
                       type="datetime-local"
                       value={newTransport.departureDate as string}
-                      onChange={(e) => setNewTransport({ ...newTransport, departureDate: e.target.value })}
+                      onChange={e => {
+                        let val = e.target.value;
+                        // Allow user to type with space instead of T
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                        }
+                        setNewTransport({ ...newTransport, departureDate: val });
+                      }}
+                      onBlur={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                          setNewTransport(prev => ({ ...prev, departureDate: val }));
+                        }
+                      }}
                       className="gh-input"
+                      placeholder="YYYY-MM-DD HH:MM"
                     />
                   </div>
                   <div>
@@ -3798,8 +3901,22 @@ function App() {
                     <input
                       type="datetime-local"
                       value={newTransport.arrivalDate as string}
-                      onChange={(e) => setNewTransport({ ...newTransport, arrivalDate: e.target.value })}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                        }
+                        setNewTransport({ ...newTransport, arrivalDate: val });
+                      }}
+                      onBlur={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                          setNewTransport(prev => ({ ...prev, arrivalDate: val }));
+                        }
+                      }}
                       className="gh-input"
+                      placeholder="YYYY-MM-DD HH:MM"
                     />
                   </div>
                 </div>
@@ -4008,8 +4125,22 @@ function App() {
                     <input
                       type="datetime-local"
                       value={formatDateTimeForInput(editingTransport.departureDate)}
-                      onChange={(e) => setEditingTransport({ ...editingTransport, departureDate: e.target.value })}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                        }
+                        setEditingTransport({ ...editingTransport, departureDate: val });
+                      }}
+                      onBlur={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                          if (editingTransport) setEditingTransport({ ...editingTransport, departureDate: val });
+                        }
+                      }}
                       className="gh-input"
+                      placeholder="YYYY-MM-DD HH:MM"
                     />
                   </div>
                   <div>
@@ -4019,8 +4150,22 @@ function App() {
                     <input
                       type="datetime-local"
                       value={formatDateTimeForInput(editingTransport.arrivalDate)}
-                      onChange={(e) => setEditingTransport({ ...editingTransport, arrivalDate: e.target.value })}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                        }
+                        setEditingTransport({ ...editingTransport, arrivalDate: val });
+                      }}
+                      onBlur={e => {
+                        let val = e.target.value;
+                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+                          val = val.replace(' ', 'T');
+                          if (editingTransport) setEditingTransport({ ...editingTransport, arrivalDate: val });
+                        }
+                      }}
                       className="gh-input"
+                      placeholder="YYYY-MM-DD HH:MM"
                     />
                   </div>
                 </div>
@@ -4121,7 +4266,7 @@ function App() {
                             onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
                             className="text-gray-500 hover:text-gray-700"
                             title="Cancel"
-                          ><X className="w-4 h-4" /></button>
+                          ><X className="w-4 h-4 text-black dark:text-white" /></button>
                         </div>
                       </div>
                     )}
@@ -4181,7 +4326,7 @@ function App() {
                   }}
                   className="text-gray-600 dark:text-[#98989d] hover:text-gray-900 dark:text-[#ffffff]"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-6 h-6 text-black dark:text-white" />
                 </button>
               </div>
 
@@ -4349,10 +4494,13 @@ function App() {
                     </label>
                     <input
                       type="time"
-                      value={formatTimeForInput(newAttraction.visitTime)}
+                      value={newAttraction.visitTime ?? ''}
                       onChange={(e) => setNewAttraction({ ...newAttraction, visitTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        setNewAttraction((prev) => ({ ...prev, visitTime: isValidTime(v) ? v : '' }));
+                      }}
                       className="gh-input"
-                      placeholder="HH:MM"
                     />
                   </div>
                 </div>
@@ -4401,7 +4549,7 @@ function App() {
                   }}
                   className="text-gray-600 dark:text-[#98989d] hover:text-gray-900 dark:text-[#ffffff]"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-6 h-6 text-black dark:text-white" />
                 </button>
               </div>
 
@@ -4556,10 +4704,13 @@ function App() {
                     </label>
                     <input
                       type="time"
-                      value={formatTimeForInput(editingAttraction.visitTime)}
+                      value={editingAttraction.visitTime ?? ''}
                       onChange={(e) => setEditingAttraction({ ...editingAttraction, visitTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingAttraction) setEditingAttraction({ ...editingAttraction, visitTime: isValidTime(v) ? v : '' });
+                      }}
                       className="gh-input"
-                      placeholder="HH:MM"
                     />
                   </div>
                 </div>
