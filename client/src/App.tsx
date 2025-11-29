@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
+import ImportMapModal from './components/ImportMapModal';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -157,6 +158,19 @@ function App() {
     }
   };
 
+  const handleImportComplete = async (result: { createdStops: any[]; createdAttractions: any[] }) => {
+    try {
+      const total = (result.createdStops?.length || 0) + (result.createdAttractions?.length || 0);
+      if (selectedJourney?.id) {
+        await refreshJourneyFromServer(selectedJourney.id);
+      }
+      success(`Imported ${total} items`);
+    } catch (e: any) {
+      console.error('Import completed but refresh failed', e);
+      success('Import finished');
+    }
+  };
+
   // Find journey id for a stop id from local state cache
   const journeyIdFromStop = (stopId: number): number | null => {
     const j = journeys.find(j => (j.stops || []).some(s => s.id === stopId));
@@ -176,9 +190,30 @@ function App() {
     };
   }, [previewUrl]);
   const [extractModalOpen, setExtractModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [extractResult, setExtractResult] = useState<any | null>(null);
   const [openStopAttachments, setOpenStopAttachments] = useState<Record<number, boolean>>({});
   const [openTransportAttachments, setOpenTransportAttachments] = useState<Record<number, boolean>>({});
+    const [openAttractions, setOpenAttractions] = useState<Record<number, boolean>>({});
+
+    // Ensure attractions are expanded by default if present
+    useEffect(() => {
+      if (selectedJourney?.stops) {
+        setOpenAttractions(prev => {
+          const updated: Record<number, boolean> = { ...prev };
+          selectedJourney.stops.forEach(stop => {
+            if (stop.id != null) {
+              if (stop.attractions && stop.attractions.length > 0 && !(stop.id in updated)) {
+                updated[stop.id] = true;
+              } else if ((!stop.attractions || stop.attractions.length === 0) && !(stop.id in updated)) {
+                updated[stop.id] = false;
+              }
+            }
+          });
+          return updated;
+        });
+      }
+    }, [selectedJourney?.stops]);
   const transportFileRef = useRef<HTMLInputElement | null>(null);
   const stopFileRef = useRef<HTMLInputElement | null>(null);
   const allowedPreviewTypes = '.pdf,.doc,.docx';
@@ -2185,6 +2220,15 @@ function App() {
         </div>
       )}
 
+      {/* Import map modal (placed here so it sits alongside other modals) */}
+      <ImportMapModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImportComplete={handleImportComplete}
+        selectedJourneyId={selectedJourney?.id ?? null}
+        existingStops={selectedJourney?.stops || []}
+      />
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2540,14 +2584,21 @@ function App() {
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
                     </div>
-                    <button
-                      onClick={() => setShowStopForm(true)}
-                      className="gh-btn-secondary text-sm"
-                      disabled={loading}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Stop
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setImportModalOpen(true)} className="gh-btn-secondary text-sm" disabled={!selectedJourney || loading} title="Import stops from map">
+                        <DownloadCloud className="w-4 h-4" />
+                        Import
+                      </button>
+
+                      <button
+                        onClick={() => setShowStopForm(true)}
+                        className="gh-btn-secondary text-sm"
+                        disabled={loading}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Stop
+                      </button>
+                    </div>
                   </div>
                   <div className={`space-y-3 transition-collapse overflow-hidden ${stopsOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!stopsOpen}>
                       { (selectedJourney?.stops || []).length > 0 ? (
@@ -2561,7 +2612,13 @@ function App() {
                                   <div className="flex items-center gap-2">
                                     <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
                                     <button
-                                      onClick={() => { setEditingStop(stop); setShowEditStopForm(true); }}
+                                      onClick={() => {
+                                        setEditingStop(stop);
+                                        setShowEditStopForm(true);
+                                        setPendingFile(null);
+                                        setUploadingAttachment(null);
+                                        if (stopFileRef.current) stopFileRef.current.value = '';
+                                      }}
                                       className="group text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] rounded p-1"
                                     >
                                       <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
@@ -2596,43 +2653,73 @@ function App() {
                                   </div>
                                 )}
 
-                                {stop.attractions && stop.attractions.length > 0 && (
-                                  <div className="mt-2 text-sm">
-                                      <p className="font-medium text-gray-900 dark:text-[#ffffff]">Attractions</p>
-                                    <ul className="list-disc pl-4 ml-0 mt-1 marker:text-blue-600 dark:marker:text-[#0a84ff] text-gray-600 dark:text-[#98989d]">
-                                      {stop.attractions.map((a: Attraction) => (
-                                        <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-gray-600 dark:text-[#98989d]">•</span>
-                                            <span className="text-sm text-gray-600 dark:text-[#98989d]">{a.name}</span>
-                                            {a.estimatedCost != null ? (
-                                              <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || (a as any).curr || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
-                                            ) : null}
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
-                                            <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="group text-blue-600 hover:bg-blue-600 rounded p-1">
-                                              <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
-                                            </button>
-                                            <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="group text-red-600 hover:bg-red-600 rounded p-1">
-                                              <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
-                                            </button>
-                                          </div>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                    <div className="mt-2">
+                                {/* Collapsible Attractions or just Add button if none */}
+                                <div className="mt-2 text-sm">
+                                  {stop.attractions && stop.attractions.length > 0 ? (
+                                    <>
                                       <button
-                                        onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
-                                        className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
-                                        aria-label="Add attraction"
+                                        onClick={() => setOpenAttractions(prev => ({ ...prev, [stop.id!]: !prev[stop.id!] }))}
+                                        className="group p-1 rounded flex items-center gap-2 text-sm text-gray-900 dark:text-[#ffffff] font-medium hover:bg-gray-100 dark:hover:bg-[#232326] transition-colors"
+                                        aria-expanded={!!openAttractions[stop.id!]}
+                                        aria-controls={`attractions-list-${stop.id}`}
                                       >
-                                        <Plus className="w-4 h-4" />
-                                        Add Attraction
+                                        <span className="text-xs">
+                                          {openAttractions[stop.id!]
+                                            ? <ChevronDown className="w-4 h-4 text-gray-900 dark:text-[#ffffff] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                                            : <ChevronRight className="w-4 h-4 text-gray-900 dark:text-[#ffffff] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
+                                        </span>
+                                        <span>Attractions ({stop.attractions.length})</span>
                                       </button>
-                                    </div>
-                                  </div>
-                                )}
+                                      <div
+                                        id={`attractions-list-${stop.id}`}
+                                        className={`transition-collapse overflow-hidden ${openAttractions[stop.id!] ? 'collapse-visible' : 'collapse-hidden'}`}
+                                        aria-hidden={!openAttractions[stop.id!]}
+                                      >
+                                        <ul className="list-disc pl-4 ml-0 mt-1 marker:text-blue-600 dark:marker:text-[#0a84ff] text-gray-600 dark:text-[#98989d]">
+                                          {stop.attractions.map((a: Attraction) => (
+                                            <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-gray-600 dark:text-[#98989d]">•</span>
+                                                <span className="text-sm text-gray-600 dark:text-[#98989d]">{a.name}</span>
+                                                {a.estimatedCost != null ? (
+                                                  <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || (a as any).curr || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
+                                                ) : null}
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
+                                                <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="group text-blue-600 hover:bg-blue-600 rounded p-1">
+                                                  <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                                </button>
+                                                <button onClick={() => handleDeleteAttraction(stop.id!, a.id!)} className="group text-red-600 hover:bg-red-600 rounded p-1">
+                                                  <Trash2 className="w-4 h-4 transition-colors group-hover:text-white" />
+                                                </button>
+                                              </div>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                        <div className="mt-2">
+                                          <button
+                                            onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
+                                            className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
+                                            aria-label="Add attraction"
+                                          >
+                                            <Plus className="w-4 h-4" />
+                                            Add Attraction
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
+                                      className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
+                                      aria-label="Add attraction"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      Add Attraction
+                                    </button>
+                                  )}
+                                </div>
                                 {/* Stop attachments toggle and list */}
                                 {attachments && (
                                   (() => {
@@ -2655,18 +2742,7 @@ function App() {
                                     );
                                   })()
                                 )}
-                                {!stop.attractions || stop.attractions.length === 0 ? (
-                                  <div className="mt-2">
-                                    <button
-                                      onClick={() => { setSelectedStopForAttraction(stop.id!); setShowAttractionForm(true); }}
-                                      className="text-blue-600 dark:text-[#0a84ff] hover:underline flex items-center gap-2 text-sm"
-                                      aria-label="Add attraction"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                      Add Attraction
-                                    </button>
-                                  </div>
-                                ) : null}
+                                {/* Add Attraction button moved inside collapsible */}
                               </div>
                             </div>
                           </div>
@@ -2727,6 +2803,9 @@ function App() {
                                     onClick={() => {
                                       setEditingTransport(transport);
                                       setShowEditTransportForm(true);
+                                      setPendingFile(null);
+                                      setUploadingAttachment(null);
+                                      if (transportFileRef.current) transportFileRef.current.value = '';
                                     }}
                                     className="group text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] rounded p-1 cursor-pointer transition-all duration-300 ease-in-out"
                                     disabled={loading}
@@ -3406,17 +3485,9 @@ function App() {
                         } finally { setLoading(false); }
                       }}
                       className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600 flex items-center justify-center"
-                    >Add</button>
+                    ><Plus className="w-4 h-4 mr-2" />Add</button>
                   </div>
-                  {uploadingAttachment && (
-                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                      <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => void openAttachmentPreview(uploadingAttachment)} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
-                        <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Removed temporary upload-preview row: keep only the static chooser and existing attachments */}
                   {/* Existing attachments for the new stop (if any) */}
                   {(newStop && attachments && attachments.length > 0) && (() => {
                     const attForNewStop = attachments.filter(a => Number(a.stopId ?? a.stop_id ?? a.stop) === (newStop.id ?? null));
@@ -3720,29 +3791,10 @@ function App() {
                         } finally { setLoading(false); }
                       }}
                       className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600"
-                    >Add</button>
+                    ><Plus className="w-4 h-4 mr-2" />Add</button>
                   </div>
 
-                  {uploadingAttachment ? (
-                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                      <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => void openAttachmentPreview(uploadingAttachment)} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
-                        <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
-                      </div>
-                    </div>
-                  ) : pendingFile && (
-                    <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                      <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
-                          className="text-gray-500 hover:text-gray-700"
-                          title="Cancel"
-                        ><X className="w-4 h-4 text-black dark:text-white" /></button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Removed temporary upload-preview and pending-file preview: only the chooser and Existing attachments are shown as requested */}
 
                   {/* Existing attachments for the stop being edited */}
                   {(editingStop && attachments && attachments.length > 0) && (() => {
@@ -4248,28 +4300,9 @@ function App() {
                         } finally { setLoading(false); }
                       }}
                       className="w-1/4 h-12 gh-btn-primary bg-green-500 hover:bg-green-600"
-                    >Add</button>
+                    ><Plus className="w-4 h-4 mr-2" />Add</button>
                   </div>
-                    {uploadingAttachment ? (
-                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                        <div className="text-sm text-white truncate">{uploadingAttachment.originalFilename || uploadingAttachment.filename} • {Math.round((uploadingAttachment.fileSize || 0) / 1024)} KB</div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={async () => { try { const preview = await attachmentService.viewAttachment(uploadingAttachment.id); if (preview.type === 'pdf') { setPreviewUrl(preview.url); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewHtml(null); setPreviewOpen(true); } else { setPreviewHtml(preview.html); setPreviewTitle(uploadingAttachment.originalFilename); setPreviewUrl(null); setPreviewOpen(true); } } catch (e: any) { error(e?.message || 'Failed to preview'); } }} className="text-gray-500 hover:text-gray-700" title="Preview"><Eye className="w-5 h-5" /></button>
-                          <button onClick={async () => { try { if (!(await confirmHook.confirm({ title: 'Delete', message: 'Delete uploaded attachment?' }))) return; await attachmentService.deleteAttachment(uploadingAttachment.id); setAttachments(prev => prev.filter(a => a.id !== uploadingAttachment.id)); setUploadingAttachment(null); setPendingFile(null); success('Attachment deleted'); } catch (e: any) { error(e?.message || 'Failed to delete'); } }} className="text-red-600 hover:text-red-700" title="Delete"><Trash2 className="w-5 h-5"/></button>
-                        </div>
-                      </div>
-                    ) : pendingFile && (
-                      <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] px-4 h-12 rounded-md border border-gray-200 dark:border-[#38383a]">
-                        <div className="text-sm text-white">{pendingFile.name} • {Math.round(pendingFile.size / 1024)} KB</div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => { setPendingFile(null); setUploadingAttachment(null); }}
-                            className="text-gray-500 hover:text-gray-700"
-                            title="Cancel"
-                          ><X className="w-4 h-4 text-black dark:text-white" /></button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Removed temporary upload-preview and pending-file preview: only the chooser and Existing attachments are shown as requested */}
                     {/* Existing attachments for the transport being edited */}
                     {(editingTransport && attachments && attachments.length > 0) && (() => {
                       const attForEditingTransport = attachments.filter(a => Number(a.transportId ?? a.transport_id ?? a.transport) === (editingTransport.id ?? null));

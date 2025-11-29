@@ -27,6 +27,8 @@ import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import userRoutes from './routes/user';
 import currencyRoutes from './routes/currency';
+import proxyRoutes from './routes/proxy';
+import proxyRenderRoutes from './routes/proxyRender';
 import { startAutoRefresh } from './services/currencyService';
 
 // Validate required environment variables
@@ -135,6 +137,8 @@ const tryConnect = async () => {
     app.use('/api/attractions', attractionRoutes);
     app.use('/api/transports', transportRoutes);
     app.use('/api/attachments', attachmentRoutes);
+    app.use('/api/proxy', proxyRoutes);
+    app.use('/api/proxy', proxyRenderRoutes);
     app.use('/api/currency', currencyRoutes);
 
     // Start periodic currency rates refresh (background) only if explicitly enabled
