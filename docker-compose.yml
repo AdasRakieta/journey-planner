@@ -85,16 +85,6 @@ services:
 
   # Frontend (React + Vite + Nginx)
   frontend:
-    # Pull from GitHub Container Registry (ghcr.io)
-    # Images are built automatically by GitHub Actions on every push to main
-    # Both AMD64 and ARM64 architectures supported
-    image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
-    container_name: journey-planner-web
-    # Build locally instead of pulling (for Portainer deployment)
-    # build:
-    #   context: ./client
-    #   dockerfile: Dockerfile
-  frontend:
     image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
     container_name: journey-planner-web
 
