@@ -29,11 +29,11 @@ services:
     image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
     container_name: journey-planner-api
     # Uncomment 'build' section below for local development builds
-    # build:
-    #   context: ./server
-    #   dockerfile: Dockerfile
-    #   args:
-    #     - NODE_ENV=production
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
     environment:
       # Server Configuration
       - PORT=${BACKEND_PORT:-5001}

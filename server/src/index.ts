@@ -92,29 +92,31 @@ const tryConnect = async () => {
     const ok = await tryConnect();
     if (!ok) {
       console.warn('\nDatabase not reachable - server will run using JSON fallback. Continuing automatically.');
-    }
-
-    // Ensure JSON users store has at least an admin account
-    try {
-      const users = await jsonStore.getAll('users');
-      const hasAdmin = users.some((u: any) => u.username === 'admin');
-      if (!hasAdmin) {
-        const pw = 'admin123';
-        const pwHash = await hashPassword(pw);
-        const adminUser = {
-          username: 'admin',
-          email: 'admin@local',
-          password_hash: pwHash,
-          role: 'admin',
-          is_active: true,
-          email_verified: true,
-          created_at: new Date().toISOString()
-        };
-        await jsonStore.insert('users', adminUser);
-        console.log("⚙️ JSON fallback: created default admin user 'admin' with password 'admin123' in server/data/users.json");
+      
+      // Ensure JSON users store has at least an admin account (only in fallback mode)
+      try {
+        const users = await jsonStore.getAll('users');
+        const hasAdmin = users.some((u: any) => u.username === 'admin');
+        if (!hasAdmin) {
+          const pw = 'admin123';
+          const pwHash = await hashPassword(pw);
+          const adminUser = {
+            username: 'admin',
+            email: 'admin@local',
+            password_hash: pwHash,
+            role: 'admin',
+            is_active: true,
+            email_verified: true,
+            created_at: new Date().toISOString()
+          };
+          await jsonStore.insert('users', adminUser);
+          console.log("⚙️ JSON fallback: created default admin user 'admin' with password 'admin123' in server/data/users.json");
+        }
+      } catch (e) {
+        console.error('Failed to ensure admin user in JSON store:', e);
       }
-    } catch (e) {
-      console.error('Failed to ensure admin user in JSON store:', e);
+    } else {
+      console.log('✅ Using PostgreSQL database - JSON fallback disabled');
     }
 
     // no interactive prompt - continue automatically

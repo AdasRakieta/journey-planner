@@ -31,21 +31,24 @@ export const connectDB = async () => {
 
   try {
     const client = await pool.connect();
-    const result = await client.query('SELECT version()');
-    console.log('✅ PostgreSQL connected successfully!');
-    console.log('📊 Version:', result.rows[0].version.split('\n')[0]);
-    client.release();
-    
-    // Test if tables exist
-    const tables = await client.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-      ORDER BY table_name
-    `);
-    console.log('📋 Available tables:', tables.rows.map(r => r.table_name).join(', '));
-    DB_AVAILABLE = true;
-    return DB_AVAILABLE;
+    try {
+      const result = await client.query('SELECT version()');
+      console.log('✅ PostgreSQL connected successfully!');
+      console.log('📊 Version:', result.rows[0].version.split('\n')[0]);
+      
+      // Test if tables exist
+      const tables = await client.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        ORDER BY table_name
+      `);
+      console.log('📋 Available tables:', tables.rows.map(r => r.table_name).join(', '));
+      DB_AVAILABLE = true;
+      return DB_AVAILABLE;
+    } finally {
+      client.release();
+    }
   } catch (error: any) {
     console.error('❌ Database connection failed:', error.message);
     console.warn('⚠️ Falling back to JSON data store. Server will still start but some operations are limited.');
