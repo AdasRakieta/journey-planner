@@ -19,6 +19,7 @@ export interface StopAttributes {
   accommodationCurrency?: string;
   notes?: string;
   isPaid?: boolean;
+  orderIndex?: number; // for sorting within journey
 }
 
 export interface TransportAttributes {
@@ -46,6 +47,10 @@ export interface AttractionAttributes {
   estimatedCost?: number;
   duration?: number; // in hours
   isPaid?: boolean;
+  orderIndex?: number; // for sorting within stop
+  priority?: 'must' | 'should' | 'could' | 'skip'; // priority level
+  plannedDate?: Date; // scheduled date
+  plannedTime?: string; // HH:MM format
 }
 
 export interface JourneyShareAttributes {
@@ -161,6 +166,7 @@ export class Stop extends Model<StopAttributes, StopCreationAttributes> implemen
   public accommodationCurrency?: string;
   public notes?: string;
   public isPaid?: boolean;
+  public orderIndex?: number;
 }
 
 Stop.init(
@@ -228,6 +234,11 @@ Stop.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       field: 'is_paid', // Map to snake_case column
+    },
+    orderIndex: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'order_index',
     },
   },
   {
@@ -344,6 +355,10 @@ export class Attraction extends Model<AttractionAttributes, AttractionCreationAt
   public estimatedCost?: number;
   public duration?: number;
   public isPaid?: boolean;
+  public orderIndex?: number;
+  public priority?: 'must' | 'should' | 'could' | 'skip';
+  public plannedDate?: Date;
+  public plannedTime?: string;
 }
 
 Attraction.init(
@@ -380,6 +395,26 @@ Attraction.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       field: 'is_paid', // Map to snake_case column
+    },
+    orderIndex: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'order_index',
+    },
+    priority: {
+      type: DataTypes.STRING(10),
+      defaultValue: 'should',
+      validate: {
+        isIn: [['must', 'should', 'could', 'skip']],
+      },
+    },
+    plannedDate: {
+      type: DataTypes.DATEONLY,
+      field: 'planned_date',
+    },
+    plannedTime: {
+      type: DataTypes.TIME,
+      field: 'planned_time',
     },
   },
   {

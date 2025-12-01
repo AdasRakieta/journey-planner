@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText, ListOrdered } from 'lucide-react';
 import JourneyMap from './components/JourneyMap';
 import ImportMapModal from './components/ImportMapModal';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
@@ -890,7 +890,6 @@ function App() {
           return updated;
         })() : null);
       }
-      warning('Attraction deleted');
     });
     
     // Listen for transport events
@@ -1373,18 +1372,47 @@ function App() {
     try {
       setLoading(true);
       
+      // Auto-geocode if coordinates are missing but address is provided
+      let attractionData = { ...newAttraction };
+      if (!attractionData.latitude || !attractionData.longitude) {
+        const hasAddress = attractionData.addressStreet || attractionData.addressCity || 
+                          attractionData.addressPostalCode || attractionData.addressCountry;
+        if (hasAddress) {
+          try {
+            const result = await geocodeAddress(
+              attractionData.addressStreet,
+              attractionData.addressCity,
+              attractionData.addressPostalCode,
+              attractionData.addressCountry
+            );
+            if (result) {
+              attractionData = {
+                ...attractionData,
+                latitude: result.latitude,
+                longitude: result.longitude,
+                address: result.displayName,
+              };
+              info('Coordinates found automatically');
+            }
+          } catch (err) {
+            console.warn('Auto-geocoding failed:', err);
+            // Continue without coordinates
+          }
+        }
+      }
+      
       // Create attraction using the new endpoint
       // Defensive: convert empty string to null for estimatedCost/duration
       const payload = {
-        ...newAttraction,
+        ...attractionData,
         estimatedCost:
-          newAttraction.estimatedCost === undefined || newAttraction.estimatedCost === null
+          attractionData.estimatedCost === undefined || attractionData.estimatedCost === null
             ? null
-            : newAttraction.estimatedCost,
+            : attractionData.estimatedCost,
         duration:
-          newAttraction.duration === '' || newAttraction.duration === undefined
+          attractionData.duration === '' || attractionData.duration === undefined
             ? null
-            : newAttraction.duration,
+            : attractionData.duration,
       };
       const createdAttraction = await attractionService.createAttraction(
         selectedStopForAttraction!,
@@ -1597,7 +1625,37 @@ function App() {
 
     try {
       setLoading(true);
-      const updated = await attractionService.updateAttraction(editingAttraction.id, editingAttraction);
+      
+      // Auto-geocode if coordinates are missing but address is provided
+      let attractionData = { ...editingAttraction };
+      if (!attractionData.latitude || !attractionData.longitude) {
+        const hasAddress = attractionData.addressStreet || attractionData.addressCity || 
+                          attractionData.addressPostalCode || attractionData.addressCountry;
+        if (hasAddress) {
+          try {
+            const result = await geocodeAddress(
+              attractionData.addressStreet,
+              attractionData.addressCity,
+              attractionData.addressPostalCode,
+              attractionData.addressCountry
+            );
+            if (result) {
+              attractionData = {
+                ...attractionData,
+                latitude: result.latitude,
+                longitude: result.longitude,
+                address: result.displayName,
+              };
+              info('Coordinates found automatically');
+            }
+          } catch (err) {
+            console.warn('Auto-geocoding failed:', err);
+            // Continue without coordinates
+          }
+        }
+      }
+      
+      const updated = await attractionService.updateAttraction(attractionData.id!, attractionData);
       
       const updatedStops = selectedJourney.stops?.map(stop => {
         if (stop.id === editingAttractionStopId) {
@@ -2071,9 +2129,10 @@ function App() {
         )}
       </header>
 
-      {/* Modals (moved out of header to avoid JSX nesting issues) */}
+
+      {/* Preview modal always rendered at the top, above all other modals/forms */}
       {previewOpen && (
-        <div className="gh-modal-overlay" onClick={() => setPreviewOpen(false)}>
+        <div className="gh-modal-overlay z-50" style={{ zIndex: 9999 }} onClick={() => setPreviewOpen(false)}>
           <div className="gh-modal max-w-4xl" onClick={(e) => e.stopPropagation()}>
             <div className="p-4">
               <div className="flex items-center justify-between">
@@ -2492,6 +2551,14 @@ function App() {
                       <p className="text-gray-600 dark:text-[#98989d] mt-2">{selectedJourney.description}</p>
                     )}
                   </div>
+                  <Link
+                    to={`/journey/${selectedJourney.id}/itinerary`}
+                    className="gh-btn-secondary text-sm flex-shrink-0"
+                    title="Plan detailed itinerary with priorities"
+                  >
+                    <ListOrdered className="w-4 h-4" />
+                    Harmonogram
+                  </Link>
                 </div>
 
                 {/* Journey-level attachments removed: attachments are shown under each Stop/Transport only. */}
@@ -4401,25 +4468,27 @@ function App() {
                       onChange={(e) => setNewAttraction({ ...newAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
-                    <div className="mt-2">
-                      <label className="block text-xs text-gray-600 dark:text-[#98989d] mb-1">Currency</label>
-                      <select
-                        value={(newAttraction as any).currency || newJourney.currency || 'PLN'}
-                        onChange={(e) => setNewAttraction({ ...newAttraction, currency: e.target.value })}
-                        className="gh-select"
-                      >
-                        <option value="PLN">PLN</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="KRW">KRW</option>
-                      </select>
-                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={(newAttraction as any).currency || newJourney.currency || 'PLN'}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, currency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
+                    </select>
                     {((newAttraction.estimatedCost || 0) > 0) && (
-                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
+                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-2">
                         {(() => {
                           const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
-                          // attractions currently don't have currency field; assume journey currency unless specified later
                           const from = (newAttraction as any).currency || mainCurr;
                           if (from === mainCurr) return null;
                           const conv = convertAmount(newAttraction.estimatedCost || 0, from, mainCurr);
@@ -4429,7 +4498,47 @@ function App() {
                       </p>
                     )}
                   </div>
+                </div>
 
+                {/* Planned Day - only for multi-day stops */}
+                {(() => {
+                  const stop = selectedJourney?.stops?.find(s => s.id === selectedStopForAttraction);
+                  if (!stop) return null;
+                  
+                  const stopArrival = new Date(stop.arrivalDate);
+                  const stopDeparture = new Date(stop.departureDate);
+                  const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  if (daysDiff < 1) return null;
+                  
+                  const formatDateForInput = (date: Date | string): string => {
+                    const d = new Date(date);
+                    return d.toISOString().split('T')[0];
+                  };
+                  
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                        📅 Planned Day
+                      </label>
+                      <input
+                        type="date"
+                        value={newAttraction.plannedDate || ''}
+                        onChange={(e) => setNewAttraction({ ...newAttraction, plannedDate: e.target.value || undefined })}
+                        min={formatDateForInput(stop.arrivalDate)}
+                        max={formatDateForInput(stop.departureDate)}
+                        className="gh-input max-w-[200px]"
+                      />
+                      {newAttraction.plannedDate && (
+                        <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                          {new Date(newAttraction.plannedDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Duration
@@ -4439,6 +4548,22 @@ function App() {
                       placeholder="e.g., 2 hours"
                       value={newAttraction.duration}
                       onChange={(e) => setNewAttraction({ ...newAttraction, duration: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Visit Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newAttraction.visitTime ?? ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, visitTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        setNewAttraction((prev) => ({ ...prev, visitTime: isValidTime(v) ? v : '' }));
+                      }}
                       className="gh-input"
                     />
                   </div>
@@ -4490,50 +4615,33 @@ function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                        Latitude {newAttraction.latitude && '✓'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Auto-filled"
-                        value={newAttraction.latitude || ''}
-                        onChange={(e) => setNewAttraction({ ...newAttraction, latitude: parseFloat(e.target.value) || undefined })}
-                        className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                        Longitude {newAttraction.longitude && '✓'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Auto-filled"
-                        value={newAttraction.longitude || ''}
-                        onChange={(e) => setNewAttraction({ ...newAttraction, longitude: parseFloat(e.target.value) || undefined })}
-                        className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
-                        readOnly
-                      />
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Latitude {newAttraction.latitude && '✓'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      placeholder="Auto-filled"
+                      value={newAttraction.latitude || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, latitude: parseFloat(e.target.value) || undefined })}
+                      className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                      readOnly
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      Visit Time
+                      Longitude {newAttraction.longitude && '✓'}
                     </label>
                     <input
-                      type="time"
-                      value={newAttraction.visitTime ?? ''}
-                      onChange={(e) => setNewAttraction({ ...newAttraction, visitTime: e.target.value })}
-                      onBlur={(e) => {
-                        const v = e.target.value;
-                        setNewAttraction((prev) => ({ ...prev, visitTime: isValidTime(v) ? v : '' }));
-                      }}
-                      className="gh-input"
+                      type="number"
+                      step="0.000001"
+                      placeholder="Auto-filled"
+                      value={newAttraction.longitude || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, longitude: parseFloat(e.target.value) || undefined })}
+                      className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                      readOnly
                     />
                   </div>
                 </div>
@@ -4624,22 +4732,65 @@ function App() {
                       onChange={(e) => setEditingAttraction({ ...editingAttraction, estimatedCost: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
-                    <div className="mt-2">
-                      <label className="block text-xs text-gray-600 dark:text-[#98989d] mb-1">Currency</label>
-                      <select
-                        value={(editingAttraction as any).currency || selectedJourney?.currency || 'PLN'}
-                        onChange={(e) => setEditingAttraction({ ...editingAttraction, currency: e.target.value })}
-                        className="gh-select"
-                      >
-                        <option value="PLN">PLN</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="KRW">KRW</option>
-                      </select>
-                    </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Currency
+                    </label>
+                    <select
+                      value={(editingAttraction as any).currency || selectedJourney?.currency || 'PLN'}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, currency: e.target.value })}
+                      className="gh-select"
+                    >
+                      <option value="PLN">PLN</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="KRW">KRW</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Planned Day - only for multi-day stops */}
+                {(() => {
+                  const stop = selectedJourney?.stops?.find(s => s.id === editingAttractionStopId);
+                  if (!stop) return null;
+                  
+                  const stopArrival = new Date(stop.arrivalDate);
+                  const stopDeparture = new Date(stop.departureDate);
+                  const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  if (daysDiff < 1) return null;
+                  
+                  const formatDateForInput = (date: Date | string): string => {
+                    const d = new Date(date);
+                    return d.toISOString().split('T')[0];
+                  };
+                  
+                  return (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                        📅 Planned Day
+                      </label>
+                      <input
+                        type="date"
+                        value={editingAttraction.plannedDate || ''}
+                        onChange={(e) => setEditingAttraction({ ...editingAttraction, plannedDate: e.target.value || undefined })}
+                        min={formatDateForInput(stop.arrivalDate)}
+                        max={formatDateForInput(stop.departureDate)}
+                        className="gh-input max-w-[200px]"
+                      />
+                      {editingAttraction.plannedDate && (
+                        <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                          {new Date(editingAttraction.plannedDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Duration
@@ -4649,6 +4800,22 @@ function App() {
                       placeholder="e.g., 2 hours"
                       value={editingAttraction.duration || ''}
                       onChange={(e) => setEditingAttraction({ ...editingAttraction, duration: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Visit Time
+                    </label>
+                    <input
+                      type="time"
+                      value={editingAttraction.visitTime ?? ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, visitTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingAttraction) setEditingAttraction({ ...editingAttraction, visitTime: isValidTime(v) ? v : '' });
+                      }}
                       className="gh-input"
                     />
                   </div>
@@ -4700,50 +4867,33 @@ function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                        Latitude {editingAttraction.latitude && '✓'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Auto-filled"
-                        value={editingAttraction.latitude || ''}
-                        onChange={(e) => setEditingAttraction({ ...editingAttraction, latitude: parseFloat(e.target.value) || undefined })}
-                        className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
-                        readOnly
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                        Longitude {editingAttraction.longitude && '✓'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Auto-filled"
-                        value={editingAttraction.longitude || ''}
-                        onChange={(e) => setEditingAttraction({ ...editingAttraction, longitude: parseFloat(e.target.value) || undefined })}
-                        className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
-                        readOnly
-                      />
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Latitude {editingAttraction.latitude && '✓'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      placeholder="Auto-filled"
+                      value={editingAttraction.latitude || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, latitude: parseFloat(e.target.value) || undefined })}
+                      className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                      readOnly
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
-                      Visit Time
+                      Longitude {editingAttraction.longitude && '✓'}
                     </label>
                     <input
-                      type="time"
-                      value={editingAttraction.visitTime ?? ''}
-                      onChange={(e) => setEditingAttraction({ ...editingAttraction, visitTime: e.target.value })}
-                      onBlur={(e) => {
-                        const v = e.target.value;
-                        if (editingAttraction) setEditingAttraction({ ...editingAttraction, visitTime: isValidTime(v) ? v : '' });
-                      }}
-                      className="gh-input"
+                      type="number"
+                      step="0.000001"
+                      placeholder="Auto-filled"
+                      value={editingAttraction.longitude || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, longitude: parseFloat(e.target.value) || undefined })}
+                      className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                      readOnly
                     />
                   </div>
                 </div>

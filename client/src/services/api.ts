@@ -237,6 +237,57 @@ export const attractionService = {
     if (!response.ok) throw new Error('Failed to update payment status');
     return response.json();
   },
+
+  // Reorder attractions within a stop
+  async reorderAttractions(stopId: number, orderedIds: number[]) {
+    const response = await fetch(`${API_URL}/attractions/stop/${stopId}/reorder`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder attractions');
+    return response.json();
+  },
+
+  // Move attraction to another stop
+  async moveAttraction(attractionId: number, newStopId: number, orderIndex?: number) {
+    const response = await fetch(`${API_URL}/attractions/${attractionId}/move`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ newStopId, orderIndex }),
+    });
+    if (!response.ok) throw new Error('Failed to move attraction');
+    return response.json();
+  },
+
+  // Update attraction priority
+  async updateAttractionPriority(attractionId: number, priority: 'must' | 'should' | 'could' | 'skip') {
+    const response = await fetch(`${API_URL}/attractions/${attractionId}/priority`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ priority }),
+    });
+    if (!response.ok) throw new Error('Failed to update attraction priority');
+    return response.json();
+  },
+
+  // Bulk update attractions (order, priority, planned date/time, move)
+  async bulkUpdateAttractions(updates: Array<{
+    id: number;
+    orderIndex?: number;
+    priority?: 'must' | 'should' | 'could' | 'skip';
+    plannedDate?: string;
+    plannedTime?: string;
+    stopId?: number;
+  }>) {
+    const response = await fetch(`${API_URL}/attractions/bulk`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) throw new Error('Failed to bulk update attractions');
+    return response.json();
+  },
 };
 
 // Transport Service

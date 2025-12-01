@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap } from 'react-leaflet';
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useTheme } from '../contexts/ThemeContext';
@@ -85,16 +85,6 @@ function LocationMarker({ onMapClick }: { onMapClick?: (lat: number, lng: number
   return null;
 }
 
-function MapCenterUpdater({ center }: { center: [number, number] }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center, map]);
-  
-  return null;
-}
-
 // Helper to format date
 const formatDate = (date: Date | string | undefined): string => {
   if (!date) return '';
@@ -119,7 +109,7 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   ratesCache = null,
 }) => {
   const { theme } = useTheme();
-  const [mapCenter, setMapCenter] = useState<[number, number]>(center);
+  const [mapCenter] = useState<[number, number]>(center); // Only set once on mount
 
   // Choose tile layer based on theme - use lighter dark tiles
   const tileLayerUrl = theme === 'dark'
@@ -130,17 +120,7 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
     : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-  useEffect(() => {
-    // Update center when prop changes
-    setMapCenter(center);
-  }, [center]);
-
-  useEffect(() => {
-    if (locations.length > 0) {
-      const lastLocation = locations[locations.length - 1];
-      setMapCenter([lastLocation.lat, lastLocation.lng]);
-    }
-  }, [locations]);
+  // No more auto-centering - let user pan freely
 
   // Create polyline coordinates from stops (sorted by arrival date)
   const polylinePositions: [number, number][] = locations
@@ -184,7 +164,6 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         />
       )}
       
-      <MapCenterUpdater center={mapCenter} />
       {onMapClick && <LocationMarker onMapClick={onMapClick} />}
       
       {/* Polyline connecting stops */}

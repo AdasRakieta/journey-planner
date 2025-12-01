@@ -301,3 +301,202 @@ export const deleteAttraction = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Failed to delete attraction' });
   }
 };
+
+// Reorder attractions within a stop (bulk update order_index)
+export const reorderAttractions = async (req: Request, res: Response) => {
+  try {
+    const stopId = parseInt(req.params.stopId);
+    const { orderedIds } = req.body; // Array of attraction IDs in new order
+    
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ message: 'orderedIds must be an array' });
+    }
+    
+    if (!DB_AVAILABLE) {
+      // JSON store implementation
+      for (let i = 0; i < orderedIds.length; i++) {
+        await jsonStore.updateById('attractions', orderedIds[i], { order_index: i });
+      }
+      const attractions = (await jsonStore.findByField('attractions', 'stop_id', stopId))
+        .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0));
+      const io = req.app.get('io');
+      io.emit('attractions:reordered', { stopId, attractions: toCamelCase(attractions) });
+      return res.json(toCamelCase(attractions));
+    }
+    
+    // PostgreSQL implementation - batch update
+    for (let i = 0; i < orderedIds.length; i++) {
+      await query(
+        'UPDATE attractions SET order_index = $1 WHERE id = $2 AND stop_id = $3',
+        [i, orderedIds[i], stopId]
+      );
+    }
+    
+    const result = await query(
+      'SELECT * FROM attractions WHERE stop_id = $1 ORDER BY order_index ASC',
+      [stopId]
+    );
+    
+    const attractions = toCamelCase(result.rows);
+    const io = req.app.get('io');
+    io.emit('attractions:reordered', { stopId, attractions });
+    
+    res.json(attractions);
+  } catch (error) {
+    console.error('Error reordering attractions:', error);
+    res.status(500).json({ message: 'Failed to reorder attractions' });
+  }
+};
+
+// Move attraction to another stop
+export const moveAttraction = async (req: Request, res: Response) => {
+  try {
+    const attractionId = parseInt(req.params.id);
+    const { newStopId, orderIndex } = req.body;
+    
+    if (!newStopId) {
+      return res.status(400).json({ message: 'newStopId is required' });
+    }
+    
+    if (!DB_AVAILABLE) {
+      const updated = await jsonStore.updateById('attractions', attractionId, {
+        stop_id: newStopId,
+        order_index: orderIndex ?? 0
+      });
+      if (!updated) return res.status(404).json({ message: 'Attraction not found' });
+      const attraction = toCamelCase(updated);
+      const io = req.app.get('io');
+      io.emit('attraction:moved', attraction);
+      return res.json(attraction);
+    }
+    
+    const result = await query(
+      'UPDATE attractions SET stop_id = $1, order_index = $2 WHERE id = $3 RETURNING *',
+      [newStopId, orderIndex ?? 0, attractionId]
+    );
+    
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'Attraction not found' });
+    }
+    
+    const attraction = toCamelCase(result.rows[0]);
+    const io = req.app.get('io');
+    io.emit('attraction:moved', attraction);
+    
+    res.json(attraction);
+  } catch (error) {
+    console.error('Error moving attraction:', error);
+    res.status(500).json({ message: 'Failed to move attraction' });
+  }
+};
+
+// Update attraction priority
+export const updateAttractionPriority = async (req: Request, res: Response) => {
+  try {
+    const attractionId = parseInt(req.params.id);
+    const { priority } = req.body;
+    
+    const validPriorities = ['must', 'should', 'could', 'skip'];
+    if (!validPriorities.includes(priority)) {
+      return res.status(400).json({ message: 'Invalid priority. Must be one of: must, should, could, skip' });
+    }
+    
+    if (!DB_AVAILABLE) {
+      const updated = await jsonStore.updateById('attractions', attractionId, { priority });
+      if (!updated) return res.status(404).json({ message: 'Attraction not found' });
+      const attraction = toCamelCase(updated);
+      const io = req.app.get('io');
+      io.emit('attraction:updated', attraction);
+      return res.json(attraction);
+    }
+    
+    const result = await query(
+      'UPDATE attractions SET priority = $1 WHERE id = $2 RETURNING *',
+      [priority, attractionId]
+    );
+    
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'Attraction not found' });
+    }
+    
+    const attraction = toCamelCase(result.rows[0]);
+    const io = req.app.get('io');
+    io.emit('attraction:updated', attraction);
+    
+    res.json(attraction);
+  } catch (error) {
+    console.error('Error updating attraction priority:', error);
+    res.status(500).json({ message: 'Failed to update attraction priority' });
+  }
+};
+
+// Bulk update attractions (order, priority, planned date/time)
+export const bulkUpdateAttractions = async (req: Request, res: Response) => {
+  try {
+    const { updates } = req.body; // Array of { id, orderIndex?, priority?, plannedDate?, plannedTime?, stopId? }
+    
+    if (!Array.isArray(updates)) {
+      return res.status(400).json({ message: 'updates must be an array' });
+    }
+    
+    const results: any[] = [];
+    
+    for (const update of updates) {
+      const { id, orderIndex, priority, plannedDate, plannedTime, stopId } = update;
+      
+      if (!DB_AVAILABLE) {
+        const fields: any = {};
+        if (orderIndex !== undefined) fields.order_index = orderIndex;
+        if (priority !== undefined) fields.priority = priority;
+        if (plannedDate !== undefined) fields.planned_date = plannedDate;
+        if (plannedTime !== undefined) fields.planned_time = plannedTime;
+        if (stopId !== undefined) fields.stop_id = stopId;
+        
+        const updated = await jsonStore.updateById('attractions', id, fields);
+        if (updated) results.push(toCamelCase(updated));
+      } else {
+        const setClauses: string[] = [];
+        const values: any[] = [];
+        let paramIndex = 1;
+        
+        if (orderIndex !== undefined) {
+          setClauses.push(`order_index = $${paramIndex++}`);
+          values.push(orderIndex);
+        }
+        if (priority !== undefined) {
+          setClauses.push(`priority = $${paramIndex++}`);
+          values.push(priority);
+        }
+        if (plannedDate !== undefined) {
+          setClauses.push(`planned_date = $${paramIndex++}`);
+          values.push(plannedDate);
+        }
+        if (plannedTime !== undefined) {
+          setClauses.push(`planned_time = $${paramIndex++}`);
+          values.push(plannedTime);
+        }
+        if (stopId !== undefined) {
+          setClauses.push(`stop_id = $${paramIndex++}`);
+          values.push(stopId);
+        }
+        
+        if (setClauses.length > 0) {
+          values.push(id);
+          const result = await query(
+            `UPDATE attractions SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+            values
+          );
+          if (result.rows[0]) results.push(toCamelCase(result.rows[0]));
+        }
+      }
+    }
+    
+    const io = req.app.get('io');
+    io.emit('attractions:bulkUpdated', results);
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Error bulk updating attractions:', error);
+    res.status(500).json({ message: 'Failed to bulk update attractions' });
+  }
+};

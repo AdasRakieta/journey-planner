@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import ItineraryPage from './pages/ItineraryPage';
 import AuthCallback from './pages/AuthCallback';
 import ProtectedRoute from './components/ProtectedRoute';
 import './index.css';
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
             {/* Protected routes */}
             <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/journey/:id/itinerary" element={<ProtectedRoute><ItineraryPage /></ProtectedRoute>} />
             
             {/* Catch all - redirect to home */}
             <Route path="*" element={<Navigate to="/" replace />} />

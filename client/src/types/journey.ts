@@ -19,6 +19,7 @@ export interface Stop {
   isPaid?: boolean;
   checkInTime?: string;  // HH:MM format for accommodation check-in
   checkOutTime?: string; // HH:MM format for accommodation check-out
+  orderIndex?: number;   // For sorting within journey
 }
 
 export interface Transport {
@@ -54,6 +55,10 @@ export interface Attraction {
   latitude?: number;     // Latitude coordinate for map marker (auto-filled)
   longitude?: number;    // Longitude coordinate for map marker (auto-filled)
   visitTime?: string;    // HH:MM format for planned visit time
+  orderIndex?: number;   // For sorting within stop
+  priority?: 'must' | 'should' | 'could' | 'skip'; // Priority level for itinerary planning
+  plannedDate?: string;  // YYYY-MM-DD format for scheduled date
+  plannedTime?: string;  // HH:MM format for scheduled time
 }
 
 export interface JourneyShare {

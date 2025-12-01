@@ -4,7 +4,33 @@ Zbiór pomocnych skryptów do lokalnego testowania aplikacji Journey Planner.
 
 ## 📁 Dostępne Skrypty
 
-### 1. `serve-local.py` (Python) ⭐
+### 1. `geocode-attractions.js` (Node.js) 🌍
+
+Automatycznie dodaje współrzędne GPS do atrakcji, które mają adres ale brakuje im lokalizacji.
+
+**Użycie:**
+```bash
+cd scripts
+node geocode-attractions.js
+```
+
+**Co robi:**
+- Wczytuje wszystkie atrakcje z `server/data/attractions.json`
+- Znajduje te z adresem ale bez współrzędnych (latitude/longitude)
+- Używa Nominatim API (OpenStreetMap) do znalezienia lokalizacji
+- Aktualizuje plik JSON z nowymi współrzędnymi
+- Respektuje limity API (1 zapytanie na sekundę)
+
+**Kiedy używać:**
+- Po zaimportowaniu starych danych bez współrzędnych
+- Gdy użytkownicy zapomnieli kliknąć "Locate on Map"
+- Aby wszystkie atrakcje pokazywały się na mapie w harmonogramie
+
+**Wymagania:**
+- Node.js 18+ (fetch API)
+- Połączenie z internetem
+
+### 2. `serve-local.py` (Python) ⭐
 
 Prosty HTTP server do hostowania zbudowanej aplikacji frontendowej.
 
