@@ -86,7 +86,19 @@ CREATE TABLE IF NOT EXISTS attractions (
     estimated_cost DECIMAL(10, 2),
     currency VARCHAR(3),
     duration VARCHAR(50), -- e.g., "2 hours", "30 minutes"
-    is_paid BOOLEAN DEFAULT FALSE
+    is_paid BOOLEAN DEFAULT FALSE,
+    address TEXT, -- Full address (legacy field for backward compatibility)
+    address_street VARCHAR(255), -- Street name and number
+    address_city VARCHAR(255), -- City name
+    address_postal_code VARCHAR(32), -- Postal/ZIP code
+    address_country VARCHAR(255), -- Country name
+    latitude DECIMAL(10, 8), -- Latitude coordinate for map marker
+    longitude DECIMAL(11, 8), -- Longitude coordinate for map marker
+    visit_time VARCHAR(5), -- HH:MM format for planned visit time
+    order_index INTEGER DEFAULT 0, -- For sorting within stop
+    priority VARCHAR(10) CHECK (priority IN ('must', 'should', 'could', 'skip')), -- Priority level for itinerary planning
+    planned_date DATE, -- YYYY-MM-DD format for scheduled date
+    planned_time VARCHAR(5) -- HH:MM format for scheduled time
 );
 
 -- Journey shares (sharing/collaboration on journeys)
@@ -126,6 +138,8 @@ CREATE TABLE IF NOT EXISTS transport_attachments (
 CREATE INDEX IF NOT EXISTS idx_stops_journey_id ON stops(journey_id);
 CREATE INDEX IF NOT EXISTS idx_transports_journey_id ON transports(journey_id);
 CREATE INDEX IF NOT EXISTS idx_attractions_stop_id ON attractions(stop_id);
+CREATE INDEX IF NOT EXISTS idx_attractions_planned_date ON attractions(planned_date);
+CREATE INDEX IF NOT EXISTS idx_attractions_order_index ON attractions(order_index);
 CREATE INDEX IF NOT EXISTS idx_transport_attachments_transport_id ON transport_attachments(transport_id);
 CREATE INDEX IF NOT EXISTS idx_transport_attachments_uploaded_by ON transport_attachments(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
