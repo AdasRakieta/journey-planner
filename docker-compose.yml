@@ -7,7 +7,7 @@ volumes:
     driver: local
 
 services:
-  backend:
+  journey-planner-api:
     image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
     container_name: journey-planner-api
     environment:
@@ -51,7 +51,7 @@ services:
       retries: 3
       start_period: 40s
 
-  frontend:
+  journey-planner-web:
     image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
     container_name: journey-planner-web
     environment:
