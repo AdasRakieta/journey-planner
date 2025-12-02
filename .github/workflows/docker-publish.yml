@@ -98,7 +98,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VITE_API_URL=http://localhost:5001/api
+            VITE_API_URL=https://malina.tail384b18.ts.net/journey/api
 
       # Krok 9: Podsumowanie
       - name: Image summary
