@@ -103,7 +103,7 @@ services:
       - "traefik.docker.network=web"
       
       # SmartHome App → https://malina.tail384b18.ts.net/smarthome
-      - "traefik.http.routers.smarthome.rule=Host(`malina.tail384b18.ts.net`) && PathPrefix(`/smarthome`)"
+      - "traefik.http.routers.smarthome.rule=PathPrefix(`/smarthome`)"
       - "traefik.http.routers.smarthome.entrypoints=web"
       - "traefik.http.routers.smarthome.priority=150"
       - "traefik.http.services.smarthome.loadbalancer.server.port=5000"

@@ -43,7 +43,8 @@ services:
       - "traefik.docker.network=web"
       
       # Traefik Dashboard → https://malina.tail384b18.ts.net/dashboard/
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`malina.tail384b18.ts.net`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      # Accept any host (Tailscale doesn't preserve Host header properly)
+      - "traefik.http.routers.traefik-dashboard.rule=PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=web"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.priority=1000"

@@ -87,7 +87,7 @@ services:
       - "traefik.docker.network=web"
       
       # Backend API → https://malina.tail384b18.ts.net/journey/api/*
-      - "traefik.http.routers.journey-api.rule=Host(`malina.tail384b18.ts.net`) && PathPrefix(`/journey/api`)"
+      - "traefik.http.routers.journey-api.rule=PathPrefix(`/journey/api`)"
       - "traefik.http.routers.journey-api.entrypoints=web"
       - "traefik.http.routers.journey-api.priority=200"
       - "traefik.http.services.journey-api.loadbalancer.server.port=5001"
@@ -124,7 +124,7 @@ services:
       - "traefik.docker.network=web"
       
       # Frontend → https://malina.tail384b18.ts.net/journey/*
-      - "traefik.http.routers.journey-frontend.rule=Host(`malina.tail384b18.ts.net`) && PathPrefix(`/journey`)"
+      - "traefik.http.routers.journey-frontend.rule=PathPrefix(`/journey`)"
       - "traefik.http.routers.journey-frontend.entrypoints=web"
       - "traefik.http.routers.journey-frontend.priority=100"
       - "traefik.http.services.journey-frontend.loadbalancer.server.port=80"
