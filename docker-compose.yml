@@ -8,7 +8,7 @@ volumes:
 
 services:
   backend:
-    image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/adasrakieta/journey-planner/backend:sha-a896f6d
     container_name: journey-planner-api
     environment:
       - PORT=${BACKEND_PORT:-5001}
@@ -51,8 +51,8 @@ services:
       retries: 3
       start_period: 40s
 
-  frontend :
-    image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
+  frontend:
+    image: ghcr.io/adasrakieta/journey-planner/frontend:sha-a896f6d
     container_name: journey-planner-web
     environment:
       - VITE_API_URL=${VITE_API_URL}
