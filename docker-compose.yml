@@ -7,7 +7,7 @@ volumes:
     driver: local
 
 services:
-  journey-planner-api:
+  backend:
     image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
     container_name: journey-planner-api
     environment:
@@ -51,7 +51,7 @@ services:
       retries: 3
       start_period: 40s
 
-  journey-planner-web:
+  frontend :
     image: ghcr.io/adasrakieta/journey-planner/frontend:${IMAGE_TAG:-latest}
     container_name: journey-planner-web
     environment:
@@ -59,7 +59,7 @@ services:
     networks:
       - web
     depends_on:
-      - journey-planner-api
+      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/index.html"]
