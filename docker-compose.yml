@@ -11,35 +11,34 @@ services:
     image: ghcr.io/adasrakieta/journey-planner/backend:${IMAGE_TAG:-latest}
     container_name: journey-planner-api
     environment:
-      - PORT=5001
-      - NODE_ENV=production
+      - PORT=${BACKEND_PORT:-5001}
+      - NODE_ENV=${NODE_ENV:-production}
+
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
+      - DB_NAME=${DB_NAME:-journey_planner}
+      - DB_USER=${DB_USER:-journey_user}
       - DB_PASSWORD=${DB_PASSWORD}
+
       - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=1h
-      - JWT_REFRESH_EXPIRES_IN=7d
-      - SMTP_HOST=${SMTP_HOST}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-${SMTP_USERNAME}}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Journey Planner}
-      - ADMIN_EMAIL=${ADMIN_EMAIL}
-      - EMAIL_PREVIEW_ENABLED=1
+
       - FRONTEND_URL=${FRONTEND_URL}
       - CORS_ORIGIN=${CORS_ORIGIN}
+      - VITE_API_URL=${VITE_API_URL}
+
       - UPLOAD_DIR=/app/uploads/attachments
-      - MAX_FILE_SIZE=10485760
-      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES}
-      - FILE_ENCRYPTION_KEY=${FILE_ENCRYPTION_KEY}
-      - EXCHANGERATE_API_KEY=${EXCHANGERATE_API_KEY}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES:-application/pdf,image/jpeg,image/png,image/jpg}
     volumes:
       - journey_attachment_uploads:/app/uploads/attachments
     networks:
