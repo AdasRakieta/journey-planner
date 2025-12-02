@@ -225,15 +225,15 @@ Journey Planner can be deployed alongside existing applications (like SmartHome)
 
 ### 📚 Deployment Options:
 
-1. **Docker + Portainer + GitHub Actions** (Recommended)
-   - See [PORTAINER_DEPLOY.md](./PORTAINER_DEPLOY.md) - Full CI/CD pipeline with auto-builds
-   - See [PORTAINER_ENV.md](./PORTAINER_ENV.md) - Environment variables management in Portainer
-   
-2. **Integration with Existing Nginx**
-   - See [NGINX_CONFIG_FOR_SMARTHOME.md](./NGINX_CONFIG_FOR_SMARTHOME.md) - Add to existing SmartHome stack
-   
-3. **Standalone Nginx Setup**
-   - See [NGINX_INTEGRATION.md](./NGINX_INTEGRATION.md) - Complete multi-app configuration
+1. **🎯 Nginx Multi-App Stack** ⭐ **RECOMMENDED** ⭐
+   - See [QUICK_NGINX_DEPLOY.md](./QUICK_NGINX_DEPLOY.md) - 3 steps to deploy (5 minutes)
+   - See [NGINX_DEPLOYMENT.md](./NGINX_DEPLOYMENT.md) - Complete documentation
+   - **One Nginx** for Journey Planner + SmartHome + other apps
+   - **Simple, stable, proven technology** - no Traefik complications
+
+2. **Legacy Options** (deprecated - use Nginx instead)
+   - [PORTAINER_DEPLOY.md](./PORTAINER_DEPLOY.md) - Traefik-based (complex)
+   - [NGINX_CONFIG_FOR_SMARTHOME.md](./NGINX_CONFIG_FOR_SMARTHOME.md) - Old configs
 
 ### Quick Manual Deployment:
 
@@ -355,19 +355,26 @@ For issues and questions, please open an issue on GitHub.
 
 ### Quick Start Guides
 - **[QUICK_START.md](QUICK_START.md)** - ✅ 5-step checklist for GitHub Actions setup
+- **[QUICK_NGINX_DEPLOY.md](QUICK_NGINX_DEPLOY.md)** - 🚀 **NEW!** 3 steps to Nginx deployment (5 minutes)
+- **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - ✅ **NEW!** Complete deployment checklist
 - **[NGINX_QUICK_COPY.md](NGINX_QUICK_COPY.md)** - 📋 Copy-paste Nginx configuration
 
-### Deployment & Configuration
-- **[NGINX_STANDALONE_SETUP.md](NGINX_STANDALONE_SETUP.md)** - 🏗️ Nginx jako osobny stack (REKOMENDOWANE dla 2+ projektów)
-- **[PORTAINER_LOCAL_BUILD.md](PORTAINER_LOCAL_BUILD.md)** - 🔧 Build lokalny w Portainerze (FIX dla localhost!)
-- **[FRONTEND_BUILD_CRITICAL.md](FRONTEND_BUILD_CRITICAL.md)** - 🚨 VITE_API_URL i compile-time config
-- **[URL_CONFIGURATION_GUIDE.md](URL_CONFIGURATION_GUIDE.md)** - 🌐 Kiedy używać `/journey/` w URL (Nginx vs Direct)
-- **[PORTAINER_ENV.md](PORTAINER_ENV.md)** - 📦 Environment variables management in Portainer
-- **[NGINX_INTEGRATION.md](NGINX_INTEGRATION.md)** - 🔗 Complete Nginx setup for SmartHome + Journey Planner
-- **[GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)** - 🚀 Automated Docker builds with GitHub Actions
+### Deployment & Configuration (Nginx - Recommended!)
+- **[NGINX_DEPLOYMENT.md](NGINX_DEPLOYMENT.md)** - 🎯 **NEW!** Complete Nginx deployment guide ⭐
+- **[NGINX_ARCHITECTURE.md](NGINX_ARCHITECTURE.md)** - 🏗️ **NEW!** Architecture diagrams & flow
+- **[MIGRATION_TRAEFIK_TO_NGINX.md](MIGRATION_TRAEFIK_TO_NGINX.md)** - 🔄 **NEW!** Migrate from Traefik to Nginx
 - **[NGINX_SETUP.md](NGINX_SETUP.md)** - 📝 Detailed Nginx reverse proxy configuration
+- **[NGINX_INTEGRATION.md](NGINX_INTEGRATION.md)** - 🔗 Complete Nginx setup for SmartHome + Journey Planner
 
-### Debugging & Troubleshooting
+### Legacy Deployment (Traefik - Deprecated)
+- **[NGINX_STANDALONE_SETUP.md](NGINX_STANDALONE_SETUP.md)** - 🏗️ Nginx jako osobny stack
+- **[PORTAINER_LOCAL_BUILD.md](PORTAINER_LOCAL_BUILD.md)** - 🔧 Build lokalny w Portainerze
+- **[PORTAINER_ENV.md](PORTAINER_ENV.md)** - 📦 Environment variables management
+- **[GITHUB_ACTIONS_SETUP.md](GITHUB_ACTIONS_SETUP.md)** - 🚀 Automated Docker builds
+
+### Configuration & Troubleshooting
+- **[FRONTEND_BUILD_CRITICAL.md](FRONTEND_BUILD_CRITICAL.md)** - 🚨 VITE_API_URL i compile-time config
+- **[URL_CONFIGURATION_GUIDE.md](URL_CONFIGURATION_GUIDE.md)** - 🌐 Kiedy używać `/journey/` w URL
 - **[DEBUG_404.md](DEBUG_404.md)** - 🔍 Comprehensive guide for fixing 404 errors
 - **[QUICKSTART.md](QUICKSTART.md)** - 🏃 Fast local development setup
 - **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - 📖 Project overview and architecture
@@ -377,6 +384,7 @@ For issues and questions, please open an issue on GitHub.
 - **[USER_GUIDE.md](USER_GUIDE.md)** - 📱 End-user documentation
 
 ### Helper Scripts
+- `scripts/verify-deployment.sh` - **NEW!** Verify Nginx deployment (10 checks)
 - `validate-env.sh` - Validate environment variables
 - `find-postgres-ip.sh` - Find existing PostgreSQL container
 - `build-on-pi.sh` - Build ARM64 images on Raspberry Pi
