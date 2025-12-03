@@ -13,7 +13,7 @@ export default defineConfig({
       }
     }
   },
-  // No base path - Nginx will handle routing
-  // Assets will be at /assets/ and Nginx will proxy /journey/ -> container:80/
-  base: '/',
+  // Base path for subpath deployment under /journey/
+  // This ensures all assets are loaded from /journey/assets/ and React Router works correctly
+  base: '/journey/',
 })

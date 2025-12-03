@@ -51,7 +51,7 @@ const ForgotPasswordPage: React.FC = () => {
       await authAPI.resetPassword(email, code, newPassword);
       setSuccess('Password reset successful! Redirecting to login...');
       setTimeout(() => {
-        window.location.href = '/login';
+        window.location.pathname = '/journey/login';
       }, 2000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to reset password');

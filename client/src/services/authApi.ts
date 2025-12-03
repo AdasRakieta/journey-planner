@@ -45,7 +45,7 @@ api.interceptors.response.use(
         // Refresh failed, log out user
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        window.location.pathname = '/journey/login';
         return Promise.reject(refreshError);
       }
     }
