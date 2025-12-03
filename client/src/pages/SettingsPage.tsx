@@ -64,6 +64,13 @@ const SettingsPage: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importFileName, setImportFileName] = useState<string | null>(null);
+  // Import modal state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [parsedImportData, setParsedImportData] = useState<any>(null);
+  const [importJourneysFlag, setImportJourneysFlag] = useState(true);
+  const [importStopsFlag, setImportStopsFlag] = useState(true);
+  const [importTransportsFlag, setImportTransportsFlag] = useState(true);
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string; count?: number } | null>(null);
 
   // Initialize username from user on mount only
   useEffect(() => {
@@ -365,7 +372,6 @@ const SettingsPage: React.FC = () => {
   const handleImportFile = async (file?: File) => {
     if (!file) return;
     setImportFileName(file.name);
-    setImportLoading(true);
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
@@ -374,16 +380,52 @@ const SettingsPage: React.FC = () => {
       if (!payload.journeys || !Array.isArray(payload.journeys) || payload.journeys.length === 0) {
         throw new Error('No journeys array found in file');
       }
+      // Store parsed data and open modal
+      setParsedImportData(payload);
+      setImportJourneysFlag(true);
+      setImportStopsFlag(true);
+      setImportTransportsFlag(true);
+      setImportResult(null);
+      setImportModalOpen(true);
+    } catch (error: any) {
+      console.error('Failed to parse JSON', error);
+      toast.error(error.message || 'Invalid JSON file');
+    }
+  };
+
+  // Execute import with selected options
+  const handleExecuteImport = async () => {
+    if (!parsedImportData) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const payload = {
+        ...parsedImportData,
+        options: {
+          importJourneys: importJourneysFlag,
+          importStops: importStopsFlag,
+          importTransports: importTransportsFlag,
+        }
+      };
       const resp = await journeyService.importJourneys(payload);
+      setImportResult({ success: true, message: resp.message || 'Import successful', count: resp.count });
       toast.success(resp.message || 'Import successful');
-      // Optionally refresh UI or navigate
-      setTimeout(() => navigate('/'), 800);
     } catch (error: any) {
       console.error('Import failed', error);
-      toast.error(error.message || 'Import failed');
+      const errorMsg = error.message || 'Import failed';
+      setImportResult({ success: false, message: errorMsg });
+      toast.error(errorMsg);
     } finally {
       setImportLoading(false);
     }
+  };
+
+  // Close import modal
+  const handleCloseImportModal = () => {
+    setImportModalOpen(false);
+    setParsedImportData(null);
+    setImportFileName(null);
+    setImportResult(null);
   };
 
   if (!user) return null;
@@ -519,7 +561,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   onClick={handleExportJourneys}
                   disabled={exportLoading}
-                  className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                  className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {exportLoading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                   Export Journeys (JSON)
@@ -532,8 +574,8 @@ const SettingsPage: React.FC = () => {
                     className="hidden"
                     onChange={e => handleImportFile(e.target.files ? e.target.files[0] : undefined)}
                   />
-                  {importLoading ? <Loader2 className="animate-spin text-white" size={16} /> : <ArrowLeft size={16} className="text-white" />}
-                  <span className="text-sm text-white">{importFileName ? `Import: ${importFileName}` : 'Import Journeys (JSON)'}</span>
+                  <ArrowLeft size={16} className="text-white" />
+                  <span className="text-sm text-white">Import Journeys (JSON)</span>
                 </label>
               </div>
             </div>
@@ -968,6 +1010,152 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Import Modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-[#38383a]">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white dark:bg-[#2c2c2e] border-b border-gray-200 dark:border-[#38383a] px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <ArrowLeft size={24} className="text-blue-500 dark:text-[#0a84ff]" />
+                Import Journeys
+              </h2>
+              <button
+                onClick={handleCloseImportModal}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-[#38383a] rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X size={24} className="text-gray-500 dark:text-[#98989d]" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-4 space-y-4">
+              {/* File Info */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                  <Save size={20} />
+                  <span className="font-medium">File: {importFileName}</span>
+                </div>
+                <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">
+                  {parsedImportData?.journeys?.length || 0} journey(s) found
+                </p>
+              </div>
+
+              {/* Selection Options */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select what to import:</h3>
+                
+                <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a] cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2c2c2e] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={importJourneysFlag}
+                    onChange={(e) => setImportJourneysFlag(e.target.checked)}
+                    className="w-5 h-5 text-blue-500 bg-white dark:bg-[#2c2c2e] border-gray-300 dark:border-[#48484a] rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">Journeys</div>
+                    <div className="text-sm text-gray-600 dark:text-[#98989d]">
+                      Import journey metadata (title, dates, description)
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a] cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2c2c2e] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={importStopsFlag}
+                    onChange={(e) => setImportStopsFlag(e.target.checked)}
+                    className="w-5 h-5 text-blue-500 bg-white dark:bg-[#2c2c2e] border-gray-300 dark:border-[#48484a] rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">Stops & Attractions</div>
+                    <div className="text-sm text-gray-600 dark:text-[#98989d]">
+                      Import cities, accommodation, and attractions
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-[#1c1c1e] rounded-lg border border-gray-200 dark:border-[#38383a] cursor-pointer hover:bg-gray-100 dark:hover:bg-[#2c2c2e] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={importTransportsFlag}
+                    onChange={(e) => setImportTransportsFlag(e.target.checked)}
+                    className="w-5 h-5 text-blue-500 bg-white dark:bg-[#2c2c2e] border-gray-300 dark:border-[#48484a] rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 dark:text-white">Transports</div>
+                    <div className="text-sm text-gray-600 dark:text-[#98989d]">
+                      Import flights, trains, buses, and car rentals
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Import Result */}
+              {importResult && (
+                <div className={`p-4 rounded-lg border ${
+                  importResult.success
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {importResult.success ? (
+                      <Check size={20} className="text-green-500 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle size={20} className="text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <p className={`text-sm font-medium ${
+                        importResult.success
+                          ? 'text-green-700 dark:text-green-300'
+                          : 'text-red-700 dark:text-red-300'
+                      }`}>
+                        {importResult.message}
+                      </p>
+                      {importResult.success && importResult.count !== undefined && (
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          {importResult.count} journey(s) imported successfully
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white dark:bg-[#2c2c2e] border-t border-gray-200 dark:border-[#38383a] px-6 py-4 flex items-center justify-end gap-3">
+              <button
+                onClick={handleCloseImportModal}
+                className="px-6 py-3 bg-gray-200 dark:bg-[#38383a] text-gray-700 dark:text-[#ffffff] rounded-lg hover:bg-gray-300 dark:hover:bg-[#48484a] transition-colors"
+              >
+                {importResult ? 'Close' : 'Cancel'}
+              </button>
+              {!importResult && (
+                <button
+                  onClick={handleExecuteImport}
+                  disabled={importLoading || (!importJourneysFlag && !importStopsFlag && !importTransportsFlag)}
+                  className="px-6 py-3 bg-blue-500 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {importLoading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowLeft size={20} />
+                      Import Selected
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toast.toasts} onClose={toast.closeToast} />

@@ -685,7 +685,7 @@ function App() {
     socketService.on('journey:created', (journey: Journey) => {
       console.log('Real-time: Journey created', journey);
       setJourneys(prev => [...prev, journey]);
-      success('New journey added by another user');
+      // Don't show toast - avoid duplicate notifications when user creates journey
     });
     
     socketService.on('journey:updated', (journey: Journey) => {
@@ -694,7 +694,7 @@ function App() {
       if (selectedJourney?.id === journey.id) {
         setSelectedJourney(journey);
       }
-      // Notification only for real-time updates from other users
+      // Don't show toast - avoid duplicate notifications when user updates journey
     });
     
     socketService.on('journey:deleted', ({ id }: { id: number }) => {
@@ -703,7 +703,8 @@ function App() {
       if (selectedJourney?.id === id) {
         setSelectedJourney(null);
       }
-      warning('Journey deleted by another user');
+      // Don't show toast - user gets local success message if they deleted it
+      // If another user deleted it, the journey just disappears from the list
     });
     
 

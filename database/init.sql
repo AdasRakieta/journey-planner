@@ -102,14 +102,42 @@ CREATE TABLE IF NOT EXISTS attractions (
 );
 
 -- Journey shares (sharing/collaboration on journeys)
+-- Journey shares (new schema compatible with controllers)
 CREATE TABLE IF NOT EXISTS journey_shares (
     id SERIAL PRIMARY KEY,
     journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(16) NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner','editor','viewer')),
+    -- Legacy column kept for backward compatibility
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    -- New columns used by API
+    shared_with_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    shared_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    role VARCHAR(16) NOT NULL DEFAULT 'edit' CHECK (role IN ('view','edit','manage')),
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected')),
+    invited_email VARCHAR(255),
+    invitation_token TEXT,
+    accepted_at TIMESTAMP,
+    rejected_at TIMESTAMP,
+    -- Legacy flag kept (not used by new code)
     accepted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure columns exist if table was created with legacy schema
+ALTER TABLE journey_shares
+    ADD COLUMN IF NOT EXISTS shared_with_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS shared_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS role VARCHAR(16);
+ALTER TABLE journey_shares
+    ALTER COLUMN role SET DEFAULT 'edit',
+    ADD CONSTRAINT IF NOT EXISTS journey_shares_role_chk CHECK (role IN ('view','edit','manage'));
+ALTER TABLE journey_shares
+    ADD COLUMN IF NOT EXISTS status VARCHAR(16) DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS invited_email VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS invitation_token TEXT,
+    ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP;
+ALTER TABLE journey_shares
+    ADD CONSTRAINT IF NOT EXISTS journey_shares_status_chk CHECK (status IN ('pending','accepted','rejected'));
 
 -- Journey checklist items (per-journey todo/checklist)
 CREATE TABLE IF NOT EXISTS journey_checklist (
@@ -142,9 +170,44 @@ CREATE INDEX IF NOT EXISTS idx_attractions_planned_date ON attractions(planned_d
 CREATE INDEX IF NOT EXISTS idx_attractions_order_index ON attractions(order_index);
 CREATE INDEX IF NOT EXISTS idx_transport_attachments_transport_id ON transport_attachments(transport_id);
 CREATE INDEX IF NOT EXISTS idx_transport_attachments_uploaded_by ON transport_attachments(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_journey_shares_journey_id ON journey_shares(journey_id);
+CREATE INDEX IF NOT EXISTS idx_journey_shares_shared_with_user_id ON journey_shares(shared_with_user_id);
+CREATE INDEX IF NOT EXISTS idx_journey_shares_status ON journey_shares(status);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_journeys_created_at ON journeys(created_at);
 CREATE INDEX IF NOT EXISTS idx_journeys_created_by ON journeys(created_by);
+
+-- Invitation tokens for admin-invite flow
+CREATE TABLE IF NOT EXISTS invitation_tokens (
+    id SERIAL PRIMARY KEY,
+    token TEXT UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    invited_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_token ON invitation_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_invitation_tokens_email ON invitation_tokens(email);
+
+-- Registration requests queue (pending approvals)
+CREATE TABLE IF NOT EXISTS registration_requests (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    provider VARCHAR(50),
+    profile JSONB,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    password_hash TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_registration_requests_email ON registration_requests(email);
+CREATE INDEX IF NOT EXISTS idx_registration_requests_status ON registration_requests(status);
+CREATE INDEX IF NOT EXISTS idx_registration_requests_created_at ON registration_requests(created_at);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

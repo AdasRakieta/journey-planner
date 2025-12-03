@@ -31,10 +31,13 @@ COPY --from=builder /app/dist ./dist
 # Create uploads directory for attachments
 RUN mkdir -p /app/uploads/attachments
 
+# Create writable data directory for runtime caches (currency rates, etc.)
+RUN mkdir -p /app/data
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app/uploads
+  chown -R nodejs:nodejs /app/uploads /app/data
 
 USER nodejs
 

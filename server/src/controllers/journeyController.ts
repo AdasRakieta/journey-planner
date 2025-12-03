@@ -87,6 +87,43 @@ export const getAllJourneys = async (req: Request, res: Response) => {
 
       return res.json(toCamelCase(enrichedJourneys));
     }
+
+    // Database mode: fetch journeys owned by user or shared with them
+    const whereClause = `WHERE (created_by = $1 OR id IN (SELECT journey_id FROM journey_shares WHERE shared_with_user_id = $1 AND status = 'accepted'))`;
+    let baseQuery = `SELECT * FROM journeys ${whereClause}`;
+    const params: any[] = [userId];
+    
+    if (q) {
+      baseQuery += ` AND title ILIKE $${params.length + 1}`;
+      params.push(`%${q}%`);
+    }
+    
+    const offset = (page - 1) * pageSize;
+    baseQuery += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(pageSize, offset);
+
+    const result = await query(baseQuery, params);
+    const journeys = result.rows;
+
+    // Enrich with stops, attractions, and transports
+    const enrichedJourneys = await Promise.all(journeys.map(async (journey: any) => {
+      const stopsRes = await query('SELECT * FROM stops WHERE journey_id = $1 ORDER BY arrival_date', [journey.id]);
+      const stops = stopsRes.rows;
+
+      const stopsWithAttractions = await Promise.all(stops.map(async (stop: any) => {
+        const attractionsRes = await query('SELECT * FROM attractions WHERE stop_id = $1', [stop.id]);
+        return { ...stop, attractions: attractionsRes.rows };
+      }));
+
+      const transportsRes = await query('SELECT * FROM transports WHERE journey_id = $1 ORDER BY departure_date', [journey.id]);
+      const transports = transportsRes.rows;
+
+      const isShared = journey.created_by !== userId;
+
+      return { ...journey, stops: stopsWithAttractions, transports, isShared };
+    }));
+
+    return res.json(toCamelCase(enrichedJourneys));
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Failed to fetch journeys' });
@@ -155,36 +192,74 @@ export const exportJourneys = async (req: Request, res: Response) => {
 };
 
 // Import journeys JSON. If DB available, insert into DB (transaction); otherwise insert into JSON store.
+// Import journeys JSON with optional selection of which parts to import
+// Payload: { journeys: Journey[], options?: { importJourneys?: boolean; importStops?: boolean; importTransports?: boolean } }
 export const importJourneys = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { journeys } = req.body;
+    const { journeys, options } = req.body;
     if (!journeys || !Array.isArray(journeys)) return res.status(400).json({ message: 'Invalid payload: journeys array required' });
+    const importJourneysFlag = options?.importJourneys !== false; // default true
+    const importStopsFlag = options?.importStops !== false; // default true
+    const importTransportsFlag = options?.importTransports !== false; // default true
 
     const imported: any[] = [];
     if (!DB_AVAILABLE) {
       for (const j of journeys) {
-        const newJourney = await jsonStore.insert('journeys', { title: j.title, description: j.description, start_date: j.startDate || j.start_date, end_date: j.endDate || j.end_date, currency: j.currency || 'PLN', created_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), total_estimated_cost: j.totalEstimatedCost || j.total_estimated_cost || 0 });
+        // Normalize and apply safe defaults
+        const safeTitle = j.title || (j.name ?? null) || 'Untitled Journey';
+        const safeDescription = j.description || null;
+        const safeStart = j.startDate || j.start_date || new Date().toISOString();
+        const safeEnd = j.endDate || j.end_date || new Date().toISOString();
+        const safeCurrency = j.currency || 'PLN';
+        const safeTotal = j.totalEstimatedCost || j.total_estimated_cost || 0;
+
+        let newJourney: any = null;
+        if (importJourneysFlag) {
+          newJourney = await jsonStore.insert('journeys', { title: safeTitle, description: safeDescription, start_date: safeStart, end_date: safeEnd, currency: safeCurrency, created_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), total_estimated_cost: safeTotal });
+          imported.push(newJourney);
+        }
+        // When not creating journeys, still need an id to attach nested items; skip nested if journey wasn't created
+        if (!newJourney) continue;
         // stops
-        if (Array.isArray(j.stops)) {
+        if (importStopsFlag && Array.isArray(j.stops)) {
           for (const s of j.stops) {
             const newStop = await jsonStore.insert('stops', { journey_id: newJourney.id, city: s.city, country: s.country, latitude: s.latitude, longitude: s.longitude, arrival_date: s.arrivalDate || s.arrival_date, departure_date: s.departureDate || s.departure_date, address_street: s.addressStreet || s.address_street || null, address_house_number: s.addressHouseNumber || s.address_house_number || null, address_postal_code: s.postalCode || s.postal_code || null, accommodation_name: s.accommodationName || s.accommodation_name, accommodation_url: s.accommodationUrl || s.accommodation_url, accommodation_price: s.accommodationPrice || s.accommodation_price, accommodation_currency: s.accommodationCurrency || s.accommodation_currency, notes: s.notes, is_paid: s.isPaid || s.is_paid || false });
             if (Array.isArray(s.attractions)) {
               for (const a of s.attractions) {
-                await jsonStore.insert('attractions', { stop_id: newStop.id, name: a.name, description: a.description, estimated_cost: a.estimatedCost || a.estimated_cost, duration: a.duration, currency: a.currency || a.currency || 'PLN', is_paid: a.isPaid || a.is_paid || false });
+                await jsonStore.insert('attractions', { 
+                  stop_id: newStop.id, 
+                  name: a.name, 
+                  description: a.description, 
+                  estimated_cost: a.estimatedCost || a.estimated_cost, 
+                  duration: a.duration, 
+                  currency: a.currency || 'PLN', 
+                  is_paid: a.isPaid || a.is_paid || false,
+                  address: a.address || null,
+                  address_street: a.addressStreet || a.address_street || null,
+                  address_city: a.addressCity || a.address_city || null,
+                  address_postal_code: a.addressPostalCode || a.address_postal_code || null,
+                  address_country: a.addressCountry || a.address_country || null,
+                  latitude: a.latitude || null,
+                  longitude: a.longitude || null,
+                  visit_time: a.visitTime || a.visit_time || null,
+                  order_index: a.orderIndex || a.order_index || 0,
+                  priority: a.priority || null,
+                  planned_date: a.plannedDate || a.planned_date || null,
+                  planned_time: a.plannedTime || a.planned_time || null
+                });
               }
             }
           }
         }
         // transports
-        if (Array.isArray(j.transports)) {
+        if (importTransportsFlag && Array.isArray(j.transports)) {
           for (const t of j.transports) {
             await jsonStore.insert('transports', { journey_id: newJourney.id, type: t.type, from_location: t.fromLocation || t.from_location, to_location: t.toLocation || t.to_location, departure_date: t.departureDate || t.departure_date, arrival_date: t.arrivalDate || t.arrival_date, price: t.price, currency: t.currency || 'PLN', booking_url: t.bookingUrl || t.booking_url, notes: t.notes, flight_number: t.flightNumber || t.flight_number, train_number: t.trainNumber || t.train_number, is_paid: t.isPaid || t.is_paid || false });
           }
         }
-        imported.push(newJourney);
       }
       return res.status(201).json({ message: 'Imported into JSON store', count: imported.length, journeys: imported });
     }
@@ -194,27 +269,65 @@ export const importJourneys = async (req: Request, res: Response) => {
     try {
       await client.query('BEGIN');
       for (const j of journeys) {
-        const journeyRes = await client.query('INSERT INTO journeys (title, description, start_date, end_date, currency, created_by, total_estimated_cost, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING *', [j.title, j.description, j.startDate || j.start_date, j.endDate || j.end_date, j.currency || 'PLN', userId, j.totalEstimatedCost || j.total_estimated_cost || 0]);
-        const newJourney = journeyRes.rows[0];
+        // Normalize and apply safe defaults to satisfy NOT NULL constraints
+        const safeTitle = j.title || (j.name ?? null) || 'Untitled Journey';
+        const safeDescription = j.description || null;
+        const safeStart = j.startDate || j.start_date || new Date().toISOString();
+        const safeEnd = j.endDate || j.end_date || new Date().toISOString();
+        const safeCurrency = j.currency || 'PLN';
+        const safeTotal = j.totalEstimatedCost || j.total_estimated_cost || 0;
+
+        let newJourney: any = null;
+        if (importJourneysFlag) {
+          const journeyRes = await client.query(
+            'INSERT INTO journeys (title, description, start_date, end_date, currency, created_by, total_estimated_cost, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING *',
+            [safeTitle, safeDescription, safeStart, safeEnd, safeCurrency, userId, safeTotal]
+          );
+          newJourney = journeyRes.rows[0];
+          imported.push(newJourney);
+        }
+        if (!newJourney) continue; // cannot attach nested items without a journey id
         // stops
-        if (Array.isArray(j.stops)) {
+        if (importStopsFlag && Array.isArray(j.stops)) {
           for (const s of j.stops) {
             const stopRes = await client.query('INSERT INTO stops (journey_id, city, country, latitude, longitude, arrival_date, departure_date, address_street, address_house_number, address_postal_code, accommodation_name, accommodation_url, accommodation_price, accommodation_currency, notes, is_paid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *', [newJourney.id, s.city, s.country, s.latitude, s.longitude, s.arrivalDate || s.arrival_date, s.departureDate || s.departure_date, s.addressStreet || s.address_street || null, s.addressHouseNumber || s.address_house_number || null, s.postalCode || s.postal_code || null, s.accommodationName || s.accommodation_name || null, s.accommodationUrl || s.accommodation_url || null, s.accommodationPrice || s.accommodation_price || null, s.accommodationCurrency || s.accommodation_currency || null, s.notes || null, s.isPaid || s.is_paid || false]);
             const newStop = stopRes.rows[0];
             if (Array.isArray(s.attractions)) {
               for (const a of s.attractions) {
-                await client.query('INSERT INTO attractions (stop_id, name, description, estimated_cost, duration, currency, is_paid) VALUES ($1,$2,$3,$4,$5,$6,$7)', [newStop.id, a.name, a.description || null, a.estimatedCost || a.estimated_cost || null, a.duration || null, a.currency || a.currency || 'PLN', a.isPaid || a.is_paid || false]);
+                await client.query(
+                  'INSERT INTO attractions (stop_id, name, description, estimated_cost, duration, currency, is_paid, address, address_street, address_city, address_postal_code, address_country, latitude, longitude, visit_time, order_index, priority, planned_date, planned_time) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)', 
+                  [
+                    newStop.id, 
+                    a.name, 
+                    a.description || null, 
+                    a.estimatedCost || a.estimated_cost || null, 
+                    a.duration || null, 
+                    a.currency || 'PLN', 
+                    a.isPaid || a.is_paid || false,
+                    a.address || null,
+                    a.addressStreet || a.address_street || null,
+                    a.addressCity || a.address_city || null,
+                    a.addressPostalCode || a.address_postal_code || null,
+                    a.addressCountry || a.address_country || null,
+                    a.latitude || null,
+                    a.longitude || null,
+                    a.visitTime || a.visit_time || null,
+                    a.orderIndex || a.order_index || 0,
+                    a.priority || null,
+                    a.plannedDate || a.planned_date || null,
+                    a.plannedTime || a.planned_time || null
+                  ]
+                );
               }
             }
           }
         }
         // transports
-        if (Array.isArray(j.transports)) {
+        if (importTransportsFlag && Array.isArray(j.transports)) {
           for (const t of j.transports) {
             await client.query('INSERT INTO transports (journey_id, type, from_location, to_location, departure_date, arrival_date, price, currency, booking_url, notes, flight_number, train_number, is_paid) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)', [newJourney.id, t.type, t.fromLocation || t.from_location, t.toLocation || t.to_location, t.departureDate || t.departure_date, t.arrivalDate || t.arrival_date, t.price || null, t.currency || 'PLN', t.bookingUrl || t.booking_url || null, t.notes || null, t.flightNumber || t.flight_number || null, t.trainNumber || t.train_number || null, t.isPaid || t.is_paid || false]);
           }
         }
-        imported.push(newJourney);
       }
       await client.query('COMMIT');
       return res.status(201).json({ message: 'Imported into database', count: imported.length, journeys: imported });
@@ -252,6 +365,51 @@ export const getJourneyById = async (req: Request, res: Response) => {
       const enrichedJourney = { ...journey, stops: stopsWithAttractions, transports };
       return res.json(toCamelCase(enrichedJourney));
     }
+
+    // Database mode: fetch journey with all nested data
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Check if user owns this journey or has access via sharing
+    const journeyRes = await query(
+      `SELECT * FROM journeys 
+       WHERE id = $1 
+       AND (created_by = $2 OR id IN (
+         SELECT journey_id FROM journey_shares 
+         WHERE shared_with_user_id = $2 AND status = 'accepted'
+       ))`,
+      [id, userId]
+    );
+
+    if (journeyRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Journey not found or access denied' });
+    }
+
+    const journey = journeyRes.rows[0];
+
+    // Fetch stops with attractions
+    const stopsRes = await query('SELECT * FROM stops WHERE journey_id = $1 ORDER BY arrival_date', [id]);
+    const stops = stopsRes.rows;
+
+    const stopsWithAttractions = await Promise.all(stops.map(async (stop: any) => {
+      const attractionsRes = await query('SELECT * FROM attractions WHERE stop_id = $1', [stop.id]);
+      return { ...stop, attractions: attractionsRes.rows };
+    }));
+
+    // Fetch transports
+    const transportsRes = await query('SELECT * FROM transports WHERE journey_id = $1 ORDER BY departure_date', [id]);
+    const transports = transportsRes.rows;
+
+    const enrichedJourney = { 
+      ...journey, 
+      stops: stopsWithAttractions, 
+      transports,
+      isShared: journey.created_by !== userId
+    };
+
+    return res.json(toCamelCase(enrichedJourney));
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Failed to fetch journey' });
@@ -289,6 +447,27 @@ export const createJourney = async (req: Request, res: Response) => {
       io.emit('journey:created', journey);
       return res.status(201).json(journey);
     }
+
+    // Database mode
+    const result = await query(
+      `INSERT INTO journeys (title, description, start_date, end_date, currency, created_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [title, description, startDate, endDate, currency || 'PLN', userId]
+    );
+
+    const newJourney = result.rows[0];
+
+    try {
+      await computeAndPersistTotal(newJourney.id);
+    } catch (e) {
+      console.warn('Failed to compute total on create:', e);
+    }
+
+    const journey = toCamelCase(newJourney);
+    const io = req.app.get('io');
+    io.emit('journey:created', journey);
+    return res.status(201).json(journey);
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Failed to create journey' });
@@ -299,6 +478,12 @@ export const updateJourney = async (req: Request, res: Response) => {
   try {
     const { title, description, startDate, endDate, currency, checklist } = req.body;
     const id = parseInt(req.params.id);
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     if (!DB_AVAILABLE) {
       const updateObj: any = { title, description, start_date: startDate, end_date: endDate, currency, updated_at: new Date().toISOString() };
       if (checklist !== undefined) updateObj.checklist = checklist;
@@ -315,28 +500,41 @@ export const updateJourney = async (req: Request, res: Response) => {
       io.emit('journey:updated', journey);
       return res.json(journey);
     }
-    // DB available flow: fetch existing journey, merge fields and persist (including checklist JSONB)
-    const journeyRes = await query('SELECT * FROM journeys WHERE id = $1', [id]);
+
+    // Database mode: verify ownership and update
+    const journeyRes = await query(
+      'SELECT * FROM journeys WHERE id = $1 AND created_by = $2',
+      [id, userId]
+    );
+
+    if (journeyRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Journey not found or access denied' });
+    }
+
     const existing = journeyRes.rows[0];
-    if (!existing) return res.status(404).json({ message: 'Not found' });
 
     const newTitle = title !== undefined ? title : existing.title;
     const newDescription = description !== undefined ? description : existing.description;
     const newStart = startDate !== undefined ? startDate : existing.start_date;
     const newEnd = endDate !== undefined ? endDate : existing.end_date;
     const newCurrency = currency !== undefined ? currency : existing.currency;
-    const newChecklist = checklist !== undefined ? checklist : existing.checklist || [];
+    const newChecklist = checklist !== undefined ? checklist : (existing.checklist || []);
 
     const updatedRes = await query(
       'UPDATE journeys SET title=$1, description=$2, start_date=$3, end_date=$4, currency=$5, checklist=$6, updated_at=NOW() WHERE id=$7 RETURNING *',
-      [newTitle, newDescription, newStart, newEnd, newCurrency, newChecklist, id]
+      [newTitle, newDescription, newStart, newEnd, newCurrency, JSON.stringify(newChecklist), id]
     );
-    const updated = updatedRes.rows[0];
+
+    if (updatedRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Update failed' });
+    }
+
     try {
       await computeAndPersistTotal(id);
     } catch (e) {
       console.warn('Failed to compute total on update (DB):', e);
     }
+
     // Fetch fresh row with updated total
     const refreshed = await query('SELECT * FROM journeys WHERE id = $1', [id]);
     const journey = toCamelCase(refreshed.rows[0]);
@@ -344,6 +542,7 @@ export const updateJourney = async (req: Request, res: Response) => {
     io.emit('journey:updated', journey);
     return res.json(journey);
   } catch (error) {
+    console.error('Error updating journey:', error);
     res.status(500).json({ message: 'Failed to update journey' });
   }
 };
