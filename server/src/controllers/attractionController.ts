@@ -81,11 +81,14 @@ export const createAttraction = async (req: Request, res: Response) => {
     if (visitTime === '' || visitTime === undefined) visitTime = null;
     
     if (!DB_AVAILABLE) {
+      // Auto-mark as paid if estimated cost is 0 or null
+      const isPaid = !estimatedCost || estimatedCost === 0;
       const newAttraction = await jsonStore.insert('attractions', {
         stop_id: stopId,
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'PLN',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
         latitude, longitude, visit_time: visitTime,
+        is_paid: isPaid,
         created_at: new Date().toISOString()
       });
       const attraction = toCamelCase(newAttraction);
@@ -103,15 +106,17 @@ export const createAttraction = async (req: Request, res: Response) => {
       }
       return res.status(201).json(attraction);
     }
+    // Auto-mark as paid if estimated cost is 0 or null
+    const isPaid = !estimatedCost || estimatedCost === 0;
     const result = await query(
       `INSERT INTO attractions (
         stop_id, name, description, estimated_cost, duration, currency,
         address, address_street, address_city, address_postal_code, address_country,
-        latitude, longitude, visit_time
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+        latitude, longitude, visit_time, is_paid
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       [stopId, name, description, estimatedCost, duration, currency || 'PLN',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime]
+       latitude, longitude, visitTime, isPaid]
     );
     const attraction = toCamelCase(result.rows[0]);
     // Emit Socket.IO event
@@ -206,10 +211,13 @@ export const updateAttraction = async (req: Request, res: Response) => {
     if (visitTime === '' || visitTime === undefined) visitTime = null;
     
     if (!DB_AVAILABLE) {
+      // Auto-mark as paid if estimated cost is 0 or null
+      const isPaid = !estimatedCost || estimatedCost === 0;
       const updated = await jsonStore.updateById('attractions', attractionId, {
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'USD',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
-        latitude, longitude, visit_time: visitTime
+        latitude, longitude, visit_time: visitTime,
+        is_paid: isPaid
       });
       if (!updated) return res.status(404).json({ message: 'Attraction not found' });
       const attraction = toCamelCase(updated);
@@ -217,15 +225,17 @@ export const updateAttraction = async (req: Request, res: Response) => {
       io.emit('attraction:updated', attraction);
       return res.json(attraction);
     }
+    // Auto-mark as paid if estimated cost is 0 or null
+    const isPaid = !estimatedCost || estimatedCost === 0;
     const result = await query(
       `UPDATE attractions SET 
         name=$1, description=$2, estimated_cost=$3, duration=$4, currency=$5,
         address=$6, address_street=$7, address_city=$8, address_postal_code=$9, address_country=$10,
-        latitude=$11, longitude=$12, visit_time=$13 
-      WHERE id=$14 RETURNING *`,
+        latitude=$11, longitude=$12, visit_time=$13, is_paid=$14 
+      WHERE id=$15 RETURNING *`,
       [name, description, estimatedCost, duration, currency || 'USD',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime, attractionId]
+       latitude, longitude, visitTime, isPaid, attractionId]
     );
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'Attraction not found' });

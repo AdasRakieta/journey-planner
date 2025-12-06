@@ -97,6 +97,8 @@ export const createStop = async (req: Request, res: Response) => {
       if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
       if (addressHouseNumber === '' || addressHouseNumber === undefined) addressHouseNumber = null;
       if (postalCode === '' || postalCode === undefined) postalCode = null;
+      // Auto-mark as paid if accommodation price is 0 or null
+      const isPaid = !accommodationPrice || accommodationPrice === 0;
       const newStop = await jsonStore.insert('stops', {
         journey_id: journeyId,
         city, country, latitude, longitude,
@@ -105,6 +107,7 @@ export const createStop = async (req: Request, res: Response) => {
         accommodation_name: accommodationName, accommodation_url: accommodationUrl,
         accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
         notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null,
+        is_paid: isPaid,
         created_at: new Date().toISOString()
       });
       const stop = toCamelCase(newStop);
@@ -120,20 +123,22 @@ export const createStop = async (req: Request, res: Response) => {
       }
       return res.status(201).json(stop);
     }
+    // Auto-mark as paid if accommodation price is 0 or null
+    const isPaid = !accommodationPrice || accommodationPrice === 0;
     const result = await query(
       `INSERT INTO stops (
         journey_id, city, country, latitude, longitude,
         arrival_date, departure_date, accommodation_name,
         accommodation_url, accommodation_price, accommodation_currency, notes,
         check_in_time, check_out_time
-        , address_street, address_house_number, address_postal_code
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
+        , address_street, address_house_number, address_postal_code, is_paid
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
       [
         journeyId, city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
         accommodationUrl, accommodationPrice, accommodationCurrency, notes,
         checkInTime || null, checkOutTime || null,
-          addressStreet || null, addressHouseNumber || null, postalCode || null
+          addressStreet || null, addressHouseNumber || null, postalCode || null, isPaid
       ]
     );
 
@@ -224,13 +229,16 @@ export const updateStop = async (req: Request, res: Response) => {
       if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
       if (addressHouseNumber === '' || addressHouseNumber === undefined) addressHouseNumber = null;
       if (postalCode === '' || postalCode === undefined) postalCode = null;
+      // Auto-mark as paid if accommodation price is 0 or null
+      const isPaid = !accommodationPrice || accommodationPrice === 0;
       const updated = await jsonStore.updateById('stops', stopId, {
         city, country, latitude, longitude,
         arrival_date: arrivalDate, departure_date: departureDate,
         address_street: addressStreet, address_house_number: addressHouseNumber, address_postal_code: postalCode,
         accommodation_name: accommodationName, accommodation_url: accommodationUrl,
         accommodation_price: accommodationPrice, accommodation_currency: accommodationCurrency,
-        notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null
+        notes, check_in_time: checkInTime || null, check_out_time: checkOutTime || null,
+        is_paid: isPaid
       });
       if (!updated) return res.status(404).json({ message: 'Stop not found' });
       const stop = toCamelCase(updated);
@@ -245,19 +253,21 @@ export const updateStop = async (req: Request, res: Response) => {
       }
       return res.json(stop);
     }
+    // Auto-mark as paid if accommodation price is 0 or null
+    const isPaid = !accommodationPrice || accommodationPrice === 0;
     const result = await query(
       `UPDATE stops SET
         city=$1, country=$2, latitude=$3, longitude=$4,
         arrival_date=$5, departure_date=$6, accommodation_name=$7,
         accommodation_url=$8, accommodation_price=$9, accommodation_currency=$10, notes=$11,
         check_in_time=$12, check_out_time=$13
-        , address_street=$14, address_house_number=$15, address_postal_code=$16
-      WHERE id=$17 RETURNING *`,
+        , address_street=$14, address_house_number=$15, address_postal_code=$16, is_paid=$17
+      WHERE id=$18 RETURNING *`,
       [
         city, country, latitude, longitude,
         arrivalDate, departureDate, accommodationName,
         accommodationUrl, accommodationPrice, accommodationCurrency, notes,
-        checkInTime || null, checkOutTime || null, addressStreet || null, addressHouseNumber || null, postalCode || null, stopId
+        checkInTime || null, checkOutTime || null, addressStreet || null, addressHouseNumber || null, postalCode || null, isPaid, stopId
       ]
     );
     

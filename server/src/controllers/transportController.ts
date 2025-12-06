@@ -84,10 +84,13 @@ export const createTransport = async (req: Request, res: Response) => {
     const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
     if (!DB_AVAILABLE) {
+      // Auto-mark as paid if price is 0 or null
+      const isPaid = !price || price === 0;
       const newTransport = await jsonStore.insert('transports', {
         journey_id: journeyId, type, from_location: fromLocation, to_location: toLocation,
         departure_date: cleanDepartureDate, arrival_date: cleanArrivalDate, price, currency, booking_url: bookingUrl, notes,
         flight_number: cleanFlightNumber, train_number: cleanTrainNumber,
+        is_paid: isPaid,
         created_at: new Date().toISOString()
       });
       const transport = toCamelCase(newTransport);
@@ -102,16 +105,18 @@ export const createTransport = async (req: Request, res: Response) => {
       }
       return res.status(201).json(transport);
     }
+    // Auto-mark as paid if price is 0 or null
+    const isPaid = !price || price === 0;
     const result = await query(
       `INSERT INTO transports (
         journey_id, type, from_location, to_location,
         departure_date, arrival_date, price, currency, booking_url, notes,
-        flight_number, train_number
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        flight_number, train_number, is_paid
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
       [
         journeyId, type, fromLocation, toLocation,
         cleanDepartureDate, cleanArrivalDate, price, currency, bookingUrl, notes,
-        cleanFlightNumber, cleanTrainNumber
+        cleanFlightNumber, cleanTrainNumber, isPaid
       ]
     );
     
@@ -201,10 +206,13 @@ export const updateTransport = async (req: Request, res: Response) => {
     const cleanTrainNumber = trainNumber && trainNumber.trim() !== '' ? trainNumber : null;
     
     if (!DB_AVAILABLE) {
+      // Auto-mark as paid if price is 0 or null
+      const isPaid = !price || price === 0;
       const updated = await jsonStore.updateById('transports', transportId, {
         type, from_location: fromLocation, to_location: toLocation,
         departure_date: cleanDepartureDate, arrival_date: cleanArrivalDate, price,
-        currency, booking_url: bookingUrl, notes, flight_number: cleanFlightNumber, train_number: cleanTrainNumber
+        currency, booking_url: bookingUrl, notes, flight_number: cleanFlightNumber, train_number: cleanTrainNumber,
+        is_paid: isPaid
       });
       if (!updated) return res.status(404).json({ message: 'Transport not found' });
       const transport = toCamelCase(updated);
@@ -219,18 +227,20 @@ export const updateTransport = async (req: Request, res: Response) => {
       }
       return res.json(transport);
     }
+    // Auto-mark as paid if price is 0 or null
+    const isPaid = !price || price === 0;
     const result = await query(
       `UPDATE transports SET
         type=$1, from_location=$2, to_location=$3,
         departure_date=$4, arrival_date=$5, price=$6,
         currency=$7, booking_url=$8, notes=$9,
-        flight_number=$10, train_number=$11
-      WHERE id=$12 RETURNING *`,
+        flight_number=$10, train_number=$11, is_paid=$12
+      WHERE id=$13 RETURNING *`,
       [
         type, fromLocation, toLocation,
         cleanDepartureDate, cleanArrivalDate, price,
         currency, bookingUrl, notes,
-        cleanFlightNumber, cleanTrainNumber, transportId
+        cleanFlightNumber, cleanTrainNumber, isPaid, transportId
       ]
     );
     

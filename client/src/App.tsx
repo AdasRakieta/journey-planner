@@ -2419,8 +2419,10 @@ function App() {
 
                           const amountDue = Math.max(0, total - paid);
                           const percentPaid = total > 0 ? Math.round((paid / total) * 100) : 0;
+                          // Use small epsilon for floating point comparison
+                          const isFullyPaid = amountDue < 0.01;
 
-                          return amountDue > 0 ? (
+                          return !isFullyPaid ? (
                             <div className="flex items-center justify-between mt-2">
                               <div className="flex items-center gap-2 text-sm font-medium text-red-600 dark:text-[#ff453a]">
                                 <XCircle className="w-4 h-4 text-black dark:text-white" />
@@ -2678,7 +2680,9 @@ function App() {
                                 <div className="flex justify-between items-start mb-1">
                                   <h4 className="font-semibold text-gray-900 dark:text-[#ffffff]">{stop.city}, {stop.country}</h4>
                                   <div className="flex items-center gap-2">
-                                    <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
+                                    {stop.accommodationPrice != null && stop.accommodationPrice > 0 && (
+                                      <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
+                                    )}
                                     <button
                                       onClick={() => {
                                         setEditingStop(stop);
@@ -2714,7 +2718,7 @@ function App() {
                                   </div>
                                 )}
 
-                                {stop.accommodationPrice != null && (
+                                {stop.accommodationPrice != null && stop.accommodationPrice > 0 && (
                                   <div className="mt-2 text-sm">
                                     <span className="font-medium text-green-600 dark:text-[#30d158]">{formatItemPrice(stop.accommodationPrice, stop.accommodationCurrency || selectedJourney.currency, stop, 'accommodation_price_converted', 'accommodation_price_converted_currency')}</span>
                                     {/* Payment control moved to top-right action area to avoid layout shift */}
@@ -2749,12 +2753,14 @@ function App() {
                                               <div className="flex items-center gap-2">
                                                 <span className="text-gray-600 dark:text-[#98989d]">•</span>
                                                 <span className="text-sm text-gray-600 dark:text-[#98989d]">{a.name}</span>
-                                                {a.estimatedCost != null ? (
+                                                {a.estimatedCost != null && a.estimatedCost > 0 ? (
                                                   <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || (a as any).curr || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
                                                 ) : null}
                                               </div>
                                               <div className="flex items-center gap-2">
-                                                <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
+                                                {a.estimatedCost != null && a.estimatedCost > 0 && (
+                                                  <PaymentCheckbox id={`attr-payment-${a.id}`} checked={a.isPaid || false} onChange={() => handleToggleAttractionPayment(stop.id!, a.id!, a.isPaid || false)} label="Paid" disabled={loading} />
+                                                )}
                                                 <button onClick={() => { setEditingAttraction(a); setEditingAttractionStopId(stop.id!); setShowEditAttractionForm(true); }} className="group text-blue-600 hover:bg-blue-600 rounded p-1">
                                                   <Edit2 className="w-4 h-4 transition-colors group-hover:text-white" />
                                                 </button>
@@ -2897,17 +2903,19 @@ function App() {
                               <p className="text-sm text-gray-600 dark:text-[#98989d] mt-1">
                                 {formatDateTimeForDisplay(transport.departureDate)} - {formatDateTimeForDisplay(transport.arrivalDate)}
                               </p>
-                              <div className="text-sm mt-1 flex items-center justify-between">
-                                <p className="font-medium text-green-600 dark:text-[#30d158]">
-                                  {formatItemPrice(transport.price, transport.currency, transport, 'price_converted', 'price_converted_currency')}
-                                </p>
-                                <PaymentCheckbox
-                                  id={`transport-payment-${transport.id}`}
-                                  checked={transport.isPaid || false}
-                                  onChange={() => handleToggleTransportPayment(transport.id!, transport.isPaid || false)}
-                                  disabled={loading}
-                                />
-                              </div>
+                              {transport.price != null && transport.price > 0 && (
+                                <div className="text-sm mt-1 flex items-center justify-between">
+                                  <p className="font-medium text-green-600 dark:text-[#30d158]">
+                                    {formatItemPrice(transport.price, transport.currency, transport, 'price_converted', 'price_converted_currency')}
+                                  </p>
+                                  <PaymentCheckbox
+                                    id={`transport-payment-${transport.id}`}
+                                    checked={transport.isPaid || false}
+                                    onChange={() => handleToggleTransportPayment(transport.id!, transport.isPaid || false)}
+                                    disabled={loading}
+                                  />
+                                </div>
+                              )}
                                 {/* Transport booking link (show above attachments and attractions) */}
                                 {transport.bookingUrl && (
                                   <a
