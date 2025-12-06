@@ -14,7 +14,8 @@ class SocketService {
       reconnectionDelay: 1000,
       reconnection: true,
       reconnectionAttempts: 10,
-      autoConnect: true
+      autoConnect: true,
+      timeout: 5000, // 5 second timeout
     });
 
     this.socket.on('connect', () => {
@@ -23,6 +24,10 @@ class SocketService {
 
     this.socket.on('disconnect', () => {
       console.log('❌ Socket.IO disconnected');
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.warn('⚠️ Socket.IO connection error (this is normal if server is restarting):', error.message);
     });
 
     this.socket.on('error', (error) => {

@@ -8,17 +8,19 @@ import {
   scrapeBookingUrl,
 } from '../controllers/stopController';
 import { authenticateToken } from '../middleware/auth';
+import { validateBody, validate } from '../middleware/validation';
+import { createStopSchema, updateStopSchema } from '../schemas/stop.schema';
 
 const router = express.Router();
 
 // Get all stops for a journey
 router.get('/journey/:journeyId', authenticateToken, getStopsByJourneyId);
 
-// Create stop for a journey
-router.post('/journey/:journeyId', authenticateToken, createStop);
+// Create stop for a journey (body validation)
+router.post('/journey/:journeyId', authenticateToken, validateBody(createStopSchema), createStop);
 
-// Update stop
-router.put('/:id', authenticateToken, updateStop);
+// Update stop (params + body validation)
+router.put('/:id', authenticateToken, validate(updateStopSchema), updateStop);
 
 // Delete stop
 router.delete('/:id', authenticateToken, deleteStop);

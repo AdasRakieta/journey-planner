@@ -90,7 +90,7 @@ const tryExtractFromGoogleMapsHtml = (html: string): Feature[] => {
 }
 
 const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, selectedJourneyId, existingStops }) => {
-  const [url, setUrl] = useState('');
+  const [url] = useState(''); // setUrl commented out - unused
   const [fileText, setFileText] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [radiusMeters, setRadiusMeters] = useState<number>(100);
@@ -98,7 +98,8 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
   const [parsedFeatures, setParsedFeatures] = useState<ParsedFeature[] | null>(null);
   const [assignments, setAssignments] = useState<Record<number, number | 'new'>>({});
   const [autoMode, setAutoMode] = useState<'off' | 'nearest' | 'name'>('nearest');
-  const [canTryRender, setCanTryRender] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_canTryRender, setCanTryRender] = useState(false);
 
   if (!isOpen) return null;
 
@@ -194,9 +195,9 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
                   if (lat && lng && Math.abs(Number(lat) - (p.lat||0)) < 0.5 && Math.abs(Number(lng) - (p.lng||0)) < 0.5) {
                     p.name = p.name || e.name;
                     p.description = p.description || e.description;
-                    p.address = p.address?.streetAddress || e.address?.streetAddress || e.address;
-                    p.phone = p.telephone || p.phone || e.telephone;
-                    p.website = p.url || p.website || e.url;
+                    p.address = p.address || (typeof e.address === 'object' ? (e.address as any)?.streetAddress : e.address);
+                    p.phone = (p as any).telephone || p.phone || (e as any).telephone;
+                    p.website = (p as any).url || p.website || (e as any).url;
                     p.raw = e;
                   }
                 }
@@ -232,12 +233,12 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
 
   const applyImport = async () => {
     if (!parsedFeatures || parsedFeatures.length === 0) return;
-    // dynamic services
+    // TODO: Fix imports when services are available
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const stopService = require('../services/stopService').default;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const attractionService = require('../services/attractionService').default;
-
+    const stopService = (await import('../services/api')).stopService;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires  
+    const attractionService = (await import('../services/api')).attractionService;
+    
     const createdStops: any[] = [];
     const createdAttractions: any[] = [];
     if (selectedJourneyId == null) { setStatus('No journey selected'); return; }
@@ -287,13 +288,14 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
     onClose();
   }
 
-  const tryServerRender = async () => {
+  /* Commented out - unused feature
+  const _tryServerRender = async () => {
     if (!url) { setStatus('No URL provided for server render'); return; }
     setStatus('Rendering page on server (may take a few seconds)...');
     try {
       const resp = await fetch(`/api/proxy/render?url=${encodeURIComponent(url)}`);
       if (!resp.ok) {
-        const txt = await resp.text();
+        await resp.text();
         setStatus(`Server render failed: ${resp.status}`);
         return;
       }
@@ -303,7 +305,6 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
 
       const parsed: ParsedFeature[] = features.map(f => ({ ...f, raw: null }));
       setParsedFeatures(parsed);
-      // initialize assignments
       const initAssign: Record<number, number | 'new'> = {};
       for (let i = 0; i < parsed.length; i++) {
         let assigned: number | 'new' = 'new';
@@ -324,6 +325,7 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
       setStatus('Server render failed');
     }
   }
+  */
 
   const autoAssign = (mode: 'nearest' | 'name') => {
     if (!parsedFeatures) return;

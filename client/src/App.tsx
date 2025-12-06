@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, MapPin, Calendar, DollarSign, Plane, Train, Bus, Car, Menu, X, Trash2, Edit2, CheckCircle2, XCircle, Settings, LogOut, User, Users, Share2, ChevronDown, ChevronRight, Eye, DownloadCloud, FileText, ListOrdered } from 'lucide-react';
-import JourneyMap from './components/JourneyMap';
+import JourneyMapWrapper from './components/JourneyMapWrapper';
 import ImportMapModal from './components/ImportMapModal';
 import { PaymentCheckbox } from './components/PaymentCheckbox';
 import { ToastContainer, useToast } from './components/Toast';
@@ -201,7 +201,7 @@ function App() {
       if (selectedJourney?.stops) {
         setOpenAttractions(prev => {
           const updated: Record<number, boolean> = { ...prev };
-          selectedJourney.stops.forEach(stop => {
+          (selectedJourney.stops || []).forEach(stop => {
             if (stop.id != null) {
               if (stop.attractions && stop.attractions.length > 0 && !(stop.id in updated)) {
                 updated[stop.id] = true;
@@ -2506,11 +2506,12 @@ function App() {
           <div className="lg:col-span-2 space-y-6">
             {/* Map */}
             <div className="gh-card p-0 overflow-hidden" style={{ height: '500px' }}>
-              <JourneyMap
+              <JourneyMapWrapper
                 locations={
                   selectedJourney?.stops?.map((stop) => ({
-                    lat: stop.latitude,
-                    lng: stop.longitude,
+                    id: stop.id,
+                    latitude: stop.latitude,
+                    longitude: stop.longitude,
                     city: stop.city,
                     country: stop.country,
                     arrivalDate: stop.arrivalDate,

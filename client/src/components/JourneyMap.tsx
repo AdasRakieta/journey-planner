@@ -49,8 +49,8 @@ interface Attraction {
 }
 
 interface Stop {
-  lat: number;
-  lng: number;
+  latitude: number;
+  longitude: number;
   city?: string;
   country?: string;
   arrivalDate?: Date | string;
@@ -124,12 +124,12 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
 
   // Create polyline coordinates from stops (sorted by arrival date)
   const polylinePositions: [number, number][] = locations
-    .filter(loc => loc.lat && loc.lng)
+    .filter(loc => loc.latitude && loc.longitude)
     .sort((a, b) => {
       if (!a.arrivalDate || !b.arrivalDate) return 0;
       return new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime();
     })
-    .map(loc => [loc.lat, loc.lng] as [number, number]);
+    .map(loc => [loc.latitude, loc.longitude] as [number, number]);
 
   // Collect all attractions with coordinates
   const allAttractions: Array<Attraction & { stopCity?: string }> = [];
@@ -180,10 +180,10 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       )}
       
       {/* Stop markers (blue) */}
-      {locations.map((location, index) => (
+      {locations.filter(loc => loc.latitude != null && loc.longitude != null).map((location, index) => (
         <Marker
           key={`stop-${index}`}
-          position={[location.lat, location.lng]}
+          position={[location.latitude, location.longitude]}
           icon={stopIcon}
           eventHandlers={{
             click: () => onLocationClick && onLocationClick(location),

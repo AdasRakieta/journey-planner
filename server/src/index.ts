@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+import helmet from 'helmet';
+import crypto from 'crypto';
 
 // Wymuś ładowanie .env z katalogu głównego
 import path from 'path';
@@ -38,7 +40,8 @@ const requiredEnvVars = [
   'DB_NAME',
   'DB_USER',
   'DB_PASSWORD',
-  'JWT_SECRET'
+  'JWT_SECRET',
+  'JWT_REFRESH_SECRET'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -49,6 +52,38 @@ if (missingEnvVars.length > 0) {
     console.error(`   - ${varName}`);
   });
   console.error('\n💡 Make sure these variables are set in your .env file or Docker environment');
+  process.exit(1);
+}
+
+// Fail-fast if JWT secrets are insecure (default/example values)
+const insecureSecrets = [
+  'your-super-secret-jwt-key-change-in-production',
+  'your-super-secret-jwt-key-change-this-in-production',
+  'your-super-secret-refresh-key-change-this-in-production',
+  'changeme',
+  'secret',
+  'jwt_secret',
+  'jwt_refresh_secret'
+];
+
+const insecureJwtSecret = insecureSecrets.includes(process.env.JWT_SECRET!.toLowerCase());
+const insecureRefreshSecret = insecureSecrets.includes(process.env.JWT_REFRESH_SECRET!.toLowerCase());
+
+if (insecureJwtSecret || insecureRefreshSecret) {
+  console.error('❌ CRITICAL SECURITY ERROR: JWT secrets are set to default/insecure values!');
+  if (insecureJwtSecret) console.error('   - JWT_SECRET is insecure');
+  if (insecureRefreshSecret) console.error('   - JWT_REFRESH_SECRET is insecure');
+  console.error('\n💡 Please set strong, random secrets in your .env file.');
+  console.error('   Generate with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+  console.error('   You need TWO different secrets (one for JWT_SECRET, one for JWT_REFRESH_SECRET)');
+  process.exit(1);
+}
+
+// Ensure JWT_SECRET and JWT_REFRESH_SECRET are different
+if (process.env.JWT_SECRET === process.env.JWT_REFRESH_SECRET) {
+  console.error('❌ CRITICAL SECURITY ERROR: JWT_SECRET and JWT_REFRESH_SECRET must be different!');
+  console.error('   Generate two different secrets with:');
+  console.error('   node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
   process.exit(1);
 }
 
@@ -73,7 +108,22 @@ const PORT = process.env.PORT || 5001;
 // Make io accessible to routes
 app.set('io', io);
 
-// Middleware
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+      imgSrc: ["'self'", 'data:', 'https:', 'http:'],
+      connectSrc: ["'self'", process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:5173'],
+      workerSrc: ["'self'", 'blob:'],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Umożliwia Leaflet tiles z zewnętrznych źródeł
+}));
+
+// CORS middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://twoja-domena',
   credentials: true
@@ -93,13 +143,13 @@ const tryConnect = async () => {
     if (!ok) {
       console.warn('\nDatabase not reachable - server will run using JSON fallback. Continuing automatically.');
       
-      // Ensure JSON users store has at least an admin account (only in fallback mode)
+      // Ensure JSON users store has at least one user (create admin only if empty)
       try {
         const users = await jsonStore.getAll('users');
-        const hasAdmin = users.some((u: any) => u.username === 'admin');
-        if (!hasAdmin) {
-          const pw = 'admin123';
-          const pwHash = await hashPassword(pw);
+        if (users.length === 0) {
+          // Generate secure random password (only when no users exist)
+          const randomPassword = crypto.randomBytes(16).toString('hex');
+          const pwHash = await hashPassword(randomPassword);
           const adminUser = {
             username: 'admin',
             email: 'admin@local',
@@ -110,7 +160,13 @@ const tryConnect = async () => {
             created_at: new Date().toISOString()
           };
           await jsonStore.insert('users', adminUser);
-          console.log("⚙️ JSON fallback: created default admin user 'admin' with password 'admin123' in server/data/users.json");
+          console.log('\n' + '='.repeat(80));
+          console.log('⚙️  JSON FALLBACK: Database not available - created initial admin user');
+          console.log('='.repeat(80));
+          console.log('   Username: admin');
+          console.log(`   Password: ${randomPassword}`);
+          console.log('   ⚠️  SAVE THIS PASSWORD - it will not be shown again!');
+          console.log('='.repeat(80) + '\n');
         }
       } catch (e) {
         console.error('Failed to ensure admin user in JSON store:', e);

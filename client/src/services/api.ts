@@ -24,7 +24,10 @@ export const journeyService = {
       },
     });
     if (!response.ok) throw new Error('Failed to fetch journeys');
-    return response.json();
+    const result = await response.json();
+    // Backend now returns {data: Journey[], pagination: {...}}
+    // Return only the data array for backwards compatibility
+    return Array.isArray(result) ? result : result.data || [];
   },
 
   async getJourneyById(id: number): Promise<Journey> {

@@ -24,7 +24,7 @@ import {
 import { journeyService, attractionService } from '../services/api';
 import type { Journey, Stop, Attraction } from '../types/journey';
 import { useToast, ToastContainer } from '../components/Toast';
-import JourneyMap from '../components/JourneyMap';
+import JourneyMapWrapper from '../components/JourneyMapWrapper';
 
 // Priority configuration with colors and labels
 const PRIORITY_CONFIG = {
@@ -686,7 +686,6 @@ const ItineraryPage: React.FC = () => {
               id: attr.id,
               orderIndex: attr.orderIndex || 0,
               priority: attr.priority || 'should',
-              plannedDate: attr.plannedDate,
               stopId: parseInt(stopId)
             });
           }
@@ -1135,7 +1134,7 @@ const ItineraryPage: React.FC = () => {
             
             {/* Map container */}
             <div className="h-[600px] rounded-xl overflow-hidden border border-gray-200 dark:border-[#38383a]">
-              <JourneyMap
+              <JourneyMapWrapper
                 locations={selectedStopForMap 
                   ? stops.filter(s => s.id === selectedStopForMap).map(s => ({
                       ...s,

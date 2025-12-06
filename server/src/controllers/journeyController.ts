@@ -47,7 +47,7 @@ export const getAllJourneys = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     const page = parseInt((req.query.page as string) || '1');
-    const pageSize = parseInt((req.query.pageSize as string) || '25');
+    const limit = parseInt((req.query.limit as string) || (req.query.pageSize as string) || '25');
     const q = (req.query.q as string || '').trim();
 
     if (!DB_AVAILABLE) {
@@ -65,10 +65,12 @@ export const getAllJourneys = async (req: Request, res: Response) => {
         journeys = journeys.filter((j: any) => (j.title || '').toLowerCase().includes(q.toLowerCase()));
       }
 
-      const start = (page - 1) * pageSize;
-      const paged = journeys.slice(start, start + pageSize);
+      const totalCount = journeys.length;
+      const totalPages = Math.ceil(totalCount / limit);
+      const start = (page - 1) * limit;
+      const paged = journeys.slice(start, start + limit);
 
-      const enrichedJourneys = await Promise.all(journeys.map(async (journey: any) => {
+      const enrichedJourneys = await Promise.all(paged.map(async (journey: any) => {
         const stops = (await jsonStore.findByField('stops', 'journey_id', journey.id))
           .sort((a: any, b: any) => (new Date(a.arrival_date || 0).getTime()) - (new Date(b.arrival_date || 0).getTime()));
 
@@ -85,11 +87,34 @@ export const getAllJourneys = async (req: Request, res: Response) => {
         return { ...journey, stops: stopsWithAttractions, transports, isShared };
       }));
 
-      return res.json(toCamelCase(enrichedJourneys));
+      return res.json({
+        data: toCamelCase(enrichedJourneys),
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages,
+        },
+      });
     }
 
     // Database mode: fetch journeys owned by user or shared with them
     const whereClause = `WHERE (created_by = $1 OR id IN (SELECT journey_id FROM journey_shares WHERE shared_with_user_id = $1 AND status = 'accepted'))`;
+    
+    // Count total matching journeys
+    let countQuery = `SELECT COUNT(*) as total FROM journeys ${whereClause}`;
+    const countParams: any[] = [userId];
+    
+    if (q) {
+      countQuery += ` AND title ILIKE $${countParams.length + 1}`;
+      countParams.push(`%${q}%`);
+    }
+    
+    const countResult = await query(countQuery, countParams);
+    const totalCount = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(totalCount / limit);
+    
+    // Fetch paginated journeys
     let baseQuery = `SELECT * FROM journeys ${whereClause}`;
     const params: any[] = [userId];
     
@@ -98,9 +123,9 @@ export const getAllJourneys = async (req: Request, res: Response) => {
       params.push(`%${q}%`);
     }
     
-    const offset = (page - 1) * pageSize;
+    const offset = (page - 1) * limit;
     baseQuery += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(pageSize, offset);
+    params.push(limit, offset);
 
     const result = await query(baseQuery, params);
     const journeys = result.rows;
@@ -123,7 +148,15 @@ export const getAllJourneys = async (req: Request, res: Response) => {
       return { ...journey, stops: stopsWithAttractions, transports, isShared };
     }));
 
-    return res.json(toCamelCase(enrichedJourneys));
+    return res.json({
+      data: toCamelCase(enrichedJourneys),
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+      },
+    });
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ message: 'Failed to fetch journeys' });

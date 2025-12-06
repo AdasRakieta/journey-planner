@@ -1,1 +1,0 @@
-﻿ALTER TABLE attractions ALTER COLUMN duration TYPE VARCHAR(50);
