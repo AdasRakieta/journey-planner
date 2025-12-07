@@ -16,11 +16,18 @@ export const validate = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
+        // Enhanced logging for debugging
+        console.error('❌ Validation failed for', req.method, req.path);
+        console.error('📦 Body:', JSON.stringify(req.body, null, 2));
+        console.error('🔍 Params:', req.params);
+        console.error('❗ Errors:', error.issues);
+        
         return res.status(400).json({
           message: 'Validation failed',
           errors: error.issues.map((err: any) => ({
             path: err.path.join('.'),
             message: err.message,
+            received: err.received,
           })),
         });
       }

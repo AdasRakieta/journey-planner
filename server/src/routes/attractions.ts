@@ -10,17 +10,24 @@ import {
   bulkUpdateAttractions,
 } from '../controllers/attractionController';
 import { authenticateToken } from '../middleware/auth';
+import { validate } from '../middleware/validation';
+import {
+  createAttractionSchema,
+  updateAttractionSchema,
+  getAttractionsByStopIdSchema,
+  deleteAttractionSchema,
+} from '../schemas/attraction.schema';
 
 const router = express.Router();
 
 // Get all attractions for a stop
-router.get('/stop/:stopId', authenticateToken, getAttractionsByStopId);
+router.get('/stop/:stopId', authenticateToken, validate(getAttractionsByStopIdSchema), getAttractionsByStopId);
 
 // Create attraction for a stop
-router.post('/stop/:stopId', authenticateToken, createAttraction);
+router.post('/stop/:stopId', authenticateToken, validate(createAttractionSchema), createAttraction);
 
 // Update attraction
-router.put('/:id', authenticateToken, updateAttraction);
+router.put('/:id', authenticateToken, validate(updateAttractionSchema), updateAttraction);
 
 // Reorder attractions within a stop
 router.patch('/stop/:stopId/reorder', authenticateToken, reorderAttractions);
@@ -35,6 +42,6 @@ router.patch('/:id/move', authenticateToken, moveAttraction);
 router.patch('/:id/priority', authenticateToken, updateAttractionPriority);
 
 // Delete attraction
-router.delete('/:id', authenticateToken, deleteAttraction);
+router.delete('/:id', authenticateToken, validate(deleteAttractionSchema), deleteAttraction);
 
 export default router;

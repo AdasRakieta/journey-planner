@@ -1,5 +1,22 @@
 import { z } from 'zod';
 
+// Custom date validator that accepts both YYYY-MM-DD and ISO datetime strings
+const dateStringSchema = z.string()
+  .refine((val) => {
+    // Accept YYYY-MM-DD format (from HTML date input)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return true;
+    // Accept ISO datetime format
+    if (/^\d{4}-\d{2}-\d{2}T/.test(val)) return true;
+    return false;
+  }, 'Invalid date format. Expected YYYY-MM-DD or ISO datetime')
+  .transform((val) => {
+    // If it's just a date (YYYY-MM-DD), convert to datetime at midnight
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      return `${val}T00:00:00.000Z`;
+    }
+    return val;
+  });
+
 /**
  * Schema dla tworzenia nowej podróży
  */
@@ -9,14 +26,14 @@ export const createJourneySchema = z.object({
       .min(1, 'Title is required')
       .max(255, 'Title must not exceed 255 characters'),
     description: z.string().max(2000, 'Description must not exceed 2000 characters').optional(),
-    startDate: z.string().datetime('Invalid start date format').or(z.date()),
-    endDate: z.string().datetime('Invalid end date format').or(z.date()),
+    startDate: dateStringSchema,
+    endDate: dateStringSchema,
     totalEstimatedCost: z.number().nonnegative('Total cost must be non-negative').optional(),
     currency: z.string()
       .length(3, 'Currency must be a 3-letter code (e.g., PLN, EUR, USD)')
       .regex(/^[A-Z]{3}$/, 'Currency must be uppercase 3-letter code')
       .default('PLN'),
-  }).refine(
+  }).passthrough().refine(
     (data) => {
       const start = new Date(data.startDate);
       const end = new Date(data.endDate);
@@ -42,14 +59,14 @@ export const updateJourneySchema = z.object({
       .max(255, 'Title must not exceed 255 characters')
       .optional(),
     description: z.string().max(2000, 'Description must not exceed 2000 characters').optional(),
-    startDate: z.string().datetime('Invalid start date format').or(z.date()).optional(),
-    endDate: z.string().datetime('Invalid end date format').or(z.date()).optional(),
+    startDate: dateStringSchema.optional(),
+    endDate: dateStringSchema.optional(),
     totalEstimatedCost: z.number().nonnegative('Total cost must be non-negative').optional(),
     currency: z.string()
       .length(3, 'Currency must be a 3-letter code')
       .regex(/^[A-Z]{3}$/, 'Currency must be uppercase')
       .optional(),
-  }).refine(
+  }).passthrough().refine(
     (data) => {
       if (data.startDate && data.endDate) {
         const start = new Date(data.startDate);
