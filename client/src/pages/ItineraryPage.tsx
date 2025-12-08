@@ -25,6 +25,7 @@ import { journeyService, attractionService } from '../services/api';
 import type { Journey, Stop, Attraction } from '../types/journey';
 import { useToast, ToastContainer } from '../components/Toast';
 import JourneyMapWrapper from '../components/JourneyMapWrapper';
+import { getAttractionTagInfo } from '../utils/attractionTags';
 
 // Priority configuration with colors and labels
 const PRIORITY_CONFIG = {
@@ -185,9 +186,26 @@ const AttractionCard: React.FC<{
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h4 className={`font-medium truncate ${currentPriority === 'skip' ? 'line-through text-gray-500 dark:text-[#636366]' : 'text-gray-900 dark:text-white'}`}>
-              {attraction.name}
-            </h4>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className={`font-medium truncate ${currentPriority === 'skip' ? 'line-through text-gray-500 dark:text-[#636366]' : 'text-gray-900 dark:text-white'}`}>
+                {attraction.name}
+              </h4>
+              {attraction.tag && (() => {
+                const tagInfo = getAttractionTagInfo(attraction.tag);
+                return tagInfo && (
+                  <span 
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
+                    style={{
+                      backgroundColor: `${tagInfo.color}20`,
+                      color: tagInfo.color,
+                      border: `1px solid ${tagInfo.color}40`
+                    }}
+                  >
+                    {tagInfo.emoji} {tagInfo.label}
+                  </span>
+                );
+              })()}
+            </div>
             {attraction.description && (
               <p className="text-sm text-gray-500 dark:text-[#8e8e93] line-clamp-2 mt-0.5">
                 {attraction.description}
@@ -1024,7 +1042,7 @@ const ItineraryPage: React.FC = () => {
                           {date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-[#8e8e93]">
-                          {items.length} {items.length === 1 ? 'atrakcja' : 'atrakcji'}
+                          {items.length} {items.length === 1 ? 'attraction' : 'attractions'}
                         </p>
                       </div>
                     </div>
@@ -1046,7 +1064,24 @@ const ItineraryPage: React.FC = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2 mb-1">
-                                <h4 className="font-medium text-gray-900 dark:text-white">{attraction.name}</h4>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-medium text-gray-900 dark:text-white">{attraction.name}</h4>
+                                  {attraction.tag && (() => {
+                                    const tagInfo = getAttractionTagInfo(attraction.tag);
+                                    return tagInfo && (
+                                      <span 
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
+                                        style={{
+                                          backgroundColor: `${tagInfo.color}20`,
+                                          color: tagInfo.color,
+                                          border: `1px solid ${tagInfo.color}40`
+                                        }}
+                                      >
+                                        {tagInfo.emoji} {tagInfo.label}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                                 <PriorityBadge priority={attraction.priority as PriorityType} compact />
                               </div>
                               <p className="text-sm text-gray-500 dark:text-[#8e8e93]">

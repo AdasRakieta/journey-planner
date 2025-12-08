@@ -98,7 +98,8 @@ CREATE TABLE IF NOT EXISTS attractions (
     order_index INTEGER DEFAULT 0, -- For sorting within stop
     priority VARCHAR(10) CHECK (priority IN ('must', 'should', 'could', 'skip')), -- Priority level for itinerary planning
     planned_date DATE, -- YYYY-MM-DD format for scheduled date
-    planned_time VARCHAR(5) -- HH:MM format for scheduled time
+    planned_time VARCHAR(5), -- HH:MM format for scheduled time
+    tag VARCHAR(20) CHECK (tag IN ('beauty', 'cafe', 'must_see', 'accommodation', 'nature', 'airport', 'food', 'attraction', 'train_station')) -- Category tag for attraction
 );
 
 -- Journey shares (sharing/collaboration on journeys)

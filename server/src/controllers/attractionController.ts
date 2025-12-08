@@ -65,7 +65,7 @@ export const createAttraction = async (req: Request, res: Response) => {
     let { 
       name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
-      latitude, longitude, visitTime 
+      latitude, longitude, visitTime, tag 
     } = req.body;
     
     // Fix: convert empty string to null for numeric/optional fields
@@ -79,6 +79,7 @@ export const createAttraction = async (req: Request, res: Response) => {
     if (latitude === '' || latitude === undefined) latitude = null;
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
+    if (tag === '' || tag === undefined) tag = null;
     
     if (!DB_AVAILABLE) {
       // Auto-mark as paid if estimated cost is 0 or null
@@ -87,7 +88,7 @@ export const createAttraction = async (req: Request, res: Response) => {
         stop_id: stopId,
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'PLN',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
-        latitude, longitude, visit_time: visitTime,
+        latitude, longitude, visit_time: visitTime, tag,
         is_paid: isPaid,
         created_at: new Date().toISOString()
       });
@@ -112,11 +113,11 @@ export const createAttraction = async (req: Request, res: Response) => {
       `INSERT INTO attractions (
         stop_id, name, description, estimated_cost, duration, currency,
         address, address_street, address_city, address_postal_code, address_country,
-        latitude, longitude, visit_time, is_paid
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        latitude, longitude, visit_time, is_paid, tag
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
       [stopId, name, description, estimatedCost, duration, currency || 'PLN',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime, isPaid]
+       latitude, longitude, visitTime, isPaid, tag]
     );
     const attraction = toCamelCase(result.rows[0]);
     // Emit Socket.IO event
@@ -195,7 +196,7 @@ export const updateAttraction = async (req: Request, res: Response) => {
     let { 
       name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
-      latitude, longitude, visitTime 
+      latitude, longitude, visitTime, tag 
     } = req.body;
     
     // Fix: convert empty string or undefined for optional fields to null
@@ -209,6 +210,7 @@ export const updateAttraction = async (req: Request, res: Response) => {
     if (latitude === '' || latitude === undefined) latitude = null;
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
+    if (tag === '' || tag === undefined) tag = null;
     
     if (!DB_AVAILABLE) {
       // Auto-mark as paid if estimated cost is 0 or null
@@ -216,7 +218,7 @@ export const updateAttraction = async (req: Request, res: Response) => {
       const updated = await jsonStore.updateById('attractions', attractionId, {
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'USD',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
-        latitude, longitude, visit_time: visitTime,
+        latitude, longitude, visit_time: visitTime, tag,
         is_paid: isPaid
       });
       if (!updated) return res.status(404).json({ message: 'Attraction not found' });
@@ -231,11 +233,11 @@ export const updateAttraction = async (req: Request, res: Response) => {
       `UPDATE attractions SET 
         name=$1, description=$2, estimated_cost=$3, duration=$4, currency=$5,
         address=$6, address_street=$7, address_city=$8, address_postal_code=$9, address_country=$10,
-        latitude=$11, longitude=$12, visit_time=$13, is_paid=$14 
-      WHERE id=$15 RETURNING *`,
+        latitude=$11, longitude=$12, visit_time=$13, is_paid=$14, tag=$15 
+      WHERE id=$16 RETURNING *`,
       [name, description, estimatedCost, duration, currency || 'USD',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime, isPaid, attractionId]
+       latitude, longitude, visitTime, isPaid, tag, attractionId]
     );
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'Attraction not found' });

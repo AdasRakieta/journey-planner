@@ -8,7 +8,7 @@ Purpose:
 
 Included files:
 - `users.json` - sample users (includes `admin` placeholder). Note: when the server runs with JSON fallback and `users` has no `admin` user, the server will automatically create an admin account with username `admin` and password `admin123` and store it in `server/data/users.json`.
-- `journeys.json`, `stops.json`, `transports.json`, `attachments.json` - small sample records linked to the sample `dev` user.
+- `journeys.json`, `stops.json`, `transports.json`, `attractions.json`, `attachments.json` - small sample records linked to the sample `dev` user.
 
 Default JSON-fallback admin account:
 - username: `admin`

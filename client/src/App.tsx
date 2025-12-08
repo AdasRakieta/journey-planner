@@ -12,6 +12,7 @@ import type { Journey, Stop, Transport, Attraction, ChecklistItem } from './type
 import { journeyService, stopService, attractionService, transportService, journeyShareService, attachmentService } from './services/api';
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
+import { getAttractionTagInfo, getAvailableAttractionTags } from './utils/attractionTags';
 // Payment calculation helpers (unused directly here) are available in services/utils; import when needed.
 import { useAuth } from './contexts/AuthContext';
 import { geocodeAddress } from './services/geocoding';
@@ -1420,25 +1421,11 @@ function App() {
         payload
       );
       
-      // Update local state - find the stop and add the attraction
+      // Reload journey data from server to ensure all fields are up-to-date
       if (selectedJourney) {
-        const updatedStops = selectedJourney.stops?.map(stop => {
-          if (stop.id === selectedStopForAttraction) {
-            return {
-              ...stop,
-              attractions: [...(stop.attractions || []), createdAttraction],
-            };
-          }
-          return stop;
-        });
-        
-        const updatedJourney = {
-          ...selectedJourney,
-          stops: updatedStops,
-        };
-        
-        setSelectedJourney(updatedJourney);
-        setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
+        const refreshedJourney = await journeyService.getJourneyById(selectedJourney.id!);
+        setSelectedJourney(refreshedJourney);
+        setJourneys(journeys.map(j => j.id === refreshedJourney.id ? refreshedJourney : j));
       }
       
       setNewAttraction({
@@ -1658,19 +1645,11 @@ function App() {
       
       const updated = await attractionService.updateAttraction(attractionData.id!, attractionData);
       
-      const updatedStops = selectedJourney.stops?.map(stop => {
-        if (stop.id === editingAttractionStopId) {
-          return {
-            ...stop,
-            attractions: stop.attractions?.map(a => a.id === updated.id ? updated : a),
-          };
-        }
-        return stop;
-      });
+      // Reload journey data from server to ensure all fields are up-to-date
+      const refreshedJourney = await journeyService.getJourneyById(selectedJourney.id!);
+      setSelectedJourney(refreshedJourney);
+      setJourneys(journeys.map(j => j.id === refreshedJourney.id ? refreshedJourney : j));
       
-      const updatedJourney = { ...selectedJourney, stops: updatedStops };
-      setSelectedJourney(updatedJourney);
-      setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
       setShowEditAttractionForm(false);
       setEditingAttraction(null);
       setEditingAttractionStopId(null);
@@ -2753,6 +2732,10 @@ function App() {
                                             <li key={a.id} className="flex justify-between items-center py-1 border-b border-transparent last:border-b-0">
                                               <div className="flex items-center gap-2">
                                                 <span className="text-gray-600 dark:text-[#98989d]">•</span>
+                                                {a.tag && (() => {
+                                                  const tagInfo = getAttractionTagInfo(a.tag);
+                                                  return tagInfo && <span className="text-sm">{tagInfo.emoji}</span>;
+                                                })()}
                                                 <span className="text-sm text-gray-600 dark:text-[#98989d]">{a.name}</span>
                                                 {a.estimatedCost != null && a.estimatedCost > 0 ? (
                                                   <span className="ml-2 font-medium text-green-600 dark:text-[#30d158] text-sm">{formatItemPrice(a.estimatedCost, (a as any).currency || (a as any).curr || selectedJourney.currency, a, 'estimated_cost_converted', 'estimated_cost_converted_currency')}</span>
@@ -4581,6 +4564,32 @@ function App() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Category Tag
+                  </label>
+                  <select
+                    value={newAttraction.tag || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, tag: e.target.value as any || undefined })}
+                    className="gh-select"
+                  >
+                    <option value="">No category</option>
+                    {getAvailableAttractionTags().map(tag => (
+                      <option key={tag.value} value={tag.value}>
+                        {tag.emoji} {tag.label}
+                      </option>
+                    ))}
+                  </select>
+                  {newAttraction.tag && (() => {
+                    const tagInfo = getAttractionTagInfo(newAttraction.tag);
+                    return tagInfo && (
+                      <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                        {tagInfo.emoji} {tagInfo.label}
+                      </p>
+                    );
+                  })()}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                     Address
                   </label>
                   <div className="space-y-3">
@@ -4829,6 +4838,32 @@ function App() {
                       className="gh-input"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Category Tag
+                  </label>
+                  <select
+                    value={editingAttraction.tag || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, tag: e.target.value as any || undefined })}
+                    className="gh-select"
+                  >
+                    <option value="">No category</option>
+                    {getAvailableAttractionTags().map(tag => (
+                      <option key={tag.value} value={tag.value}>
+                        {tag.emoji} {tag.label}
+                      </option>
+                    ))}
+                  </select>
+                  {editingAttraction.tag && (() => {
+                    const tagInfo = getAttractionTagInfo(editingAttraction.tag);
+                    return tagInfo && (
+                      <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                        {tagInfo.emoji} {tagInfo.label}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div>

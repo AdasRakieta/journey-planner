@@ -51,6 +51,7 @@ export interface AttractionAttributes {
   priority?: 'must' | 'should' | 'could' | 'skip'; // priority level
   plannedDate?: Date; // scheduled date
   plannedTime?: string; // HH:MM format
+  tag?: 'beauty' | 'cafe' | 'must_see' | 'accommodation' | 'nature' | 'airport' | 'food' | 'attraction' | 'train_station'; // category tag
 }
 
 export interface JourneyShareAttributes {
@@ -359,6 +360,7 @@ export class Attraction extends Model<AttractionAttributes, AttractionCreationAt
   public priority?: 'must' | 'should' | 'could' | 'skip';
   public plannedDate?: Date;
   public plannedTime?: string;
+  public tag?: 'beauty' | 'cafe' | 'must_see' | 'accommodation' | 'nature' | 'airport' | 'food' | 'attraction' | 'train_station';
 }
 
 Attraction.init(
@@ -415,6 +417,13 @@ Attraction.init(
     plannedTime: {
       type: DataTypes.TIME,
       field: 'planned_time',
+    },
+    tag: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      validate: {
+        isIn: [['beauty', 'cafe', 'must_see', 'accommodation', 'nature', 'airport', 'food', 'attraction', 'train_station']],
+      },
     },
   },
   {

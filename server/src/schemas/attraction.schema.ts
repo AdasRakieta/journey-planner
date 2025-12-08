@@ -34,8 +34,8 @@ export const createAttractionSchema = z.object({
     name: z.string()
       .min(1, 'Name is required')
       .max(255, 'Name must not exceed 255 characters'),
-    description: z.string().max(2000, 'Description must not exceed 2000 characters').optional(),
-    estimatedCost: z.number().nonnegative('Estimated cost must be non-negative').optional(),
+    description: z.string().max(2000, 'Description must not exceed 2000 characters').optional().nullable(),
+    estimatedCost: z.number().nonnegative('Estimated cost must be non-negative').optional().nullable(),
     currency: z.string()
       .length(3, 'Currency must be a 3-letter code')
       .regex(/^[A-Z]{3}$/, 'Currency must be uppercase')
@@ -44,9 +44,9 @@ export const createAttractionSchema = z.object({
     isPaid: z.boolean().optional(),
     // Address fields
     address: z.string().max(500).optional(),
-    addressStreet: z.string().max(255).optional(),
+    addressStreet: z.string().max(255).optional().nullable(),
     addressCity: z.string().max(255).optional(),
-    addressPostalCode: z.string().max(32).optional(),
+    addressPostalCode: z.string().max(32).optional().nullable(),
     addressCountry: z.string().max(255).optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
@@ -54,8 +54,12 @@ export const createAttractionSchema = z.object({
     visitTime: z.string().max(5).optional().nullable(), // HH:MM format
     orderIndex: z.number().optional(),
     priority: z.enum(priorityTypes).optional(),
-    plannedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Planned date must be YYYY-MM-DD').optional().nullable(),
+    plannedDate: z.union([
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Planned date must be YYYY-MM-DD'),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}T/, 'Planned date must be ISO datetime')
+    ]).optional().nullable(),
     plannedTime: z.string().max(5).optional().nullable(), // HH:MM format
+    tag: z.enum(['beauty', 'cafe', 'must_see', 'accommodation', 'nature', 'airport', 'food', 'attraction', 'train_station']).optional().nullable(),
   }).passthrough(),
 });
 
@@ -68,16 +72,16 @@ export const updateAttractionSchema = z.object({
   }),
   body: z.object({
     name: z.string().min(1).max(255).optional(),
-    description: z.string().max(2000).optional(),
-    estimatedCost: z.number().nonnegative().optional(),
+    description: z.string().max(2000).optional().nullable(),
+    estimatedCost: z.number().nonnegative().optional().nullable(),
     currency: z.string().length(3).regex(/^[A-Z]{3}$/).optional(),
     duration: z.string().max(50).optional(),
     isPaid: z.boolean().optional(),
     // Address fields
     address: z.string().max(500).optional(),
-    addressStreet: z.string().max(255).optional(),
+    addressStreet: z.string().max(255).optional().nullable(),
     addressCity: z.string().max(255).optional(),
-    addressPostalCode: z.string().max(32).optional(),
+    addressPostalCode: z.string().max(32).optional().nullable(),
     addressCountry: z.string().max(255).optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
@@ -85,8 +89,12 @@ export const updateAttractionSchema = z.object({
     visitTime: z.string().max(5).optional().nullable(),
     orderIndex: z.number().optional(),
     priority: z.enum(priorityTypes).optional(),
-    plannedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Planned date must be YYYY-MM-DD').optional().nullable(),
+    plannedDate: z.union([
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Planned date must be YYYY-MM-DD'),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}T/, 'Planned date must be ISO datetime')
+    ]).optional().nullable(),
     plannedTime: z.string().max(5).optional().nullable(),
+    tag: z.enum(['beauty', 'cafe', 'must_see', 'accommodation', 'nature', 'airport', 'food', 'attraction', 'train_station']).optional().nullable(),
   }).passthrough(), // Allow additional fields for backwards compatibility
 });
 

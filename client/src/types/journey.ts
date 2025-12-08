@@ -59,6 +59,7 @@ export interface Attraction {
   priority?: 'must' | 'should' | 'could' | 'skip'; // Priority level for itinerary planning
   plannedDate?: string;  // YYYY-MM-DD format for scheduled date
   plannedTime?: string;  // HH:MM format for scheduled time
+  tag?: 'beauty' | 'cafe' | 'must_see' | 'accommodation' | 'nature' | 'airport' | 'food' | 'attraction' | 'train_station'; // Category tag
 }
 
 export interface JourneyShare {
