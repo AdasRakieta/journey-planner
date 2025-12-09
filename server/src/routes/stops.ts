@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   getStopsByJourneyId,
+  getStopById,
   createStop,
   updateStop,
   deleteStop,
@@ -15,6 +16,9 @@ const router = express.Router();
 
 // Get all stops for a journey
 router.get('/journey/:journeyId', authenticateToken, getStopsByJourneyId);
+
+// Get single stop by ID
+router.get('/:id', authenticateToken, getStopById);
 
 // Create stop for a journey (params + body validation)
 router.post('/journey/:journeyId', authenticateToken, validate(createStopSchema), createStop);

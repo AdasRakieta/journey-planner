@@ -1,41 +1,22 @@
-cały czas mam ten błąd dodatkowo nei wiem czemu, przeanalizuj cały projekt i upewnij się że się nie powtórzy zobacz też pliki env czy odpowiednio są ustawione
 
-**PUT**[http://localhost:5001/api/stops/21](http://localhost:5001/api/stops/21 "http://localhost:5001/api/stops/21")[[HTTP/1.1 **400** Bad Request 11ms]]()
+cały czas jest to samo z takimi logami:
+📥 ItineraryPage: Received journey data: 
+Object { id: 9, title: "Korea Południowas", description: null, startDate: "2025-12-20T22:00:00.000Z", endDate: "2026-01-02T22:00:00.000Z", totalEstimatedCost: 7930.99, currency: "PLN", createdBy: 1, createdAt: "2025-12-02T20:56:16.497Z", updatedAt: "2025-12-09T13:45:39.634Z", … }
+ItineraryPage.tsx:816:15
+📥 ItineraryPage: Stop dates: 
+Array(5) [ {…}, {…}, {…}, {…}, {…} ]
+ItineraryPage.tsx:817:15
+🔍 Edit Attraction - Stop dates: 
+Object { stopId: 17, city: "Seul", arrivalDate: "2025-12-22T00:00:00", departureDate: "2025-12-24T00:00:00" }
+ItineraryPage.tsx:2183:25
+📅 Formatted dates: 
+Object { arrivalDate: "2025-12-22", departureDate: "2025-12-24" }
+ItineraryPage.tsx:2203:25
+🔍 Edit Attraction - Stop dates: 
+Object { stopId: 17, city: "Seul", arrivalDate: "2025-12-22T00:00:00", departureDate: "2025-12-24T00:00:00" }
+ItineraryPage.tsx:2183:25
+📅 Formatted dates: 
+Object { arrivalDate: "2025-12-22", departureDate: "2025-12-24" }
 
-**XHR**OPTIONS[http://localhost:5001/api/stops/21](http://localhost:5001/api/stops/21 "http://localhost:5001/api/stops/21")[[HTTP/1.1 **204** No Content 2ms]]()
-
-Failed to update stop:** **Error: **Failed to update stop****    **updateStop**api.ts**:**154**
-
-**    **handleEditStop**App.tsx**:**1567**
-
-**    **React**13**
-
-**        **executeDispatch
-
-**        **runWithFiberInDEV
-
-**        **processDispatchQueue
-
-**        **dispatchEventForPluginEventSystem
-
-**        **batchedUpdates$1
-
-**        **dispatchEventForPluginEventSystem
-
-**        **dispatchEvent
-
-**        **dispatchDiscreteEvent
-
-**        **addTrappedEventListener
-
-**        **listenToNativeEvent
-
-**        **listenToAllSupportedEvents
-
-**        **listenToAllSupportedEvents
-
-**        **createRoot
-
-**    **`<anonymous>`**main.tsx**:**16**
-
- [App.tsx**:1578:15**](http://localhost:5173/journey/src/App.tsx "Wyświetl źródło w debugerze → http://localhost:5173/journey/src/App.tsx:1578:15")
+​dałem też 2 zdjęcia jedno z strony drugie z bazy danych
+pamiętaj że musi być po angielsku, i upewnij się że na pewno to poprawnie działa

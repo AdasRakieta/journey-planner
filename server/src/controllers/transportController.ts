@@ -9,7 +9,7 @@ const toCamelCase = (obj: any): any => {
   if (Array.isArray(obj)) {
     return obj.map(item => toCamelCase(item));
   }
-  // Keep Date objects as ISO strings
+  // Keep Date objects as ISO strings unless a date-only column (ends with _date)
   if (obj instanceof Date) {
     return obj.toISOString();
   }
@@ -20,7 +20,11 @@ const toCamelCase = (obj: any): any => {
       
       // Convert Date objects to ISO strings
       if (value instanceof Date) {
-        acc[camelKey] = value.toISOString();
+        if (/(_date)$/.test(key)) {
+          acc[camelKey] = value.toISOString().slice(0, 10);
+        } else {
+          acc[camelKey] = value.toISOString();
+        }
       }
       // Convert numeric strings to numbers for specific fields
       else if (typeof value === 'string' && 

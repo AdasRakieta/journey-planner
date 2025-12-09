@@ -21,7 +21,10 @@ const toCamelCase = (obj: any): any => {
     return Object.keys(obj).reduce((acc: any, key: string) => {
       const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
       const value = obj[key];
-      if (value instanceof Date) acc[camelKey] = value.toISOString();
+      if (value instanceof Date) {
+        if (/(_date)$/.test(key)) acc[camelKey] = value.toISOString().slice(0, 10);
+        else acc[camelKey] = value.toISOString();
+      }
       else acc[camelKey] = toCamelCase(value);
       return acc;
     }, {});

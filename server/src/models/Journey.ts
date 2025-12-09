@@ -51,6 +51,9 @@ export interface AttractionAttributes {
   priority?: 'must' | 'should' | 'could' | 'skip'; // priority level
   plannedDate?: Date; // scheduled date
   plannedTime?: string; // HH:MM format
+  visitTime?: string; // HH:MM format for planned visit time
+  openingTime?: string; // HH:MM format for opening time
+  closingTime?: string; // HH:MM format for closing time
   tag?: 'beauty' | 'cafe' | 'must_see' | 'accommodation' | 'nature' | 'airport' | 'food' | 'attraction' | 'train_station'; // category tag
 }
 
@@ -360,6 +363,9 @@ export class Attraction extends Model<AttractionAttributes, AttractionCreationAt
   public priority?: 'must' | 'should' | 'could' | 'skip';
   public plannedDate?: Date;
   public plannedTime?: string;
+  public visitTime?: string;
+  public openingTime?: string;
+  public closingTime?: string;
   public tag?: 'beauty' | 'cafe' | 'must_see' | 'accommodation' | 'nature' | 'airport' | 'food' | 'attraction' | 'train_station';
 }
 
@@ -417,6 +423,18 @@ Attraction.init(
     plannedTime: {
       type: DataTypes.TIME,
       field: 'planned_time',
+    },
+    visitTime: {
+      type: DataTypes.TIME,
+      field: 'visit_time',
+    },
+    openingTime: {
+      type: DataTypes.TIME,
+      field: 'opening_time',
+    },
+    closingTime: {
+      type: DataTypes.TIME,
+      field: 'closing_time',
     },
     tag: {
       type: DataTypes.STRING(20),

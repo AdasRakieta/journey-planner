@@ -37,6 +37,7 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - VITE_API_URL=${VITE_API_URL}
 
+      - FILE_ENCRYPTION_KEY=${FILE_ENCRYPTION_KEY}
       - UPLOAD_DIR=/app/uploads/attachments
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
       - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES:-application/pdf,image/jpeg,image/png,image/jpg}

@@ -10,6 +10,7 @@ const toCamelCase = (obj: any): any => {
   }
   // Keep Date objects as ISO strings
   if (obj instanceof Date) {
+    // Default top-level Date -> ISO (keeps time info where necessary)
     return obj.toISOString();
   }
   if (obj !== null && typeof obj === 'object') {
@@ -17,9 +18,13 @@ const toCamelCase = (obj: any): any => {
       const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
       const value = obj[key];
       
-      // Convert Date objects to ISO strings
+      // Convert Date objects: date-only fields (snake key ending with _date) -> YYYY-MM-DD
       if (value instanceof Date) {
-        acc[camelKey] = value.toISOString();
+        if (/(_date)$/.test(key)) {
+          acc[camelKey] = value.toISOString().slice(0, 10); // YYYY-MM-DD
+        } else {
+          acc[camelKey] = value.toISOString();
+        }
       }
       // Convert numeric strings to numbers for specific fields
       else if (typeof value === 'string' && 
@@ -65,11 +70,11 @@ export const createAttraction = async (req: Request, res: Response) => {
     let { 
       name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
-      latitude, longitude, visitTime, tag 
+      latitude, longitude, visitTime, openingTime, closingTime, tag 
     } = req.body;
     
     // Fix: convert empty string to null for numeric/optional fields
-    if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
+    if (estimatedCost === '' || estimatedCost === undefined || estimatedCost === 0) estimatedCost = null;
     if (duration === '' || duration === undefined) duration = null;
     if (address === '' || address === undefined) address = null;
     if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
@@ -79,6 +84,8 @@ export const createAttraction = async (req: Request, res: Response) => {
     if (latitude === '' || latitude === undefined) latitude = null;
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
+    if (openingTime === '' || openingTime === undefined) openingTime = null;
+    if (closingTime === '' || closingTime === undefined) closingTime = null;
     if (tag === '' || tag === undefined) tag = null;
     
     if (!DB_AVAILABLE) {
@@ -88,7 +95,7 @@ export const createAttraction = async (req: Request, res: Response) => {
         stop_id: stopId,
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'PLN',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
-        latitude, longitude, visit_time: visitTime, tag,
+        latitude, longitude, visit_time: visitTime, opening_time: openingTime, closing_time: closingTime, tag,
         is_paid: isPaid,
         created_at: new Date().toISOString()
       });
@@ -113,11 +120,11 @@ export const createAttraction = async (req: Request, res: Response) => {
       `INSERT INTO attractions (
         stop_id, name, description, estimated_cost, duration, currency,
         address, address_street, address_city, address_postal_code, address_country,
-        latitude, longitude, visit_time, is_paid, tag
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+        latitude, longitude, visit_time, opening_time, closing_time, is_paid, tag
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
       [stopId, name, description, estimatedCost, duration, currency || 'PLN',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime, isPaid, tag]
+       latitude, longitude, visitTime, openingTime, closingTime, isPaid, tag]
     );
     const attraction = toCamelCase(result.rows[0]);
     // Emit Socket.IO event
@@ -196,11 +203,11 @@ export const updateAttraction = async (req: Request, res: Response) => {
     let { 
       name, description, estimatedCost, duration, currency,
       address, addressStreet, addressCity, addressPostalCode, addressCountry,
-      latitude, longitude, visitTime, tag 
+      latitude, longitude, visitTime, openingTime, closingTime, tag, planned_date, planned_time 
     } = req.body;
     
     // Fix: convert empty string or undefined for optional fields to null
-    if (estimatedCost === '' || estimatedCost === undefined) estimatedCost = null;
+    if (estimatedCost === '' || estimatedCost === undefined || estimatedCost === 0) estimatedCost = null;
     if (duration === '' || duration === undefined) duration = null;
     if (address === '' || address === undefined) address = null;
     if (addressStreet === '' || addressStreet === undefined) addressStreet = null;
@@ -210,7 +217,11 @@ export const updateAttraction = async (req: Request, res: Response) => {
     if (latitude === '' || latitude === undefined) latitude = null;
     if (longitude === '' || longitude === undefined) longitude = null;
     if (visitTime === '' || visitTime === undefined) visitTime = null;
+    if (openingTime === '' || openingTime === undefined) openingTime = null;
+    if (closingTime === '' || closingTime === undefined) closingTime = null;
     if (tag === '' || tag === undefined) tag = null;
+    if (planned_date === '' || planned_date === undefined) planned_date = null;
+    if (planned_time === '' || planned_time === undefined) planned_time = null;
     
     if (!DB_AVAILABLE) {
       // Auto-mark as paid if estimated cost is 0 or null
@@ -218,7 +229,8 @@ export const updateAttraction = async (req: Request, res: Response) => {
       const updated = await jsonStore.updateById('attractions', attractionId, {
         name, description, estimated_cost: estimatedCost, duration, currency: currency || 'USD',
         address, address_street: addressStreet, address_city: addressCity, address_postal_code: addressPostalCode, address_country: addressCountry,
-        latitude, longitude, visit_time: visitTime, tag,
+        latitude, longitude, visit_time: visitTime, opening_time: openingTime, closing_time: closingTime, tag,
+        planned_date, planned_time,
         is_paid: isPaid
       });
       if (!updated) return res.status(404).json({ message: 'Attraction not found' });
@@ -233,11 +245,13 @@ export const updateAttraction = async (req: Request, res: Response) => {
       `UPDATE attractions SET 
         name=$1, description=$2, estimated_cost=$3, duration=$4, currency=$5,
         address=$6, address_street=$7, address_city=$8, address_postal_code=$9, address_country=$10,
-        latitude=$11, longitude=$12, visit_time=$13, is_paid=$14, tag=$15 
-      WHERE id=$16 RETURNING *`,
+        latitude=$11, longitude=$12, visit_time=$13, opening_time=$14, closing_time=$15, is_paid=$16, tag=$17,
+        planned_date=$18, planned_time=$19
+      WHERE id=$20 RETURNING *`,
       [name, description, estimatedCost, duration, currency || 'USD',
        address, addressStreet, addressCity, addressPostalCode, addressCountry,
-       latitude, longitude, visitTime, isPaid, tag, attractionId]
+       latitude, longitude, visitTime, openingTime, closingTime, isPaid, tag,
+       planned_date, planned_time, attractionId]
     );
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'Attraction not found' });
@@ -454,23 +468,26 @@ export const bulkUpdateAttractions = async (req: Request, res: Response) => {
     const results: any[] = [];
     
     for (const update of updates) {
-      const { id, orderIndex, priority, plannedDate, plannedTime, stopId } = update;
-      
+      const { id, orderIndex, priority, planned_date, plannedDate, plannedTime, stopId } = update;
+      // Accept both planned_date and plannedDate for compatibility
+      let safePlannedDate = planned_date || plannedDate;
+      if (typeof safePlannedDate === 'string') {
+        // Strip time if present (e.g., '2024-12-22T12:00:00' -> '2024-12-22')
+        safePlannedDate = safePlannedDate.split('T')[0];
+      }
       if (!DB_AVAILABLE) {
         const fields: any = {};
         if (orderIndex !== undefined) fields.order_index = orderIndex;
         if (priority !== undefined) fields.priority = priority;
-        if (plannedDate !== undefined) fields.planned_date = plannedDate;
+        if (safePlannedDate !== undefined) fields.planned_date = safePlannedDate;
         if (plannedTime !== undefined) fields.planned_time = plannedTime;
         if (stopId !== undefined) fields.stop_id = stopId;
-        
         const updated = await jsonStore.updateById('attractions', id, fields);
         if (updated) results.push(toCamelCase(updated));
       } else {
         const setClauses: string[] = [];
         const values: any[] = [];
         let paramIndex = 1;
-        
         if (orderIndex !== undefined) {
           setClauses.push(`order_index = $${paramIndex++}`);
           values.push(orderIndex);
@@ -479,9 +496,9 @@ export const bulkUpdateAttractions = async (req: Request, res: Response) => {
           setClauses.push(`priority = $${paramIndex++}`);
           values.push(priority);
         }
-        if (plannedDate !== undefined) {
+        if (safePlannedDate !== undefined) {
           setClauses.push(`planned_date = $${paramIndex++}`);
-          values.push(plannedDate);
+          values.push(safePlannedDate);
         }
         if (plannedTime !== undefined) {
           setClauses.push(`planned_time = $${paramIndex++}`);
@@ -491,7 +508,6 @@ export const bulkUpdateAttractions = async (req: Request, res: Response) => {
           setClauses.push(`stop_id = $${paramIndex++}`);
           values.push(stopId);
         }
-        
         if (setClauses.length > 0) {
           values.push(id);
           const result = await query(

@@ -13,6 +13,7 @@ import { journeyService, stopService, attractionService, transportService, journ
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
 import { getAttractionTagInfo, getAvailableAttractionTags } from './utils/attractionTags';
+import { parseYMDToDate, toYMD, formatYMDForDisplay } from './utils/date';
 // Payment calculation helpers (unused directly here) are available in services/utils; import when needed.
 import { useAuth } from './contexts/AuthContext';
 import { geocodeAddress } from './services/geocoding';
@@ -20,9 +21,11 @@ import { geocodeAddress } from './services/geocoding';
 // Helper function to format date to YYYY-MM-DD
 const formatDateForInput = (date: Date | string | undefined): string => {
   if (!date) return '';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
-  return d.toISOString().split('T')[0];
+  if (typeof date === 'string') {
+    const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  return toYMD(date);
 };
 
 // Helper function to format datetime for datetime-local input (local time)
@@ -48,16 +51,15 @@ const isValidTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 // Helper function to format date for display
 const formatDateForDisplay = (date: Date | string | undefined): string => {
   if (!date) return 'Not set';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'Invalid date';
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const s = formatYMDForDisplay(date, 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return s || 'Invalid date';
 };
 
 // Helper to format date+time for display without seconds
 const formatDateTimeForDisplay = (date: Date | string | undefined): string => {
   if (!date) return 'Not set';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'Invalid date';
+  const d = parseYMDToDate(date) || new Date(date as any);
+  if (!d || isNaN(d.getTime())) return 'Invalid date';
   return d.toLocaleString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
@@ -760,6 +762,13 @@ function App() {
           return updated;
         });
       }
+      // Update editingStop if it's currently being edited
+      setEditingStop(prev => {
+        if (prev && prev.id === stop.id) {
+          return stop;
+        }
+        return prev;
+      });
       // Removed duplicate notification - handled by manual actions
     });
     
@@ -1558,9 +1567,14 @@ function App() {
       
       setSelectedJourney(updatedJourney);
       setJourneys(journeys.map(j => j.id === updatedJourney.id ? updatedJourney : j));
-      setShowEditStopForm(false);
-      setEditingStop(null);
+      
       success('Stop updated successfully!');
+      
+      // Wait 1 second for socket event to update the form, then close
+      setTimeout(() => {
+        setShowEditStopForm(false);
+        setEditingStop(null);
+      }, 1000);
     } catch (err) {
       console.error('Failed to update stop:', err);
       error('Failed to update stop');
@@ -2553,9 +2567,9 @@ function App() {
                       <button onClick={toggleChecklistOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle checklist">
                         <span className="sr-only">Toggle checklist</span>
                         {checklistOpen ? (
-                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                          <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                          <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
                         )}
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Checklist</h3>
@@ -2627,9 +2641,9 @@ function App() {
                       <button onClick={toggleStopsOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle stops">
                         <span className="sr-only">Toggle stops</span>
                         {stopsOpen ? (
-                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                          <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                          <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
                         )}
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
@@ -2664,12 +2678,22 @@ function App() {
                                       <PaymentCheckbox id={`stop-payment-${stop.id}`} checked={stop.isPaid || false} onChange={() => handleToggleStopPayment(stop.id!, stop.isPaid || false)} label="Paid" disabled={loading} />
                                     )}
                                     <button
-                                      onClick={() => {
-                                        setEditingStop(stop);
-                                        setShowEditStopForm(true);
-                                        setPendingFile(null);
-                                        setUploadingAttachment(null);
-                                        if (stopFileRef.current) stopFileRef.current.value = '';
+                                      onClick={async () => {
+                                        try {
+                                          console.log('🔄 Fetching fresh stop data for ID:', stop.id);
+                                          // Fetch fresh stop data from API to avoid stale dates
+                                          const freshStop = await stopService.getStopById(stop.id!);
+                                          console.log('✅ Received fresh stop:', freshStop);
+                                          console.log('📅 Fresh dates - Arrival:', freshStop.arrivalDate, 'Departure:', freshStop.departureDate);
+                                          setEditingStop(freshStop);
+                                          setShowEditStopForm(true);
+                                          setPendingFile(null);
+                                          setUploadingAttachment(null);
+                                          if (stopFileRef.current) stopFileRef.current.value = '';
+                                        } catch (error) {
+                                          console.error('Failed to fetch stop:', error);
+                                          error('Failed to load stop data');
+                                        }
                                       }}
                                       className="group text-blue-600 dark:text-[#0a84ff] hover:bg-blue-600 dark:hover:bg-[#0a84ff] rounded p-1"
                                     >
@@ -2717,8 +2741,8 @@ function App() {
                                       >
                                         <span className="text-xs">
                                           {openAttractions[stop.id!]
-                                            ? <ChevronDown className="w-4 h-4 text-gray-900 dark:text-[#ffffff] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
-                                            : <ChevronRight className="w-4 h-4 text-gray-900 dark:text-[#ffffff] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
+                                            ? <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                                            : <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
                                         </span>
                                         <span>Attractions ({stop.attractions.length})</span>
                                       </button>
@@ -2787,7 +2811,7 @@ function App() {
                                       <div className="mt-3">
                                         <button onClick={() => toggleStopAttachments(stop.id!)} className="group p-1 rounded flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]" aria-expanded={!!openStopAttachments[stop.id!]}>
                                           <span className="text-xs">
-                                            {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
+                                            {openStopAttachments[stop.id!] ? <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
                                           </span>
                                           <span>{attForStop.length} Attachment{attForStop.length !== 1 ? 's' : ''}</span>
                                         </button>
@@ -2817,9 +2841,9 @@ function App() {
                       <button onClick={toggleTransportsOpen} className="group p-2 rounded-full hover:bg-white/10 dark:hover:bg-white/10 transition-colors" aria-label="Toggle transports">
                         <span className="sr-only">Toggle transports</span>
                         {transportsOpen ? (
-                          <ChevronDown className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
+                          <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
+                          <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />
                         )}
                       </button>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Transportation</h3>
@@ -2921,7 +2945,7 @@ function App() {
                                       <div className="mt-3">
                                         <button onClick={() => toggleTransportAttachments(transport.id!)} className="group p-1 rounded flex items-center gap-2 text-sm text-gray-600 dark:text-[#98989d]" aria-expanded={!!openTransportAttachments[transport.id!]}>
                                           <span className="text-xs">
-                                            {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-gray-600 dark:text-[#98989d] transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
+                                            {openTransportAttachments[transport.id!] ? <ChevronDown className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:-rotate-90 group-hover:scale-110" /> : <ChevronRight className="w-4 h-4 text-black dark:text-white transition-transform duration-200 transform group-hover:rotate-90 group-hover:scale-110" />}
                                           </span>
                                           <span>{attForTransport.length} Attachment{attForTransport.length !== 1 ? 's' : ''}</span>
                                         </button>
@@ -4498,16 +4522,18 @@ function App() {
                   const stop = selectedJourney?.stops?.find(s => s.id === selectedStopForAttraction);
                   if (!stop) return null;
                   
-                  const stopArrival = new Date(stop.arrivalDate);
-                  const stopDeparture = new Date(stop.departureDate);
-                  const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
+                  // Extract date portion without timezone conversion (use shared helper)
+                  const getDateOnly = (dateStr: Date | string): string => toYMD(dateStr);
+
+                  const arrivalDate = getDateOnly(stop.arrivalDate);
+                  const departureDate = getDateOnly(stop.departureDate);
+
+                  // Calculate days difference using local dates
+                  const arrivalTime = parseYMDToDate(arrivalDate)!.getTime();
+                  const departureTime = parseYMDToDate(departureDate)!.getTime();
+                  const daysDiff = Math.ceil((departureTime - arrivalTime) / (1000 * 60 * 60 * 24));
                   
                   if (daysDiff < 1) return null;
-                  
-                  const formatDateForInput = (date: Date | string): string => {
-                    const d = new Date(date);
-                    return d.toISOString().split('T')[0];
-                  };
                   
                   return (
                     <div>
@@ -4518,13 +4544,16 @@ function App() {
                         type="date"
                         value={newAttraction.plannedDate || ''}
                         onChange={(e) => setNewAttraction({ ...newAttraction, plannedDate: e.target.value || undefined })}
-                        min={formatDateForInput(stop.arrivalDate)}
-                        max={formatDateForInput(stop.departureDate)}
+                        min={arrivalDate}
+                        max={departureDate}
                         className="gh-input max-w-[200px]"
                       />
                       {newAttraction.plannedDate && (
                         <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
-                          {new Date(newAttraction.plannedDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          {(() => {
+                            const d = parseYMDToDate(newAttraction.plannedDate);
+                            return d ? d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+                          })()}
                         </p>
                       )}
                     </div>
@@ -4556,6 +4585,40 @@ function App() {
                       onBlur={(e) => {
                         const v = e.target.value;
                         setNewAttraction((prev) => ({ ...prev, visitTime: isValidTime(v) ? v : '' }));
+                      }}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Opening Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newAttraction.openingTime ?? ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, openingTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        setNewAttraction((prev) => ({ ...prev, openingTime: isValidTime(v) ? v : '' }));
+                      }}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Closing Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newAttraction.closingTime ?? ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, closingTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        setNewAttraction((prev) => ({ ...prev, closingTime: isValidTime(v) ? v : '' }));
                       }}
                       className="gh-input"
                     />
@@ -4776,16 +4839,18 @@ function App() {
                   const stop = selectedJourney?.stops?.find(s => s.id === editingAttractionStopId);
                   if (!stop) return null;
                   
-                  const stopArrival = new Date(stop.arrivalDate);
-                  const stopDeparture = new Date(stop.departureDate);
-                  const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
+                  // Extract date portion without timezone conversion (use shared helper)
+                  const getDateOnly = (dateStr: Date | string): string => toYMD(dateStr);
+
+                  const arrivalDate = getDateOnly(stop.arrivalDate);
+                  const departureDate = getDateOnly(stop.departureDate);
+
+                  // Calculate days difference using local dates
+                  const arrivalTime = parseYMDToDate(arrivalDate)!.getTime();
+                  const departureTime = parseYMDToDate(departureDate)!.getTime();
+                  const daysDiff = Math.ceil((departureTime - arrivalTime) / (1000 * 60 * 60 * 24));
                   
                   if (daysDiff < 1) return null;
-                  
-                  const formatDateForInput = (date: Date | string): string => {
-                    const d = new Date(date);
-                    return d.toISOString().split('T')[0];
-                  };
                   
                   return (
                     <div>
@@ -4796,13 +4861,16 @@ function App() {
                         type="date"
                         value={editingAttraction.plannedDate || ''}
                         onChange={(e) => setEditingAttraction({ ...editingAttraction, plannedDate: e.target.value || undefined })}
-                        min={formatDateForInput(stop.arrivalDate)}
-                        max={formatDateForInput(stop.departureDate)}
+                        min={arrivalDate}
+                        max={departureDate}
                         className="gh-input max-w-[200px]"
                       />
                       {editingAttraction.plannedDate && (
                         <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
-                          {new Date(editingAttraction.plannedDate).toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          {(() => {
+                            const d = parseYMDToDate(editingAttraction.plannedDate);
+                            return d ? d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+                          })()}
                         </p>
                       )}
                     </div>
@@ -4834,6 +4902,40 @@ function App() {
                       onBlur={(e) => {
                         const v = e.target.value;
                         if (editingAttraction) setEditingAttraction({ ...editingAttraction, visitTime: isValidTime(v) ? v : '' });
+                      }}
+                      className="gh-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Opening Time
+                    </label>
+                    <input
+                      type="time"
+                      value={editingAttraction.openingTime ?? ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, openingTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingAttraction) setEditingAttraction({ ...editingAttraction, openingTime: isValidTime(v) ? v : '' });
+                      }}
+                      className="gh-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      Closing Time
+                    </label>
+                    <input
+                      type="time"
+                      value={editingAttraction.closingTime ?? ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, closingTime: e.target.value })}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (editingAttraction) setEditingAttraction({ ...editingAttraction, closingTime: isValidTime(v) ? v : '' });
                       }}
                       className="gh-input"
                     />

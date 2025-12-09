@@ -1,4 +1,5 @@
 import type { Journey, JourneyShare } from '../types/journey';
+import { toYMD } from '../utils/date';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -155,6 +156,17 @@ export const stopService = {
     return response.json();
   },
 
+  async getStopById(stopId: number) {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_URL}/stops/${stopId}`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch stop');
+    return response.json();
+  },
+
   async deleteStop(stopId: number) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/stops/${stopId}`, {
@@ -211,10 +223,17 @@ export const attractionService = {
   },
 
   async updateAttraction(attractionId: number, attraction: any) {
-      const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
+    // Convert plannedDate to planned_date for backend compatibility
+    const payload = { ...attraction };
+    if ('plannedDate' in payload) {
+      // Ensure planned_date is always YYYY-MM-DD (strip time / convert Date objects)
+      payload.planned_date = toYMD(payload.plannedDate);
+      delete payload.plannedDate;
+    }
+    const response = await fetch(`${API_URL}/attractions/${attractionId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify(attraction),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) throw new Error('Failed to update attraction');
     return response.json();
@@ -283,10 +302,20 @@ export const attractionService = {
     plannedTime?: string;
     stopId?: number;
   }>) {
+    // Always send planned_date as YYYY-MM-DD string (never Date object or with time)
+    const safeUpdates = updates.map(u => {
+      const update: any = { ...u };
+      if (update.plannedDate) {
+        // Always convert to YYYY-MM-DD via toYMD helper so we preserve the DB day exactly
+        update.planned_date = toYMD(update.plannedDate);
+        delete update.plannedDate;
+      }
+      return update;
+    });
     const response = await fetch(`${API_URL}/attractions/bulk`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ updates }),
+      body: JSON.stringify({ updates: safeUpdates }),
     });
     if (!response.ok) throw new Error('Failed to bulk update attractions');
     return response.json();

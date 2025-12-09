@@ -40,18 +40,20 @@ export const createAttractionSchema = z.object({
       .length(3, 'Currency must be a 3-letter code')
       .regex(/^[A-Z]{3}$/, 'Currency must be uppercase')
       .optional(),
-    duration: z.string().max(50, 'Duration must not exceed 50 characters').optional(),
+    duration: z.string().max(50, 'Duration must not exceed 50 characters').optional().nullable(),
     isPaid: z.boolean().optional(),
     // Address fields
-    address: z.string().max(500).optional(),
+    address: z.string().max(500).optional().nullable(),
     addressStreet: z.string().max(255).optional().nullable(),
-    addressCity: z.string().max(255).optional(),
+    addressCity: z.string().max(255).optional().nullable(),
     addressPostalCode: z.string().max(32).optional().nullable(),
-    addressCountry: z.string().max(255).optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional(),
+    addressCountry: z.string().max(255).optional().nullable(),
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
     // Planning fields
     visitTime: z.string().max(5).optional().nullable(), // HH:MM format
+    openingTime: z.string().max(5).optional().nullable(), // HH:MM format
+    closingTime: z.string().max(5).optional().nullable(), // HH:MM format
     orderIndex: z.number().optional(),
     priority: z.enum(priorityTypes).optional(),
     plannedDate: z.union([
@@ -75,20 +77,22 @@ export const updateAttractionSchema = z.object({
     description: z.string().max(2000).optional().nullable(),
     estimatedCost: z.number().nonnegative().optional().nullable(),
     currency: z.string().length(3).regex(/^[A-Z]{3}$/).optional(),
-    duration: z.string().max(50).optional(),
+    duration: z.string().max(50).optional().nullable(),
     isPaid: z.boolean().optional(),
     // Address fields
-    address: z.string().max(500).optional(),
+    address: z.string().max(500).optional().nullable(),
     addressStreet: z.string().max(255).optional().nullable(),
-    addressCity: z.string().max(255).optional(),
+    addressCity: z.string().max(255).optional().nullable(),
     addressPostalCode: z.string().max(32).optional().nullable(),
-    addressCountry: z.string().max(255).optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional(),
+    addressCountry: z.string().max(255).optional().nullable(),
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
     // Planning fields
     visitTime: z.string().max(5).optional().nullable(),
+    openingTime: z.string().max(5).optional().nullable(), // HH:MM format
+    closingTime: z.string().max(5).optional().nullable(), // HH:MM format
     orderIndex: z.number().optional(),
-    priority: z.enum(priorityTypes).optional(),
+    priority: z.enum(priorityTypes).optional().nullable(),
     plannedDate: z.union([
       z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Planned date must be YYYY-MM-DD'),
       z.string().regex(/^\d{4}-\d{2}-\d{2}T/, 'Planned date must be ISO datetime')

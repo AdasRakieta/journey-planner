@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from '
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { useTheme } from '../contexts/ThemeContext';
+import { parseYMDToDate } from '../utils/date';
 
 // Fix for default marker icons in React-Leaflet
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -85,11 +86,11 @@ function LocationMarker({ onMapClick }: { onMapClick?: (lat: number, lng: number
   return null;
 }
 
-// Helper to format date
+// Helper to format date using local parsing for date-only strings
 const formatDate = (date: Date | string | undefined): string => {
   if (!date) return '';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
+  const d = parseYMDToDate(date) || new Date(String(date));
+  if (!d || isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
@@ -127,7 +128,9 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     .filter(loc => loc.latitude && loc.longitude)
     .sort((a, b) => {
       if (!a.arrivalDate || !b.arrivalDate) return 0;
-      return new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime();
+      const da = parseYMDToDate(a.arrivalDate) || new Date(a.arrivalDate as any);
+      const db = parseYMDToDate(b.arrivalDate) || new Date(b.arrivalDate as any);
+      return da.getTime() - db.getTime();
     })
     .map(loc => [loc.latitude, loc.longitude] as [number, number]);
 

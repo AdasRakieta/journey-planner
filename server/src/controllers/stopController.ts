@@ -19,9 +19,13 @@ const toCamelCase = (obj: any): any => {
       const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
       const value = obj[key];
       
-      // Convert Date objects to ISO strings
+      // Convert Date objects: date-only fields -> YYYY-MM-DD, otherwise keep full ISO
       if (value instanceof Date) {
-        acc[camelKey] = value.toISOString();
+        if (/(_date)$/.test(key)) {
+          acc[camelKey] = value.toISOString().slice(0, 10);
+        } else {
+          acc[camelKey] = value.toISOString();
+        }
       }
       // Convert numeric strings to numbers for specific fields
       else if (typeof value === 'string' && 
@@ -66,6 +70,26 @@ export const getStopsByJourneyId = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching stops:', error);
     res.status(500).json({ message: 'Failed to fetch stops' });
+  }
+};
+
+// Get single stop by ID
+export const getStopById = async (req: Request, res: Response) => {
+  try {
+    const stopId = parseInt(req.params.id);
+    if (!DB_AVAILABLE) {
+      const stop = await jsonStore.getById('stops', stopId);
+      if (!stop) return res.status(404).json({ message: 'Stop not found' });
+      return res.json(toCamelCase(stop));
+    }
+    const result = await query('SELECT * FROM stops WHERE id=$1', [stopId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Stop not found' });
+    }
+    res.json(toCamelCase(result.rows[0]));
+  } catch (error) {
+    console.error('Error fetching stop:', error);
+    res.status(500).json({ message: 'Failed to fetch stop' });
   }
 };
 

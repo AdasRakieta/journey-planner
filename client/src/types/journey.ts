@@ -55,6 +55,8 @@ export interface Attraction {
   latitude?: number;     // Latitude coordinate for map marker (auto-filled)
   longitude?: number;    // Longitude coordinate for map marker (auto-filled)
   visitTime?: string;    // HH:MM format for planned visit time
+  openingTime?: string;  // HH:MM format for opening time
+  closingTime?: string;  // HH:MM format for closing time
   orderIndex?: number;   // For sorting within stop
   priority?: 'must' | 'should' | 'could' | 'skip'; // Priority level for itinerary planning
   plannedDate?: string;  // YYYY-MM-DD format for scheduled date

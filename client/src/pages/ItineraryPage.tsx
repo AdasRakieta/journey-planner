@@ -19,18 +19,62 @@ import {
   Sparkles,
   CalendarDays,
   List,
-  Navigation
+  Navigation,
+  Plus,
+  Edit2,
+  Trash2,
+  X
 } from 'lucide-react';
 import { journeyService, attractionService } from '../services/api';
+import { socketService } from '../services/socket';
 import type { Journey, Stop, Attraction } from '../types/journey';
 import { useToast, ToastContainer } from '../components/Toast';
 import JourneyMapWrapper from '../components/JourneyMapWrapper';
-import { getAttractionTagInfo } from '../utils/attractionTags';
+import { getAttractionTagInfo, getAvailableAttractionTags } from '../utils/attractionTags';
+import { geocodeAddress } from '../services/geocoding';
+
+// Helper function for time validation
+const isValidTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+
+// Helper function to parse duration string to minutes
+const parseDurationToMinutes = (duration: string): number => {
+  if (!duration) return 0;
+  
+  // Match various formats: "5h", "5 h", "5 hours", "5hours", "2.5h", "2.5 hours"
+  const hourMatch = duration.match(/(\d+(?:\.\d+)?)\s*h(?:ours?)?/i);
+  // Match: "30m", "30 m", "30 minutes", "30min"
+  const minMatch = duration.match(/(\d+)\s*m(?:in(?:utes?)?)?/i);
+  
+  let minutes = 0;
+  if (hourMatch) {
+    minutes += parseFloat(hourMatch[1]) * 60;
+  } else if (minMatch) {
+    minutes += parseInt(minMatch[1]);
+  } else {
+    // If no unit specified, try to parse as plain number (assume hours)
+    const plainNumber = parseFloat(duration);
+    if (!isNaN(plainNumber)) {
+      minutes = plainNumber * 60;
+    }
+  }
+  
+  return minutes;
+};
+
+// Helper function to add minutes to time string
+const addMinutesToTime = (time: string, minutes: number): string => {
+  if (!time || !isValidTime(time)) return '';
+  const [h, m] = time.split(':').map(Number);
+  const totalMinutes = h * 60 + m + minutes;
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const mins = totalMinutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+};
 
 // Priority configuration with colors and labels
 const PRIORITY_CONFIG = {
   must: { 
-    label: 'Obowiązkowe', 
+    label: 'Must See', 
     shortLabel: 'Must',
     color: 'bg-red-500 dark:bg-[#ff453a]', 
     textColor: 'text-red-600 dark:text-[#ff453a]',
@@ -38,7 +82,7 @@ const PRIORITY_CONFIG = {
     borderColor: 'border-red-300 dark:border-[#ff453a]/30'
   },
   should: { 
-    label: 'Ważne', 
+    label: 'Important', 
     shortLabel: 'Should',
     color: 'bg-orange-500 dark:bg-[#ff9f0a]', 
     textColor: 'text-orange-600 dark:text-[#ff9f0a]',
@@ -54,7 +98,7 @@ const PRIORITY_CONFIG = {
     borderColor: 'border-blue-300 dark:border-[#0a84ff]/30'
   },
   skip: { 
-    label: 'Pomiń', 
+    label: 'Skip', 
     shortLabel: 'Skip',
     color: 'bg-gray-400 dark:bg-[#636366]', 
     textColor: 'text-gray-500 dark:text-[#636366]',
@@ -65,19 +109,42 @@ const PRIORITY_CONFIG = {
 
 type PriorityType = keyof typeof PRIORITY_CONFIG;
 
-// Format date for display
+// Format date for display (use local parsing to avoid timezone shifts)
 const formatDateForDisplay = (date: Date | string | undefined): string => {
   if (!date) return '';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const d = parseYMDToDate(date);
+  if (!d) return '';
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
 // Format date key YYYY-MM-DD
-const formatDateKey = (date: Date | string): string => {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return '';
-  return d.toISOString().split('T')[0];
+// Parse a DB date string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS) into a local Date (no timezone shift)
+const parseYMDToDate = (date: Date | string | undefined | null): Date | null => {
+  if (!date) return null;
+  if (date instanceof Date) return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const s = String(date);
+  // Match YYYY-MM-DD at start
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    return new Date(y, mo - 1, d);
+  }
+  // Fallback: try to construct a Date and take local YMD
+  const dd = new Date(s);
+  if (!isNaN(dd.getTime())) return new Date(dd.getFullYear(), dd.getMonth(), dd.getDate());
+  return null;
+};
+
+// Return YYYY-MM-DD for a date-like input, preserving DB's day
+const toYMD = (date: Date | string | undefined | null): string => {
+  const d = parseYMDToDate(date);
+  if (!d) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 // Calculate distance between two points (Haversine formula)
@@ -156,7 +223,9 @@ const AttractionCard: React.FC<{
   onDragEnd: (e: React.DragEvent) => void;
   isDragging: boolean;
   isDropTarget?: boolean;
-}> = ({ attraction, stop, onPriorityChange, onPlannedDateChange, onDragStart, onDragEnd, isDragging, isDropTarget }) => {
+  onEdit?: (attraction: Attraction) => void;
+  onDelete?: (id: number) => void;
+}> = ({ attraction, stop, onPriorityChange, onPlannedDateChange, onDragStart, onDragEnd, isDragging, isDropTarget, onEdit, onDelete }) => {
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   
   const currentPriority = attraction.priority || 'should';
@@ -213,19 +282,53 @@ const AttractionCard: React.FC<{
             )}
           </div>
           
-          {/* Priority Badge & Dropdown */}
-          <div className="relative flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowPriorityMenu(!showPriorityMenu);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors
-                ${config.bgLight} ${config.textColor} hover:opacity-80`}
-            >
-              {config.shortLabel}
-              <ChevronDown size={12} />
-            </button>
+          {/* Action Buttons & Priority Badge */}
+          <div className="flex items-start gap-1 flex-shrink-0">
+            {/* Edit & Delete buttons */}
+            {(onEdit || onDelete) && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(attraction);
+                    }}
+                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#3a3a3c] text-gray-600 dark:text-[#8e8e93] hover:text-blue-600 dark:hover:text-[#0a84ff] transition-colors"
+                    title="Edit attraction"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(attraction.id!);
+                    }}
+                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-[#3a3a3c] text-gray-600 dark:text-[#8e8e93] hover:text-red-600 dark:hover:text-[#ff453a] transition-colors"
+                    title="Delete attraction"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {/* Priority Badge & Dropdown */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPriorityMenu(!showPriorityMenu);
+                }}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors
+                  ${config.bgLight} ${config.textColor} hover:opacity-80`}
+              >
+                {config.shortLabel}
+                <ChevronDown size={12} />
+              </button>
             
             {showPriorityMenu && (
               <>
@@ -255,26 +358,29 @@ const AttractionCard: React.FC<{
                 </div>
               </>
             )}
+            </div>
           </div>
         </div>
         
-        {/* Meta info */}
+        {/* Meta info - basic details */}
         <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-[#8e8e93]">
-          {attraction.plannedDate && (
+              {attraction.plannedDate && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-[#0a84ff]/20 text-blue-600 dark:text-[#0a84ff] font-medium">
-              📅 {new Date(attraction.plannedDate).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
+              📅 {(() => {
+                const dateObj = parseYMDToDate(attraction.plannedDate);
+                return dateObj ? dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : '';
+              })()}
+            </span>
+          )}
+          {attraction.visitTime && (
+            <span className="flex items-center gap-1">
+              <Clock size={12} />
+              {attraction.visitTime}
             </span>
           )}
           {attraction.duration && (
             <span className="flex items-center gap-1">
-              <Clock size={12} />
-              {attraction.duration}
-            </span>
-          )}
-          {attraction.plannedTime && (
-            <span className="flex items-center gap-1">
-              <Calendar size={12} />
-              {attraction.plannedTime}
+              ⏱️ {attraction.duration}
             </span>
           )}
           {attraction.estimatedCost && attraction.estimatedCost > 0 && (
@@ -283,48 +389,50 @@ const AttractionCard: React.FC<{
             </span>
           )}
         </div>
-        
-        {/* Planned Date Picker (for multi-day stops) */}
-        {stop && onPlannedDateChange && (() => {
-          const stopArrival = new Date(stop.arrivalDate);
-          const stopDeparture = new Date(stop.departureDate);
-          const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
-          
-          // Only show date picker if stop is multi-day (2+ days)
-          if (daysDiff >= 1) {
-            return (
-              <div className="mt-2">
-                <label className="block text-xs text-gray-600 dark:text-[#8e8e93] mb-1">
-                  📅 Dzień w {stop.city}
-                </label>
-                <input
-                  type="date"
-                  value={attraction.plannedDate || ''}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    onPlannedDateChange(attraction.id!, e.target.value || null);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  min={formatDateKey(stop.arrivalDate)}
-                  max={formatDateKey(stop.departureDate)}
-                  className="max-w-[160px] px-2 py-1 text-xs rounded border border-gray-300 dark:border-[#48484a] bg-white dark:bg-[#1c1c1e] text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[#0a84ff]"
-                />
-                {attraction.plannedDate && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPlannedDateChange(attraction.id!, null);
-                    }}
-                    className="mt-1 text-xs text-gray-500 dark:text-[#8e8e93] hover:text-red-600 dark:hover:text-[#ff453a]"
-                  >
-                    Wyczyść datę
-                  </button>
-                )}
-              </div>
-            );
-          }
-          return null;
-        })()}
+
+        {/* Timeline visualization - showing visit schedule */}
+        {(attraction.visitTime || attraction.openingTime) && (
+          <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-[#0a84ff]/10 dark:to-[#5e5ce6]/10 border border-blue-200 dark:border-[#0a84ff]/30">
+            <div className="flex items-center gap-2 text-xs">
+              {/* Opening time */}
+              {attraction.openingTime && (
+                <div className="flex items-center gap-1 text-gray-600 dark:text-[#8e8e93]">
+                  <span className="font-medium">Opens:</span>
+                  <span className="font-mono bg-white dark:bg-[#2c2c2e] px-1.5 py-0.5 rounded">{attraction.openingTime}</span>
+                </div>
+              )}
+              
+              {/* Visit time range */}
+              {attraction.visitTime && (
+                <>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="px-3 py-1 rounded-md bg-blue-500 dark:bg-[#0a84ff] text-white font-medium font-mono shadow-sm">
+                      {attraction.visitTime}
+                      {attraction.duration && (() => {
+                        const durationMin = parseDurationToMinutes(attraction.duration);
+                        const endTime = addMinutesToTime(attraction.visitTime!, durationMin);
+                        return endTime ? ` - ${endTime}` : '';
+                      })()}
+                    </div>
+                    {attraction.duration && (
+                      <span className="ml-2 text-gray-500 dark:text-[#636366]">
+                        ({attraction.duration})
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+              
+              {/* Closing time */}
+              {attraction.closingTime && (
+                <div className="flex items-center gap-1 text-gray-600 dark:text-[#8e8e93]">
+                  <span className="font-medium">Closes:</span>
+                  <span className="font-mono bg-white dark:bg-[#2c2c2e] px-1.5 py-0.5 rounded">{attraction.closingTime}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -346,6 +454,9 @@ const StopSection: React.FC<{
   dragOverStopId: number | null;
   onOptimize: (stopId: number) => void;
   onShowMap: (stopId: number) => void;
+  onAddAttraction?: (stopId: number) => void;
+  onEditAttraction?: (attraction: Attraction) => void;
+  onDeleteAttraction?: (id: number) => void;
 }> = ({
   stop,
   attractions,
@@ -360,7 +471,10 @@ const StopSection: React.FC<{
   draggingAttraction,
   dragOverStopId,
   onOptimize,
-  onShowMap
+  onShowMap,
+  onAddAttraction,
+  onEditAttraction,
+  onDeleteAttraction
 }) => {
   const sortedAttractions = [...attractions].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   const isDropTarget = dragOverStopId === stop.id;
@@ -373,10 +487,44 @@ const StopSection: React.FC<{
   const hasCoordinates = sortedAttractions.some(a => a.latitude && a.longitude);
   
   // Calculate days in stop
-  const stopArrival = new Date(stop.arrivalDate);
-  const stopDeparture = new Date(stop.departureDate);
+  const getDateOnly = (dateStr: Date | string): string => {
+    return toYMD(dateStr);
+  };
+  
+  const stopArrivalDate = getDateOnly(stop.arrivalDate);
+  const stopDepartureDate = getDateOnly(stop.departureDate);
+  const stopArrival = parseYMDToDate(stopArrivalDate)!;
+  const stopDeparture = parseYMDToDate(stopDepartureDate)!;
   const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
   const daysCount = daysDiff + 1; // Include arrival day
+  
+  // Group attractions by day
+  const attractionsByDay: Record<string, Attraction[]> = {};
+  const unscheduledAttractions: Attraction[] = [];
+  
+  // Generate array of dates for this stop
+  const stopDates: string[] = [];
+  for (let i = 0; i < daysCount; i++) {
+    const date = new Date(stopArrival.getFullYear(), stopArrival.getMonth(), stopArrival.getDate());
+    date.setDate(date.getDate() + i);
+    const dateStr = toYMD(date);
+    stopDates.push(dateStr);
+    attractionsByDay[dateStr] = [];
+  }
+  
+  // Assign attractions to days
+  sortedAttractions.forEach(attr => {
+    if (attr.plannedDate) {
+      const plannedDateStr = toYMD(attr.plannedDate);
+      if (attractionsByDay[plannedDateStr]) {
+        attractionsByDay[plannedDateStr].push(attr);
+      } else {
+        unscheduledAttractions.push(attr);
+      }
+    } else {
+      unscheduledAttractions.push(attr);
+    }
+  });
   
   return (
     <div 
@@ -432,7 +580,7 @@ const StopSection: React.FC<{
               </span>
             )}
             <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-[#3a3a3c] text-gray-600 dark:text-[#8e8e93]">
-              {sortedAttractions.length} atrakcji
+              {sortedAttractions.length} attractions
             </span>
           </div>
         </button>
@@ -448,7 +596,7 @@ const StopSection: React.FC<{
                     onOptimize(stop.id!);
                   }}
                   className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-[#0a84ff]/20 text-blue-600 dark:text-[#0a84ff] transition-colors"
-                  title="Optymalizuj trasę"
+                  title="Optimize route"
                 >
                   <Sparkles size={18} />
                 </button>
@@ -458,7 +606,7 @@ const StopSection: React.FC<{
                     onShowMap(stop.id!);
                   }}
                   className="p-2 rounded-lg hover:bg-blue-100 dark:hover:bg-[#0a84ff]/20 text-blue-600 dark:text-[#0a84ff] transition-colors"
-                  title="Pokaż na mapie"
+                  title="Show on map"
                 >
                   <Navigation size={18} />
                 </button>
@@ -470,7 +618,7 @@ const StopSection: React.FC<{
       
       {/* Attractions List */}
       {isExpanded && (
-        <div className="px-4 pb-4 space-y-2">
+        <div className="px-4 pb-4 space-y-4">
           {sortedAttractions.length === 0 ? (
             <div 
               className={`py-8 text-center rounded-lg border-2 border-dashed transition-colors ${
@@ -479,42 +627,144 @@ const StopSection: React.FC<{
                   : 'border-gray-200 dark:border-[#38383a]'
               }`}
             >
-              <p className="text-gray-500 dark:text-[#8e8e93]">
-                {isDropTarget ? 'Upuść tutaj' : 'Brak atrakcji. Przeciągnij tutaj lub dodaj w widoku głównym.'}
+              <p className="text-gray-500 dark:text-[#8e8e93] mb-3">
+                {isDropTarget ? 'Drop here' : 'No attractions'}
               </p>
+              {onAddAttraction && (
+                <button
+                  type="button"
+                  onClick={() => onAddAttraction(stop.id!)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-700 dark:hover:bg-[#0077ed] transition-colors"
+                >
+                  <Plus size={16} />
+                  Add attraction
+                </button>
+              )}
             </div>
           ) : (
             <>
-              {sortedAttractions.map((attraction, index) => (
-                <div
-                  key={attraction.id}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={(e) => {
-                    e.stopPropagation();
-                    onDrop(e, stop.id!, index);
-                  }}
-                >
-                  <AttractionCard
-                    attraction={attraction}
-                    stop={stop}
-                    onPriorityChange={onPriorityChange}
-                    onPlannedDateChange={onPlannedDateChange}
-                    onDragStart={onDragStart}
-                    onDragEnd={onDragEnd}
-                    isDragging={draggingAttraction?.id === attraction.id}
-                    isDropTarget={false}
-                  />
-                </div>
-              ))}
+              {/* Render attractions grouped by day */}
+              {stopDates.map((dateStr, dayIndex) => {
+                const dayAttractions = attractionsByDay[dateStr] || [];
+                // Poprawne parsowanie daty bez przesunięcia strefowego
+                const [year, month, day] = dateStr.split('-');
+                const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+                // Parse date without timezone shift
+                const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+                return (
+                  <div key={dateStr} className="space-y-2">
+                    {/* Day Header */}
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-[#0a84ff]/20 flex items-center justify-center">
+                        <span className="text-xs font-semibold text-blue-600 dark:text-[#0a84ff]">
+                          {dayIndex + 1}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {dayLabel}
+                      </h4>
+                      <div className="flex-1 h-px bg-gray-200 dark:bg-[#38383a]"></div>
+                      <span className="text-xs text-gray-500 dark:text-[#8e8e93]">
+                        {dayAttractions.length} {dayAttractions.length === 1 ? 'atrakcja' : 'atrakcji'}
+                      </span>
+                    </div>
+                    
+                    {/* Day Attractions */}
+                    <div className="space-y-2 pl-10">
+                      {dayAttractions.length === 0 ? (
+                        <div className="py-4 text-center rounded-lg border border-dashed border-gray-200 dark:border-[#38383a]">
+                          <p className="text-xs text-gray-400 dark:text-[#636366]">No attractions for this day</p>
+                        </div>
+                      ) : (
+                        dayAttractions.map((attraction, index) => (
+                          <div
+                            key={attraction.id}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            onDrop={(e) => {
+                              e.stopPropagation();
+                              onDrop(e, stop.id!, index);
+                            }}
+                          >
+                            <AttractionCard
+                              attraction={attraction}
+                              stop={stop}
+                              onPriorityChange={onPriorityChange}
+                              onPlannedDateChange={onPlannedDateChange}
+                              onDragStart={onDragStart}
+                              onDragEnd={onDragEnd}
+                              isDragging={draggingAttraction?.id === attraction.id}
+                              isDropTarget={false}
+                              onEdit={onEditAttraction}
+                              onDelete={onDeleteAttraction}
+                            />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               
-              {/* Drop zone at the end */}
-              {isDropTarget && draggingAttraction && !sortedAttractions.find(a => a.id === draggingAttraction.id) && (
-                <div className="py-2 text-center rounded-lg border-2 border-dashed border-blue-500 dark:border-[#0a84ff] bg-blue-50 dark:bg-[#0a84ff]/10">
-                  <p className="text-sm text-blue-600 dark:text-[#0a84ff]">Upuść tutaj</p>
+              {/* Unscheduled Attractions Section */}
+              {unscheduledAttractions.length > 0 && (
+                <div className="space-y-2 mt-6">
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 dark:bg-[#3a3a3c] flex items-center justify-center">
+                      <span className="text-xs font-semibold text-gray-500 dark:text-[#8e8e93]">?</span>
+                    </div>
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Unscheduled
+                    </h4>
+                    <div className="flex-1 h-px bg-gray-200 dark:bg-[#38383a]"></div>
+                    <span className="text-xs text-gray-500 dark:text-[#8e8e93]">
+                      {unscheduledAttractions.length} {unscheduledAttractions.length === 1 ? 'attraction' : 'attractions'}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2 pl-10">
+                    {unscheduledAttractions.map((attraction, index) => (
+                      <div
+                        key={attraction.id}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.stopPropagation();
+                          onDrop(e, stop.id!, sortedAttractions.length - unscheduledAttractions.length + index);
+                        }}
+                      >
+                        <AttractionCard
+                          attraction={attraction}
+                          stop={stop}
+                          onPriorityChange={onPriorityChange}
+                          onPlannedDateChange={onPlannedDateChange}
+                          onDragStart={onDragStart}
+                          onDragEnd={onDragEnd}
+                          isDragging={draggingAttraction?.id === attraction.id}
+                          isDropTarget={false}
+                          onEdit={onEditAttraction}
+                          onDelete={onDeleteAttraction}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              )}
+              
+              {/* Add Attraction button at the bottom */}
+              {onAddAttraction && (
+                <button
+                  type="button"
+                  onClick={() => onAddAttraction(stop.id!)}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-[#48484a] text-gray-600 dark:text-[#8e8e93] hover:border-blue-500 dark:hover:border-[#0a84ff] hover:text-blue-600 dark:hover:text-[#0a84ff] transition-colors mt-4"
+                >
+                  <Plus size={16} />
+                  Add attraction
+                </button>
               )}
             </>
           )}
@@ -550,6 +800,28 @@ const ItineraryPage: React.FC = () => {
   
   // Selected stop for map view
   const [selectedStopForMap, setSelectedStopForMap] = useState<number | null>(null);
+  
+  // Attraction management modals
+  const [showAddAttractionModal, setShowAddAttractionModal] = useState(false);
+  const [showEditAttractionModal, setShowEditAttractionModal] = useState(false);
+  const [selectedStopForAttraction, setSelectedStopForAttraction] = useState<number | null>(null);
+  const [editingAttraction, setEditingAttraction] = useState<Attraction | null>(null);
+  const [geocodingEditAttraction, setGeocodingEditAttraction] = useState(false);
+  const [geocodingNewAttraction, setGeocodingNewAttraction] = useState(false);
+  const [newAttraction, setNewAttraction] = useState<Partial<Attraction>>({
+    name: '',
+    description: '',
+    estimatedCost: undefined,
+    currency: journey?.currency || 'PLN',
+    duration: '',
+    tag: undefined,
+    addressStreet: '',
+    addressCity: '',
+    addressPostalCode: '',
+    addressCountry: '',
+    latitude: null,
+    longitude: null
+  });
 
   // Load journey data
   const loadData = useCallback(async () => {
@@ -557,13 +829,23 @@ const ItineraryPage: React.FC = () => {
     
     setLoading(true);
     try {
+      console.log('📡 ItineraryPage: Loading journey data from API...');
       const journeyData = await journeyService.getJourneyById(parseInt(id));
+      console.log('📥 ItineraryPage: Received journey data:', journeyData);
+      console.log('📥 ItineraryPage: Stop dates:', journeyData.stops?.map((s: Stop) => ({
+        id: s.id,
+        city: s.city,
+        arrival: s.arrivalDate,
+        departure: s.departureDate
+      })));
       setJourney(journeyData);
       
       const stopsData = journeyData.stops || [];
-      setStops(stopsData.sort((a: Stop, b: Stop) => 
-        new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime()
-      ));
+      setStops(stopsData.sort((a: Stop, b: Stop) => {
+        const da = parseYMDToDate(a.arrivalDate) || new Date(a.arrivalDate);
+        const db = parseYMDToDate(b.arrivalDate) || new Date(b.arrivalDate);
+        return da.getTime() - db.getTime();
+      }));
       
       // Load attractions for each stop
       const attractionsMap: Record<number, Attraction[]> = {};
@@ -582,7 +864,7 @@ const ItineraryPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error loading journey:', error);
-      toast.error('Nie udało się załadować podróży');
+      toast.error('Failed to load journey');
     } finally {
       setLoading(false);
     }
@@ -591,6 +873,50 @@ const ItineraryPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Connect socket for real-time updates
+  useEffect(() => {
+    console.log('🔌 ItineraryPage: Connecting to socket...');
+    socketService.connect();
+    
+    return () => {
+      // Don't disconnect here as other components might use it
+      console.log('🔌 ItineraryPage: Component unmounting (keeping socket connected)');
+    };
+  }, []);
+
+  // Listen for real-time updates from other clients
+  useEffect(() => {
+    console.log('👂 ItineraryPage: Registering socket listeners...');
+    
+    const handleStopUpdate = (data: any) => {
+      console.log('🔄 ItineraryPage received: Stop updated', data);
+      loadData();
+    };
+
+    const handleJourneyUpdate = (data: any) => {
+      console.log('🔄 ItineraryPage received: Journey updated', data);
+      loadData();
+    };
+
+    const handleAttractionUpdate = (data: any) => {
+      console.log('🔄 ItineraryPage received: Attraction updated', data);
+      loadData();
+    };
+
+    socketService.on('stop:updated', handleStopUpdate);
+    socketService.on('journey:updated', handleJourneyUpdate);
+    socketService.on('attraction:updated', handleAttractionUpdate);
+
+    console.log('✅ ItineraryPage: Socket listeners registered');
+
+    return () => {
+      console.log('🧹 ItineraryPage: Cleaning up socket listeners');
+      socketService.off('stop:updated', handleStopUpdate);
+      socketService.off('journey:updated', handleJourneyUpdate);
+      socketService.off('attraction:updated', handleAttractionUpdate);
+    };
   }, [loadData]);
 
   // Handle priority change
@@ -628,9 +954,178 @@ const ItineraryPage: React.FC = () => {
       toast.success('Data zapisana');
     } catch (error) {
       console.error('Error saving planned date:', error);
-      toast.error('Nie udało się zapisać daty');
+      toast.error('Failed to save date');
     }
   }, [toast]);
+
+  // Add new attraction
+  const handleAddAttraction = useCallback(async () => {
+    if (!selectedStopForAttraction || !newAttraction.name) {
+      toast.error('Enter attraction name');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const created = await attractionService.createAttraction(selectedStopForAttraction, {
+        ...newAttraction,
+        currency: newAttraction.currency || journey?.currency || 'PLN'
+      });
+
+      // Reload data to get fresh state
+      await loadData();
+      
+      setNewAttraction({
+        name: '',
+        description: '',
+        estimatedCost: undefined,
+        currency: journey?.currency || 'PLN',
+        duration: '',
+        tag: undefined,
+        addressStreet: '',
+        addressCity: '',
+        addressPostalCode: '',
+        addressCountry: '',
+        latitude: null,
+        longitude: null
+      });
+      setShowAddAttractionModal(false);
+      setSelectedStopForAttraction(null);
+      toast.success('Attraction added!');
+    } catch (error) {
+      console.error('Error adding attraction:', error);
+      toast.error('Failed to add attraction');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedStopForAttraction, newAttraction, journey, loadData, toast]);
+
+  // Edit attraction
+  const handleEditAttraction = useCallback(async () => {
+    if (!editingAttraction?.id || !editingAttraction.name) {
+      toast.error('Enter attraction name');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await attractionService.updateAttraction(editingAttraction.id, editingAttraction);
+
+      // Reload data to get fresh state
+      await loadData();
+      
+      setEditingAttraction(null);
+      setShowEditAttractionModal(false);
+      toast.success('Attraction updated!');
+    } catch (error) {
+      console.error('Error updating attraction:', error);
+      toast.error('Failed to update attraction');
+    } finally {
+      setLoading(false);
+    }
+  }, [editingAttraction, loadData, toast]);
+
+  // Delete attraction
+  const handleDeleteAttraction = useCallback(async (attractionId: number) => {
+    if (!window.confirm('Are you sure you want to delete this attraction?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await attractionService.deleteAttraction(attractionId);
+
+      // Reload data
+      await loadData();
+      
+      toast.success('Attraction deleted');
+    } catch (error) {
+      console.error('Error deleting attraction:', error);
+      toast.error('Failed to delete attraction');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadData, toast]);
+
+  // Geocode edit attraction address
+  const handleGeocodeEditAttraction = useCallback(async () => {
+    if (!editingAttraction) return;
+    
+    const parts = [
+      editingAttraction.addressStreet,
+      editingAttraction.addressCity,
+      editingAttraction.addressPostalCode,
+      editingAttraction.addressCountry
+    ].filter(Boolean);
+    
+    if (parts.length === 0) {
+      toast.error('Enter at least one address field');
+      return;
+    }
+    
+    const fullAddress = parts.join(', ');
+    
+    try {
+      setGeocodingEditAttraction(true);
+      const coords = await geocodeAddress(fullAddress);
+      
+      if (coords) {
+        setEditingAttraction({
+          ...editingAttraction,
+          latitude: coords.lat,
+          longitude: coords.lng,
+          address: coords.display_name || fullAddress
+        });
+        toast.success('Coordinates found!');
+      } else {
+        toast.error('Failed to find location');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Error while searching for location');
+    } finally {
+      setGeocodingEditAttraction(false);
+    }
+  }, [editingAttraction, toast]);
+
+  // Geocode new attraction address
+  const handleGeocodeNewAttraction = useCallback(async () => {
+    const parts = [
+      newAttraction.addressStreet,
+      newAttraction.addressCity,
+      newAttraction.addressPostalCode,
+      newAttraction.addressCountry
+    ].filter(Boolean);
+    
+    if (parts.length === 0) {
+      toast.error('Enter at least one address field');
+      return;
+    }
+    
+    const fullAddress = parts.join(', ');
+    
+    try {
+      setGeocodingNewAttraction(true);
+      const coords = await geocodeAddress(fullAddress);
+      
+      if (coords) {
+        setNewAttraction({
+          ...newAttraction,
+          latitude: coords.lat,
+          longitude: coords.lng,
+          address: coords.display_name || fullAddress
+        });
+        toast.success('Coordinates found!');
+      } else {
+        toast.error('Failed to find location');
+      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Error while searching for location');
+    } finally {
+      setGeocodingNewAttraction(false);
+    }
+  }, [newAttraction, toast]);
 
   // Drag handlers
   const handleDragStart = useCallback((e: React.DragEvent, attraction: Attraction) => {
@@ -711,11 +1206,11 @@ const ItineraryPage: React.FC = () => {
       }
       
       await attractionService.bulkUpdateAttractions(updates);
-      toast.success('Zmiany zostały zapisane');
+      toast.success('Changes saved');
       setHasChanges(false);
     } catch (error) {
       console.error('Error saving changes:', error);
-      toast.error('Nie udało się zapisać zmian');
+      toast.error('Failed to save changes');
     } finally {
       setSaving(false);
     }
@@ -759,7 +1254,7 @@ const ItineraryPage: React.FC = () => {
       [stopId]: optimized.map((a, i) => ({ ...a, orderIndex: i }))
     }));
     setHasChanges(true);
-    toast.success(`Zoptymalizowano trasę dla ${stop.city}`);
+    toast.success(`Route optimized for ${stop.city}`);
   };
   
   // Group attractions by date
@@ -772,8 +1267,8 @@ const ItineraryPage: React.FC = () => {
       attractions.forEach(attr => {
         // Use planned date if available, otherwise use stop arrival date
         const dateKey = attr.plannedDate 
-          ? formatDateKey(attr.plannedDate)
-          : formatDateKey(stop.arrivalDate);
+          ? toYMD(attr.plannedDate)
+          : toYMD(stop.arrivalDate);
         
         if (!byDate[dateKey]) {
           byDate[dateKey] = [];
@@ -790,7 +1285,7 @@ const ItineraryPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50 dark:bg-[#1c1c1e] flex items-center justify-center">
         <div className="flex items-center gap-3 text-gray-600 dark:text-[#8e8e93]">
           <Loader2 size={24} className="animate-spin" />
-          <span>Ładowanie harmonogramu...</span>
+          <span>Loading itinerary...</span>
         </div>
       </div>
     );
@@ -800,9 +1295,9 @@ const ItineraryPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-[#1c1c1e] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 dark:text-[#8e8e93] mb-4">Nie znaleziono podróży</p>
+          <p className="text-gray-600 dark:text-[#8e8e93] mb-4">Journey not found</p>
           <Link to="/" className="gh-btn-primary">
-            Wróć do listy
+            Back to list
           </Link>
         </div>
       </div>
@@ -830,7 +1325,7 @@ const ItineraryPage: React.FC = () => {
                   {journey.title}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-[#8e8e93]">
-                  Harmonogram podróży
+                  Itinerary
                 </p>
               </div>
             </div>
@@ -956,8 +1451,8 @@ const ItineraryPage: React.FC = () => {
         {/* Info banner */}
         <div className="mb-6 p-4 rounded-xl bg-blue-50 dark:bg-[#0a84ff]/10 border border-blue-200 dark:border-[#0a84ff]/30">
           <p className="text-sm text-blue-800 dark:text-[#0a84ff]">
-            <strong>Wskazówka:</strong> Przeciągaj atrakcje aby zmienić kolejność lub przenieść między przystankami. 
-            Ustaw priorytety aby łatwo zidentyfikować co pominąć gdy zabraknie czasu.
+            <strong>Tip:</strong> Drag attractions to reorder or move between stops. 
+            Set priorities to easily identify what to skip when running out of time.
           </p>
         </div>
         
@@ -978,10 +1473,10 @@ const ItineraryPage: React.FC = () => {
               <div className="text-center py-12">
                 <MapPin size={48} className="mx-auto mb-4 text-gray-300 dark:text-[#48484a]" />
                 <p className="text-gray-500 dark:text-[#8e8e93]">
-                  Brak przystanków w tej podróży
+                  No stops in this journey
                 </p>
                 <Link to="/" className="text-blue-600 dark:text-[#0a84ff] hover:underline mt-2 inline-block">
-                  Dodaj przystanki w widoku głównym
+                  Add stops in the main view
                 </Link>
               </div>
             ) : (
@@ -1005,6 +1500,34 @@ const ItineraryPage: React.FC = () => {
                     setSelectedStopForMap(stopId);
                     setViewMode('map');
                   }}
+                  onAddAttraction={async (stopId) => {
+                    // Reload data to ensure fresh stop dates
+                    await loadData();
+                    setSelectedStopForAttraction(stopId);
+                    setNewAttraction({
+                      name: '',
+                      description: '',
+                      estimatedCost: 0,
+                      duration: '',
+                      currency: journey?.currency || 'PLN',
+                      latitude: null,
+                      longitude: null,
+                      addressStreet: '',
+                      addressCity: '',
+                      addressPostalCode: '',
+                      addressCountry: '',
+                      priority: 'should',
+                      tag: null
+                    });
+                    setShowAddAttractionModal(true);
+                  }}
+                  onEditAttraction={async (attraction) => {
+                    // Reload data to ensure fresh stop dates
+                    await loadData();
+                    setEditingAttraction(attraction);
+                    setShowEditAttractionModal(true);
+                  }}
+                  onDeleteAttraction={handleDeleteAttraction}
                 />
               ))
             )}
@@ -1029,7 +1552,7 @@ const ItineraryPage: React.FC = () => {
               
               return sortedDates.map(dateKey => {
                 const items = byDate[dateKey];
-                const date = new Date(dateKey);
+                const date = parseYMDToDate(dateKey) || new Date(dateKey);
                 
                 return (
                   <div key={dateKey} className="gh-card">
@@ -1039,7 +1562,7 @@ const ItineraryPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                          {date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-[#8e8e93]">
                           {items.length} {items.length === 1 ? 'attraction' : 'attractions'}
@@ -1049,8 +1572,8 @@ const ItineraryPage: React.FC = () => {
                     
                     <div className="space-y-3">
                       {items.map(({ stop, attraction }) => {
-                        const stopArrival = new Date(stop.arrivalDate);
-                        const stopDeparture = new Date(stop.departureDate);
+                        const stopArrival = parseYMDToDate(stop.arrivalDate) || new Date(stop.arrivalDate);
+                        const stopDeparture = parseYMDToDate(stop.departureDate) || new Date(stop.departureDate);
                         const daysDiff = Math.ceil((stopDeparture.getTime() - stopArrival.getTime()) / (1000 * 60 * 60 * 24));
                         const isMultiDay = daysDiff >= 1;
                         
@@ -1102,22 +1625,22 @@ const ItineraryPage: React.FC = () => {
                               {isMultiDay && (
                                 <div className="mt-2">
                                   <label className="block text-xs text-gray-600 dark:text-[#8e8e93] mb-1">
-                                    Zmień dzień:
+                                    Change day:
                                   </label>
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="date"
                                       value={attraction.plannedDate || ''}
                                       onChange={(e) => handlePlannedDateChange(attraction.id!, e.target.value || null)}
-                                      min={formatDateKey(stop.arrivalDate)}
-                                      max={formatDateKey(stop.departureDate)}
+                                      min={toYMD(stop.arrivalDate)}
+                                      max={toYMD(stop.departureDate)}
                                       className="max-w-[160px] px-2 py-1 text-xs rounded border border-gray-300 dark:border-[#48484a] bg-white dark:bg-[#2c2c2e] text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-[#0a84ff] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[#0a84ff]"
                                     />
                                     {attraction.plannedDate && (
                                       <button
                                         onClick={() => handlePlannedDateChange(attraction.id!, null)}
                                         className="text-xs text-gray-500 dark:text-[#8e8e93] hover:text-red-600 dark:hover:text-[#ff453a] px-2 py-1"
-                                        title="Wyczyść datę"
+                                        title="Clear date"
                                       >
                                         ✕
                                       </button>
@@ -1226,6 +1749,669 @@ const ItineraryPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Add Attraction Modal */}
+      {showAddAttractionModal && selectedStopForAttraction && (
+        <div className="gh-modal-overlay" onClick={() => setShowAddAttractionModal(false)}>
+          <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="gh-card w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Add Attraction
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAddAttractionModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3a3a3c] text-gray-500 dark:text-[#8e8e93] transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleAddAttraction();
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Attraction Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Eiffel Tower"
+                  value={newAttraction.name}
+                  onChange={(e) => setNewAttraction({ ...newAttraction, name: e.target.value })}
+                  className="gh-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Category Tag
+                </label>
+                <select
+                  value={newAttraction.tag || ''}
+                  onChange={(e) => setNewAttraction({ ...newAttraction, tag: e.target.value || null })}
+                  className="gh-select"
+                >
+                  <option value="">No category</option>
+                  {getAvailableAttractionTags().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.emoji} {option.label}
+                    </option>
+                  ))}
+                </select>
+                {newAttraction.tag && (() => {
+                  const tagInfo = getAttractionTagInfo(newAttraction.tag);
+                  return tagInfo && (
+                    <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                      {tagInfo.emoji} {tagInfo.label}
+                    </p>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Description
+                </label>
+                <textarea
+                  placeholder="Details about the attraction..."
+                  value={newAttraction.description || ''}
+                  onChange={(e) => setNewAttraction({ ...newAttraction, description: e.target.value })}
+                  className="gh-input h-24 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Estimated Cost
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={newAttraction.estimatedCost || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      const num = val ? parseFloat(val) : undefined;
+                      setNewAttraction({ ...newAttraction, estimatedCost: (num && !isNaN(num)) ? num : undefined });
+                    }}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Currency
+                  </label>
+                  <select
+                    value={newAttraction.currency || 'PLN'}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, currency: e.target.value })}
+                    className="gh-select"
+                  >
+                    <option value="PLN">PLN</option>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="KRW">KRW</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Planned Day - only for multi-day stops */}
+              {(() => {
+                const stop = journey?.stops?.find(s => s.id === selectedStopForAttraction);
+                if (!stop) return null;
+                
+                console.log('🔍 Add Attraction - Stop dates:', {
+                  stopId: stop.id,
+                  city: stop.city,
+                  arrivalDate: stop.arrivalDate,
+                  departureDate: stop.departureDate
+                });
+                
+                // Extract date portion without timezone conversion (use shared helper)
+                const getDateOnly = (dateStr: Date | string): string => toYMD(dateStr);
+
+                const arrivalDate = getDateOnly(stop.arrivalDate);
+                const departureDate = getDateOnly(stop.departureDate);
+                
+                console.log('📅 Formatted dates:', { arrivalDate, departureDate });
+                
+                // Calculate days difference using date strings
+                const arrivalTime = parseYMDToDate(arrivalDate)!.getTime();
+                const departureTime = parseYMDToDate(departureDate)!.getTime();
+                const daysDiff = Math.ceil((departureTime - arrivalTime) / (1000 * 60 * 60 * 24));
+                
+                if (daysDiff < 1) return null;
+                
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      📅 Planned Day
+                    </label>
+                    <input
+                      type="date"
+                      value={newAttraction.plannedDate || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, plannedDate: e.target.value || undefined })}
+                      min={arrivalDate}
+                      max={departureDate}
+                      className="gh-input max-w-[200px]"
+                    />
+                    {newAttraction.plannedDate && (
+                      <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                        {(() => {
+                          const d = parseYMDToDate(newAttraction.plannedDate);
+                          return d ? d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Choose a valid date';
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Duration
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 2 hours"
+                    value={newAttraction.duration || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, duration: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Visit Time
+                  </label>
+                  <input
+                    type="time"
+                    value={newAttraction.visitTime ?? ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, visitTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      setNewAttraction((prev) => ({ ...prev, visitTime: isValidTime(v) ? v : '' }));
+                    }}
+                    className="gh-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Opening Time
+                  </label>
+                  <input
+                    type="time"
+                    value={newAttraction.openingTime ?? ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, openingTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      setNewAttraction((prev) => ({ ...prev, openingTime: isValidTime(v) ? v : '' }));
+                    }}
+                    className="gh-input"
+                    placeholder="09:00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Closing Time
+                  </label>
+                  <input
+                    type="time"
+                    value={newAttraction.closingTime ?? ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, closingTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      setNewAttraction((prev) => ({ ...prev, closingTime: isValidTime(v) ? v : '' }));
+                    }}
+                    className="gh-input"
+                    placeholder="18:00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Address
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Street and number"
+                    value={newAttraction.addressStreet || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, addressStreet: e.target.value })}
+                    className="gh-input"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="City"
+                      value={newAttraction.addressCity || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, addressCity: e.target.value })}
+                      className="gh-input"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Postal Code"
+                      value={newAttraction.addressPostalCode || ''}
+                      onChange={(e) => setNewAttraction({ ...newAttraction, addressPostalCode: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Country"
+                    value={newAttraction.addressCountry || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, addressCountry: e.target.value })}
+                    className="gh-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGeocodeNewAttraction}
+                    disabled={geocodingNewAttraction || !(newAttraction.addressStreet || newAttraction.addressCity || newAttraction.addressPostalCode || newAttraction.addressCountry)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-700 dark:hover:bg-[#0077ed] transition-colors disabled:opacity-50"
+                  >
+                    <MapPin size={16} />
+                    {geocodingNewAttraction ? 'Finding coordinates...' : 'Locate on Map'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Latitude {newAttraction.latitude && '✓'}
+                  </label>
+                  <input
+                    type="number"
+                    value={newAttraction.latitude || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, latitude: parseFloat(e.target.value) || null })}
+                    className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                    step="0.000001"
+                    placeholder="Auto-filled"
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Longitude {newAttraction.longitude && '✓'}
+                  </label>
+                  <input
+                    type="number"
+                    value={newAttraction.longitude || ''}
+                    onChange={(e) => setNewAttraction({ ...newAttraction, longitude: parseFloat(e.target.value) || null })}
+                    className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                    step="0.000001"
+                    placeholder="Auto-filled"
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-[#38383a]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAttractionModal(false)}
+                  className="px-4 py-2 rounded-lg text-gray-700 dark:text-[#8e8e93] hover:bg-gray-100 dark:hover:bg-[#3a3a3c] transition-colors"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-700 dark:hover:bg-[#0077ed] transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Adding...' : 'Add Attraction'}
+                </button>
+              </div>
+            </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Attraction Modal */}
+      {showEditAttractionModal && editingAttraction && (
+        <div className="gh-modal-overlay" onClick={() => setShowEditAttractionModal(false)}>
+          <div className="gh-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="gh-card w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Edit Attraction
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowEditAttractionModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3a3a3c] text-gray-500 dark:text-[#8e8e93] transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleEditAttraction();
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Attraction Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Eiffel Tower"
+                  value={editingAttraction.name}
+                  onChange={(e) => setEditingAttraction({ ...editingAttraction, name: e.target.value })}
+                  className="gh-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Category Tag
+                </label>
+                <select
+                  value={editingAttraction.tag || ''}
+                  onChange={(e) => setEditingAttraction({ ...editingAttraction, tag: e.target.value || null })}
+                  className="gh-select"
+                >
+                  <option value="">No category</option>
+                  {getAvailableAttractionTags().map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.emoji} {option.label}
+                    </option>
+                  ))}
+                </select>
+                {editingAttraction.tag && (() => {
+                  const tagInfo = getAttractionTagInfo(editingAttraction.tag);
+                  return tagInfo && (
+                    <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                      {tagInfo.emoji} {tagInfo.label}
+                    </p>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Description
+                </label>
+                <textarea
+                  placeholder="Details about the attraction..."
+                  value={editingAttraction.description || ''}
+                  onChange={(e) => setEditingAttraction({ ...editingAttraction, description: e.target.value })}
+                  className="gh-input h-24 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Estimated Cost
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={editingAttraction.estimatedCost || ''}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      const num = val ? parseFloat(val) : undefined;
+                      setEditingAttraction({ ...editingAttraction, estimatedCost: (num && !isNaN(num)) ? num : undefined });
+                    }}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Currency
+                  </label>
+                  <select
+                    value={editingAttraction.currency || 'PLN'}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, currency: e.target.value })}
+                    className="gh-select"
+                  >
+                    <option value="PLN">PLN</option>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="KRW">KRW</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Planned Day - only for multi-day stops */}
+              {(() => {
+                const stop = journey?.stops?.find(s => 
+                  s.id === editingAttraction.stopId || 
+                  s.attractions?.some(a => a.id === editingAttraction.id)
+                );
+                if (!stop) return null;
+                
+                console.log('🔍 Edit Attraction - Stop dates:', {
+                  stopId: stop.id,
+                  city: stop.city,
+                  arrivalDate: stop.arrivalDate,
+                  departureDate: stop.departureDate
+                });
+                
+                // Extract date portion without timezone conversion (use shared helper)
+                const getDateOnly = (dateStr: Date | string): string => toYMD(dateStr);
+
+                const arrivalDate = getDateOnly(stop.arrivalDate);
+                const departureDate = getDateOnly(stop.departureDate);
+                
+                console.log('📅 Formatted dates:', { arrivalDate, departureDate });
+                
+                // Calculate days difference using date strings
+                const arrivalTime = parseYMDToDate(arrivalDate)!.getTime();
+                const departureTime = parseYMDToDate(departureDate)!.getTime();
+                const daysDiff = Math.ceil((departureTime - arrivalTime) / (1000 * 60 * 60 * 24));
+                
+                if (daysDiff < 1) return null;
+                
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                      📅 Planned Day
+                    </label>
+                    <input
+                      type="date"
+                      value={editingAttraction.plannedDate || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, plannedDate: e.target.value || undefined })}
+                      min={arrivalDate}
+                      max={departureDate}
+                      className="gh-input max-w-[200px]"
+                    />
+                    {editingAttraction.plannedDate && (
+                      <p className="text-xs text-gray-500 dark:text-[#8e8e93] mt-1">
+                        {(() => {
+                          // Always parse as a local date (not UTC)
+                          const d = parseYMDToDate(editingAttraction.plannedDate);
+                          if (!d) return 'Choose a valid date';
+                          return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Duration
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 2 hours"
+                    value={editingAttraction.duration || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, duration: e.target.value })}
+                    className="gh-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Visit Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editingAttraction.visitTime ?? ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, visitTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      if (editingAttraction) setEditingAttraction({ ...editingAttraction, visitTime: isValidTime(v) ? v : '' });
+                    }}
+                    className="gh-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Opening Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editingAttraction.openingTime ?? ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, openingTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      if (editingAttraction) setEditingAttraction({ ...editingAttraction, openingTime: isValidTime(v) ? v : '' });
+                    }}
+                    className="gh-input"
+                    placeholder="09:00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Closing Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editingAttraction.closingTime ?? ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, closingTime: e.target.value })}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      if (editingAttraction) setEditingAttraction({ ...editingAttraction, closingTime: isValidTime(v) ? v : '' });
+                    }}
+                    className="gh-input"
+                    placeholder="18:00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                  Address
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Street and number"
+                    value={editingAttraction.addressStreet || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, addressStreet: e.target.value })}
+                    className="gh-input"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      placeholder="City"
+                      value={editingAttraction.addressCity || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, addressCity: e.target.value })}
+                      className="gh-input"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Postal Code"
+                      value={editingAttraction.addressPostalCode || ''}
+                      onChange={(e) => setEditingAttraction({ ...editingAttraction, addressPostalCode: e.target.value })}
+                      className="gh-input"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Country"
+                    value={editingAttraction.addressCountry || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, addressCountry: e.target.value })}
+                    className="gh-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGeocodeEditAttraction}
+                    disabled={geocodingEditAttraction || !(editingAttraction.addressStreet || editingAttraction.addressCity || editingAttraction.addressPostalCode || editingAttraction.addressCountry)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-700 dark:hover:bg-[#0077ed] transition-colors disabled:opacity-50"
+                  >
+                    <MapPin size={16} />
+                    {geocodingEditAttraction ? 'Finding coordinates...' : 'Locate on Map'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Latitude {editingAttraction.latitude && '✓'}
+                  </label>
+                  <input
+                    type="number"
+                    value={editingAttraction.latitude || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, latitude: parseFloat(e.target.value) || null })}
+                    className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                    step="0.000001"
+                    placeholder="Auto-filled"
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
+                    Longitude {editingAttraction.longitude && '✓'}
+                  </label>
+                  <input
+                    type="number"
+                    value={editingAttraction.longitude || ''}
+                    onChange={(e) => setEditingAttraction({ ...editingAttraction, longitude: parseFloat(e.target.value) || null })}
+                    className="gh-input bg-gray-50 dark:bg-[#2c2c2e]"
+                    step="0.000001"
+                    placeholder="Auto-filled"
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-[#38383a]">
+                <button
+                  type="button"
+                  onClick={() => setShowEditAttractionModal(false)}
+                  className="px-4 py-2 rounded-lg text-gray-700 dark:text-[#8e8e93] hover:bg-gray-100 dark:hover:bg-[#3a3a3c] transition-colors"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-blue-600 dark:bg-[#0a84ff] text-white rounded-lg hover:bg-blue-700 dark:hover:bg-[#0077ed] transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   );
 };

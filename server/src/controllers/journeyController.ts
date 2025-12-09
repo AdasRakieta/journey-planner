@@ -18,9 +18,13 @@ const toCamelCase = (obj: any): any => {
       const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
       const value = obj[key];
       
-      // Convert Date objects to ISO strings
+      // For any date-only fields (key ending with _date), return YYYY-MM-DD
       if (value instanceof Date) {
-        acc[camelKey] = value.toISOString();
+        if (/(_date)$/.test(key)) {
+          acc[camelKey] = value.toISOString().slice(0, 10);
+        } else {
+          acc[camelKey] = value.toISOString();
+        }
       }
       // Convert numeric strings to numbers for specific fields
       else if (typeof value === 'string' && 
