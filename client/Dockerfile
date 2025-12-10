@@ -1,5 +1,6 @@
 # Build stage
-FROM node:20-alpine AS builder
+# Use Debian-based image to avoid Alpine musl/build issues when compiling native deps
+FROM node:20-bullseye-slim AS builder
 
 WORKDIR /app
 
