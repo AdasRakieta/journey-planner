@@ -124,9 +124,38 @@ app.use(helmet({
 }));
 
 // CORS middleware
+// Allow a set of trusted origins and handle localhost/127.0.0.1 variants during development.
+const allowedOrigins = new Set([
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+].filter(Boolean));
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+  // Always allow common CORS preflight headers for API routes
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// Also keep the CORS package to ensure robust behavior for other clients
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://twoja-domena',
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin as string)) return callback(null, true);
+    // Allow non-browser requests (curl, server-to-server) when no origin
+    return callback(new Error('CORS not allowed'));
+  },
+  credentials: true,
 }));
 app.use(express.json());
 
