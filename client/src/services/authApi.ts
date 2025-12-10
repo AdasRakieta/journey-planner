@@ -8,6 +8,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Ensure cookies (refresh tokens) and credentials are sent for cross-origin requests
+  withCredentials: true,
 });
 
 // Add token to requests if it exists
