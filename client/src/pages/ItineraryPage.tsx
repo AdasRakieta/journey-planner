@@ -262,13 +262,8 @@ const AttractionCard: React.FC<{
               {attraction.tag && (() => {
                 const tagInfo = getAttractionTagInfo(attraction.tag);
                 return tagInfo && (
-                  <span 
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium shrink-0"
-                    style={{
-                      backgroundColor: `${tagInfo.color}20`,
-                      color: tagInfo.color,
-                      border: `1px solid ${tagInfo.color}40`
-                    }}
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border shrink-0 ${tagInfo.bgLight} ${tagInfo.textColor} ${tagInfo.borderColor}`}
                   >
                     {tagInfo.emoji} {tagInfo.label}
                   </span>
@@ -665,7 +660,7 @@ const StopSection: React.FC<{
                       </h4>
                       <div className="flex-1 h-px bg-gray-200 dark:bg-[#38383a]"></div>
                       <span className="text-xs text-gray-500 dark:text-[#8e8e93]">
-                        {dayAttractions.length} {dayAttractions.length === 1 ? 'atrakcja' : 'atrakcji'}
+                        {dayAttractions.length} {dayAttractions.length === 1 ? 'attraction' : 'attractions'}
                       </span>
                     </div>
                     
