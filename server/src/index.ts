@@ -134,7 +134,7 @@ const allowedOrigins = new Set([
 ].filter(Boolean));
 
 app.use((req, res, next) => {
-  const origin = req.headers.origin as string | undefined;
+    const origin = req.headers.origin || process.env.CORS_ORIGIN || 'http://localhost:5173';
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -143,20 +143,26 @@ app.use((req, res, next) => {
   // Always allow common CORS preflight headers for API routes
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    return res.status(200).end();
+  }
   next();
 });
 
 // Also keep the CORS package to ensure robust behavior for other clients
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.has(origin as string)) return callback(null, true);
-    // Allow non-browser requests (curl, server-to-server) when no origin
-    return callback(new Error('CORS not allowed'));
-  },
-  credentials: true,
-}));
+// app.use(cors({
+//   origin: (origin, callback) => {
+//     if (!origin) return callback(null, true);
+//     if (allowedOrigins.has(origin as string)) return callback(null, true);
+//     // Allow non-browser requests (curl, server-to-server) when no origin
+//     return callback(new Error('CORS not allowed'));
+//   },
+//   credentials: true,
+// }));
 app.use(express.json());
 
 // Connect to PostgreSQL and offer retry if connection fails
