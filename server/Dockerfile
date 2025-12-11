@@ -35,9 +35,9 @@ RUN mkdir -p /app/uploads/attachments
 RUN mkdir -p /app/data
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
-  chown -R nodejs:nodejs /app/uploads /app/data
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs nodejs && \
+    chown -R nodejs:nodejs /app/uploads /app/data
 
 USER nodejs
 
