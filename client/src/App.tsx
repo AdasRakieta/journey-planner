@@ -2554,7 +2554,7 @@ function App() {
                     title="Plan detailed itinerary with priorities"
                   >
                     <ListOrdered className="w-4 h-4" />
-                    Harmonogram
+                      Schedule
                   </Link>
                 </div>
 
