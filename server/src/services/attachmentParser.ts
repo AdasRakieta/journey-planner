@@ -108,7 +108,7 @@ export const sanitizeHtml = (html: string): string => {
   return $.html();
 };
 
-export const autoAssignToTransportIfFlightMatches = async (journeyId: number, flightNumber?: string) => {
+export const autoAssignToTransportIfFlightMatches = async (journeyId: string, flightNumber?: string) => {
   if (!flightNumber) return null;
   // Search for transport with this flight number in the given journey
   if (!DB_AVAILABLE) {

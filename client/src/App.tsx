@@ -708,7 +708,7 @@ function App() {
       // Don't show toast - avoid duplicate notifications when user updates journey
     });
     
-    socketService.on('journey:deleted', ({ id }: { id: number }) => {
+    socketService.on('journey:deleted', ({ id }: { id: string }) => {
       console.log('Real-time: Journey deleted', id);
       setJourneys(prev => prev.filter(j => j.id !== id));
       if (selectedJourney?.id === id) {
@@ -788,7 +788,7 @@ function App() {
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('stop:deleted', async ({ id }: { id: number }) => {
+    socketService.on('stop:deleted', async ({ id }: { id: string }) => {
       console.log('Real-time: Stop deleted', id);
       const journeyId = journeyIdFromStop(id);
       const refreshed = journeyId ? await refreshJourneyFromServer(journeyId) : null;
@@ -886,7 +886,7 @@ function App() {
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('attraction:deleted', async ({ id, journeyId: evtJourneyId }: { id: number; journeyId?: number }) => {
+    socketService.on('attraction:deleted', async ({ id, journeyId: evtJourneyId }: { id: string; journeyId?: string }) => {
       console.log('Real-time: Attraction deleted', id);
       const journeyId = evtJourneyId ?? journeyIdFromAttractionId(id);
       const refreshed = journeyId ? await refreshJourneyFromServer(journeyId) : null;
@@ -971,7 +971,7 @@ function App() {
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('transport:deleted', async ({ id, journeyId }: { id: number; journeyId: number }) => {
+    socketService.on('transport:deleted', async ({ id, journeyId }: { id: string; journeyId: string }) => {
       console.log('Real-time: Transport deleted', id);
       const refreshed = await refreshJourneyFromServer(journeyId);
       if (refreshed) return;

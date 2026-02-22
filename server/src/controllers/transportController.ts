@@ -236,7 +236,7 @@ export const updateTransport = async (req: Request, res: Response) => {
 
     // if user changes dates, ensure range inside journey
     if (departureDate || arrivalDate) {
-      let journeyId: number | null = null;
+      let journeyId: string | null = null;
       if (!DB_AVAILABLE) {
         const t = await jsonStore.getById('transports', transportId);
         if (t) journeyId = t.journey_id;
