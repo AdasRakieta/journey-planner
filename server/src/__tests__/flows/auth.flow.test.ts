@@ -66,7 +66,7 @@ describe('end-to-end auth flow (JSON mode)', () => {
 
     // approve as admin
     req = makeReq({}, { id: requestId.toString() });
-    req.user = { userId: 1 };
+    req.user = { userId: '1' };
     res = makeRes();
     await adminController.approveRegistrationRequest(req, res);
     expect(res.json).toHaveBeenCalled();
