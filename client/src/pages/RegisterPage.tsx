@@ -8,6 +8,7 @@ const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  // compute info directly from current params (no local state)
   const info = searchParams.get('info');
 
   const [formData, setFormData] = useState({
@@ -27,6 +28,14 @@ const RegisterPage: React.FC = () => {
       // no-op: allow manual registration flow when no invitation token
     }
   }, [token]);
+
+  // if info query indicates request sent, redirect to login after delay
+  useEffect(() => {
+    if (info === 'request_sent') {
+      const timer = setTimeout(() => navigate('/login'), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [info, navigate]);
 
   // Request a verification code for local registration (no invitation token)
   const handleRequestCode = async (e?: React.FormEvent) => {
@@ -129,6 +138,7 @@ const RegisterPage: React.FC = () => {
               {info === 'request_sent' && (
                 <div className="mb-4 p-3 bg-green-900/20 border border-green-800 rounded-lg animate-slide-up-in">
                   <p className="text-sm text-green-200">Your request has been sent to the administrator for approval.</p>
+                  <p className="text-xs text-gray-400 mt-2">You will be redirected to the login page shortly...</p>
                 </div>
               )}
 
