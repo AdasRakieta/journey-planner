@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1,
+    "token": "6f91f79dae1ecde0e0b42c5a1a76502bc70c0e2936599f195503d3f918768032",
+    "email": "szymon.przybysz@op.pl",
+    "invited_by": 1,
+    "expires_at": "2026-02-27T23:06:54.279Z",
+    "used": true,
+    "created_at": "2026-02-20T23:06:54.279Z"
+  }
+]

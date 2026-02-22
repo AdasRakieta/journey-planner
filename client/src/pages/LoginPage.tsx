@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { MapPin, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import PasswordField from '../components/PasswordField';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   
   const [formData, setFormData] = useState({
@@ -21,7 +23,8 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.login, formData.password);
-      navigate('/');
+      const redirect = searchParams.get('redirect');
+      navigate(redirect || '/');
     } catch (err: any) {
       console.error('Login failed:', err);
       setError(err.response?.data?.error || 'Invalid credentials');
@@ -34,8 +37,8 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-lg mb-4">
+        <div className="text-center mb-8 animate-slide-up-in">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-lg mb-4 hover:scale-105 transition-transform duration-300 animate-float">
             <MapPin size={40} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Journey Planner</h1>
@@ -43,7 +46,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         {/* Login Card */}
-        <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d]">
+        <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d] animate-bounce-in" style={{ animationDelay: '0.08s' }}>
           <h2 className="text-2xl font-semibold text-white mb-6">Sign In</h2>
 
           {error && (
@@ -75,24 +78,16 @@ const LoginPage: React.FC = () => {
             </div>
 
             {/* Password Input */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                  placeholder="Enter your password"
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
+            <PasswordField
+              id="password"
+              label="Password"
+              icon={<Lock size={20} />}
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Enter your password"
+              required
+              autoComplete="current-password"
+            />
 
             {/* Forgot Password Link */}
             <div className="text-right">
@@ -108,7 +103,7 @@ const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.97] text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -124,7 +119,7 @@ const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/register')}
-              className="w-full bg-[#8c3afc] hover:bg-[#732de6] text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all flex items-center justify-center gap-2"
+              className="w-full bg-[#8c3afc] hover:bg-[#732de6] active:scale-[0.97] text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
             >
               Create Account
             </button>
@@ -132,17 +127,17 @@ const LoginPage: React.FC = () => {
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          {/* <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-[#30363d]"></div>
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-4 bg-[#161b22] text-gray-400">Or continue with</span>
             </div>
-          </div>
+          </div> */}
 
           {/* OAuth Buttons */}
-          <div className="flex justify-center">
+          {/* <div className="flex justify-center">
             <button
               type="button"
               className="flex items-center justify-center gap-2 px-6 py-3 bg-[#0d1117] border border-[#30363d] rounded-xl hover:bg-[#1c2128] transition-all duration-300 ease-in-out hover:shadow-lg font-medium text-gray-300"
@@ -172,7 +167,7 @@ const LoginPage: React.FC = () => {
               Google
             </button>
 
-          </div>
+          </div> */}
 
          
         </div>

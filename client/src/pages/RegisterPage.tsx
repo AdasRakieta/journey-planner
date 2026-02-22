@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../services/authApi';
 import { MapPin, User, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import PasswordField from '../components/PasswordField';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -61,6 +62,18 @@ const RegisterPage: React.FC = () => {
       return setError('Invitation token missing');
     }
 
+    if (!formData.username || !formData.password) {
+      return setError('Username and password are required');
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      return setError('Passwords do not match');
+    }
+
+    if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[a-z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
+      return setError('Password must be at least 8 characters with uppercase, lowercase, and a number');
+    }
+
     setIsLoading(true);
     try {
       await authAPI.register(token, formData.username, formData.password);
@@ -94,8 +107,8 @@ const RegisterPage: React.FC = () => {
     <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-lg mb-4">
+        <div className="text-center mb-8 animate-slide-up-in">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl shadow-lg mb-4 animate-float hover:scale-105 transition-transform duration-300">
             <MapPin size={40} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
@@ -103,9 +116,9 @@ const RegisterPage: React.FC = () => {
         </div>
 
         {/* Register Card */}
-        <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d]">
+        <div className="bg-[#161b22] rounded-2xl shadow-xl p-8 border border-[#30363d] animate-bounce-in" style={{ animationDelay: '0.08s' }}>
           {error && (
-            <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-xl flex items-start gap-3">
+            <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-xl flex items-start gap-3 animate-slide-up-in">
               <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-300">{error}</p>
             </div>
@@ -114,7 +127,7 @@ const RegisterPage: React.FC = () => {
           {!token ? (
             <div>
               {info === 'request_sent' && (
-                <div className="mb-4 p-3 bg-green-900/20 border border-green-800 rounded-lg">
+                <div className="mb-4 p-3 bg-green-900/20 border border-green-800 rounded-lg animate-slide-up-in">
                   <p className="text-sm text-green-200">Your request has been sent to the administrator for approval.</p>
                 </div>
               )}
@@ -131,15 +144,30 @@ const RegisterPage: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                    <input id="password" type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white" placeholder="Create a password" required minLength={8} />
+                    <PasswordField
+                      id="password"
+                      icon={<Lock size={20} />}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Create a password"
+                      required
+                      minLength={8}
+                    />
                   </div>
                   <div>
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
-                    <input id="confirmPassword" type="password" value={formData.confirmPassword} onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white" placeholder="Confirm your password" required />
+                    <PasswordField
+                      id="confirmPassword"
+                      icon={<Lock size={20} />}
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      placeholder="Confirm your password"
+                      required
+                    />
                   </div>
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => navigate('/login')} className="px-4 py-3 bg-red-600 hover:bg-red-700 dark:bg-[#ff453a] dark:hover:bg-red-600 text-white rounded-xl transition-all">Back</button>
-                    <button type="submit" disabled={isLoading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl">{isLoading ? 'Sending...' : 'Send verification code'}</button>
+                    <button type="button" onClick={() => navigate('/login')} className="px-4 py-3 bg-red-600 hover:bg-red-700 dark:bg-[#ff453a] dark:hover:bg-red-600 text-white rounded-xl transition-all active:scale-[0.97]">Back</button>
+                    <button type="submit" disabled={isLoading} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl transition-all duration-200 active:scale-[0.97] disabled:active:scale-100">{isLoading ? 'Sending...' : 'Send verification code'}</button>
                   </div>
                 </form>
               ) : (
@@ -153,13 +181,13 @@ const RegisterPage: React.FC = () => {
                     <input id="code" type="text" value={code} onChange={(e) => setCode(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white" placeholder="Enter code from email" required />
                   </div>
                   <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setStep('form')} className="px-4 py-3 bg-red-600 hover:bg-red-700 dark:bg-[#ff453a] dark:hover:bg-red-600 text-white rounded-xl transition-all">Back</button>
-                    <button type="submit" disabled={codeLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl">{codeLoading ? 'Confirming...' : 'Confirm and Request Approval'}</button>
+                    <button type="button" onClick={() => setStep('form')} className="px-4 py-3 bg-red-600 hover:bg-red-700 dark:bg-[#ff453a] dark:hover:bg-red-600 text-white rounded-xl transition-all active:scale-[0.97]">Back</button>
+                    <button type="submit" disabled={codeLoading} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl transition-all duration-200 active:scale-[0.97] disabled:active:scale-100">{codeLoading ? 'Confirming...' : 'Confirm and Request Approval'}</button>
                   </div>
                 </form>
               )}
 
-              <div className="mt-6">
+              {/* <div className="mt-6">
                 <p className="text-gray-400 mb-2">Or request an account via Google (admin approval required)</p>
                 <div className="flex justify-center">
                   <button
@@ -176,7 +204,7 @@ const RegisterPage: React.FC = () => {
                     Register with Google
                   </button>
                 </div>
-              </div>
+              </div> */}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -204,19 +232,15 @@ const RegisterPage: React.FC = () => {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
                   Password
                 </label>
-                <div className="relative">
-                  <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-[#0d1117] border border-[#30363d] text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                    placeholder="Create a password"
-                    required
-                    minLength={8}
-                  />
-                </div>
+                <PasswordField
+                  id="password"
+                  icon={<Lock size={20} />}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Create a password"
+                  required
+                  minLength={8}
+                />
                 <p className="mt-2 text-xs text-gray-400">
                   Must be at least 8 characters with uppercase, lowercase, and numbers
                 </p>
@@ -243,7 +267,7 @@ const RegisterPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform transition-all duration-200 active:scale-[0.97] disabled:active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>

@@ -10,6 +10,7 @@ import ManageSharesModal from './components/ManageSharesModal';
 import { useConfirm } from './hooks/useConfirm';
 import type { Journey, Stop, Transport, Attraction, ChecklistItem } from './types/journey';
 import { journeyService, stopService, attractionService, transportService, journeyShareService, attachmentService } from './services/api';
+import DateInput from './components/DateInput';
 import { getRates } from './services/currencyApi';
 import { socketService } from './services/socket';
 import { getAttractionTagInfo, getAvailableAttractionTags } from './utils/attractionTags';
@@ -693,9 +694,16 @@ function App() {
     
     socketService.on('journey:updated', (journey: Journey) => {
       console.log('Real-time: Journey updated', journey);
-      setJourneys(prev => prev.map(j => j.id === journey.id ? journey : j));
+      // Preserve nested stops/transports — server emits only flat journey fields (no includes)
+      setJourneys(prev => prev.map(j => j.id === journey.id
+        ? { ...j, ...journey, stops: j.stops, transports: j.transports }
+        : j
+      ));
       if (selectedJourney?.id === journey.id) {
-        setSelectedJourney(journey);
+        setSelectedJourney(prev => prev
+          ? { ...prev, ...journey, stops: prev.stops, transports: prev.transports }
+          : journey
+        );
       }
       // Don't show toast - avoid duplicate notifications when user updates journey
     });
@@ -743,11 +751,19 @@ function App() {
       const refreshed = await refreshJourneyFromServer(stop.journeyId);
       if (refreshed) return;
 
+      // Clear stale server-cached conversions so formatItemPrice uses fresh client-side conversion
+      const stopClean = {
+        ...stop,
+        accommodationPriceConverted: null,
+        accommodationPriceConvertedCurrency: null,
+        accommodation_price_converted: null,
+        accommodation_price_converted_currency: null,
+      };
       setJourneys(prev => prev.map(j => {
         if (j.id === stop.journeyId) {
           const updated = { 
             ...j, 
-            stops: (j.stops || []).map(s => s.id === stop.id ? stop : s)
+            stops: (j.stops || []).map(s => s.id === stop.id ? { ...stopClean, attractions: s.attractions } : s)
           } as Journey;
           updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
           return updated;
@@ -757,7 +773,7 @@ function App() {
       if (selectedJourney?.id === stop.journeyId) {
         setSelectedJourney(prev => {
           if (!prev) return null;
-          const updated = { ...prev, stops: (prev.stops || []).map(s => s.id === stop.id ? stop : s) } as Journey;
+          const updated = { ...prev, stops: (prev.stops || []).map(s => s.id === stop.id ? { ...stopClean, attractions: s.attractions } : s) } as Journey;
           updated.totalEstimatedCost = updated.totalEstimatedCost ?? calculateJourneyTotalCost(updated);
           return updated;
         });
@@ -870,9 +886,9 @@ function App() {
       // Removed duplicate notification - handled by manual actions
     });
     
-    socketService.on('attraction:deleted', async ({ id }: { id: number }) => {
+    socketService.on('attraction:deleted', async ({ id, journeyId: evtJourneyId }: { id: number; journeyId?: number }) => {
       console.log('Real-time: Attraction deleted', id);
-      const journeyId = journeyIdFromAttractionId(id);
+      const journeyId = evtJourneyId ?? journeyIdFromAttractionId(id);
       const refreshed = journeyId ? await refreshJourneyFromServer(journeyId) : null;
       if (refreshed) return;
 
@@ -1086,11 +1102,16 @@ function App() {
     try {
       setLoading(true);
       const updated = await journeyService.updateJourney(editingJourney.id, editingJourney);
-      
-      setJourneys(journeys.map(j => j.id === updated.id ? updated : j));
+
+      // updated object does not include related stops/transports, so fetch full journey
+      const refreshed = await refreshJourneyFromServer(updated.id);
+
+      // update list entry using refreshed data if available, otherwise fallback to updated
+      setJourneys(journeys.map(j => j.id === updated.id ? (refreshed || updated) : j));
       if (selectedJourney?.id === updated.id) {
-        setSelectedJourney(updated);
+        setSelectedJourney(refreshed || updated);
       }
+
       setShowEditJourneyForm(false);
       setEditingJourney(null);
       success('Journey updated successfully!');
@@ -1287,6 +1308,17 @@ function App() {
       warning('Please fill in city and country');
       return;
     }
+    // validate dates against journey range
+    if (newStop.arrivalDate && newStop.departureDate) {
+      const journeyStart = new Date(selectedJourney.startDate);
+      const journeyEnd = new Date(selectedJourney.endDate);
+      const arr = new Date(newStop.arrivalDate);
+      const dep = new Date(newStop.departureDate);
+      if (arr < journeyStart || dep > journeyEnd) {
+        warning(`Stop dates must fall between journey ${selectedJourney.startDate} and ${selectedJourney.endDate}`);
+        return;
+      }
+    }
 
     try {
       setLoading(true);
@@ -1425,7 +1457,7 @@ function App() {
             ? null
             : attractionData.duration,
       };
-      const createdAttraction = await attractionService.createAttraction(
+      await attractionService.createAttraction(
         selectedStopForAttraction!,
         payload
       );
@@ -1561,8 +1593,19 @@ function App() {
     try {
       setLoading(true);
       const updated = await stopService.updateStop(editingStop.id, editingStop);
+      // Clear stale server-cached conversions so the UI uses fresh client-side conversion
+      // until the next full server refresh recomputes them.
+      const updatedClean = {
+        ...updated,
+        accommodationPriceConverted: null,
+        accommodationPriceConvertedCurrency: null,
+        accommodation_price_converted: null,
+        accommodation_price_converted_currency: null,
+      };
       
-      const updatedStops = selectedJourney.stops?.map(s => s.id === updated.id ? updated : s);
+      const updatedStops = selectedJourney.stops?.map(s =>
+        s.id === updated.id ? { ...updatedClean, attractions: s.attractions } : s
+      );
       const updatedJourney = { ...selectedJourney, stops: updatedStops };
       
       setSelectedJourney(updatedJourney);
@@ -1657,7 +1700,7 @@ function App() {
         }
       }
       
-      const updated = await attractionService.updateAttraction(attractionData.id!, attractionData);
+      await attractionService.updateAttraction(attractionData.id!, attractionData);
       
       // Reload journey data from server to ensure all fields are up-to-date
       const refreshedJourney = await journeyService.getJourneyById(selectedJourney.id!);
@@ -1678,6 +1721,17 @@ function App() {
 
   const handleEditTransport = async () => {
     if (!editingTransport?.id || !selectedJourney) return;
+    // ensure dates remain within journey boundaries
+    if (editingTransport.departureDate || editingTransport.arrivalDate) {
+      const journeyStart = new Date(selectedJourney.startDate);
+      const journeyEnd = new Date(selectedJourney.endDate);
+      const dep = editingTransport.departureDate ? new Date(editingTransport.departureDate) : journeyStart;
+      const arr = editingTransport.arrivalDate ? new Date(editingTransport.arrivalDate) : dep;
+      if (dep < journeyStart || arr > journeyEnd) {
+        warning(`Transport dates must fall between journey ${selectedJourney.startDate} and ${selectedJourney.endDate}`);
+        return;
+      }
+    }
 
     try {
       setLoading(true);
@@ -1703,6 +1757,17 @@ function App() {
     if (!selectedJourney || !newTransport.fromLocation || !newTransport.toLocation) {
       warning('Please fill in all required fields');
       return;
+    }
+    // ensure dates inside journey
+    if (newTransport.departureDate || newTransport.arrivalDate) {
+      const journeyStart = new Date(selectedJourney.startDate);
+      const journeyEnd = new Date(selectedJourney.endDate);
+      const dep = newTransport.departureDate ? new Date(newTransport.departureDate) : journeyStart;
+      const arr = newTransport.arrivalDate ? new Date(newTransport.arrivalDate) : dep;
+      if (dep < journeyStart || arr > journeyEnd) {
+        warning(`Transport dates must fall between journey ${selectedJourney.startDate} and ${selectedJourney.endDate}`);
+        return;
+      }
     }
 
     try {
@@ -2018,7 +2083,7 @@ function App() {
               {/* New Journey Button */}
               <button
                 onClick={() => setShowNewJourneyForm(true)}
-                className="gh-btn-primary"
+                className="gh-btn-primary btn-glow-green"
                 disabled={loading}
               >
                 <Plus className="w-5 h-5" />
@@ -2295,21 +2360,25 @@ function App() {
               </div>
               <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2">
                 {loading && journeys.length === 0 ? (
-                  <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-8">
-                    Loading journeys...
-                  </p>
+                  <div className="space-y-3">
+                    {[1,2,3].map(i => (
+                      <div key={i} className="skeleton h-24 rounded-xl" />
+                    ))}
+                  </div>
                 ) : journeys.length === 0 ? (
-                  <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-8">
-                    No journeys yet. Create your first journey!
-                  </p>
+                  <div className="flex flex-col items-center justify-center py-10 text-center animate-slide-up-in">
+                    <div className="text-4xl mb-3 animate-float">🗺️</div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-[#ffffff] mb-1">No journeys yet</p>
+                    <p className="text-xs text-gray-500 dark:text-[#98989d]">Click <span className="font-semibold text-blue-600 dark:text-[#0a84ff]">+ New Journey</span> to start</p>
+                  </div>
                 ) : (
                   journeys.map((journey) => (
                     <div
                       key={journey.id}
-                      className={`p-4 rounded-lg border transition-all ${
+                      className={`journey-card-item animate-slide-up-in stagger-item p-4 rounded-xl border ${
                         selectedJourney?.id === journey.id
-                          ? 'bg-gray-100 dark:bg-[#3f3f44] border-gray-300 dark:border-[#48484a]'
-                          : 'bg-gray-50 dark:bg-[#1c1c1e] border-gray-200 dark:border-[#38383a] hover:border-gray-300 dark:hover:border-[#48484a]'
+                          ? 'journey-card-selected bg-blue-50 dark:bg-[#1a1d2e] border-blue-300 dark:border-[#0a84ff]/40'
+                          : 'bg-gray-50 dark:bg-[#1c1c1e] border-gray-200 dark:border-[#38383a] cursor-pointer'
                       }`}
                     >
                       <div
@@ -2524,13 +2593,15 @@ function App() {
                 onMapClick={selectedJourney ? handleMapClick : undefined}
                 center={
                   // Use newStop coordinates if available (for geocoding), otherwise use first stop
-                  newStop.latitude && newStop.longitude
-                    ? [newStop.latitude, newStop.longitude]
-                    : selectedJourney?.stops && selectedJourney.stops.length > 0
-                    ? [
-                        selectedJourney.stops[0].latitude,
-                        selectedJourney.stops[0].longitude,
-                      ]
+                  newStop.latitude != null && newStop.longitude != null
+                    ? ([newStop.latitude, newStop.longitude] as [number, number])
+                    : selectedJourney?.stops && selectedJourney.stops.length > 0 &&
+                      selectedJourney.stops[0].latitude != null &&
+                      selectedJourney.stops[0].longitude != null
+                    ? ([
+                        selectedJourney.stops[0].latitude!,
+                        selectedJourney.stops[0].longitude!,
+                      ] as [number, number])
                     : undefined
                 }
                 journeyCurrency={selectedJourney?.currency}
@@ -2540,7 +2611,7 @@ function App() {
 
             {/* Journey Details */}
             {selectedJourney ? (
-              <div className="gh-card">
+              <div key={selectedJourney.id} className="gh-card animate-slide-up-in">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff]">{selectedJourney.title}</h2>
@@ -2594,7 +2665,7 @@ function App() {
                         <p className="text-sm text-gray-600 dark:text-[#98989d]">No checklist items yet.</p>
                       ) : (
                         (selectedJourney!.checklist || []).map(item => (
-                          <div key={item.id} className="flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
+                          <div key={item.id} className="checklist-item flex items-center justify-between bg-gray-50 dark:bg-[#1c1c1e] p-2 rounded-md border border-gray-200 dark:border-[#38383a]">
                             <div className="flex items-center gap-3">
                               <div className="flex items-center gap-2">
                                 <PaymentCheckbox id={`check-bought-${item.id}`} checked={item.bought || false} onChange={() => toggleChecklistBought(item.id)} label="Bought" />
@@ -2649,10 +2720,10 @@ function App() {
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-[#ffffff]">Stops</h3>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setImportModalOpen(true)} className="gh-btn-secondary text-sm" disabled={!selectedJourney || loading} title="Import stops from map">
+                      {/* <button onClick={() => setImportModalOpen(true)} className="gh-btn-secondary text-sm" disabled={!selectedJourney || loading} title="Import stops from map">
                         <DownloadCloud className="w-4 h-4" />
                         Import
-                      </button>
+                      </button> */}
 
                       <button
                         onClick={() => setShowStopForm(true)}
@@ -2667,7 +2738,7 @@ function App() {
                   <div className={`space-y-3 transition-collapse overflow-hidden ${stopsOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!stopsOpen}>
                       { (selectedJourney?.stops || []).length > 0 ? (
                         (selectedJourney?.stops || []).map((stop, index) => (
-                          <div key={stop.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                          <div key={stop.id ?? index} className="stop-card animate-slide-up-in stagger-item bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-xl border border-gray-200 dark:border-[#38383a]">
                             <div className="flex items-start gap-3">
                               <MapPin className="w-5 h-5 text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
@@ -2690,8 +2761,8 @@ function App() {
                                           setPendingFile(null);
                                           setUploadingAttachment(null);
                                           if (stopFileRef.current) stopFileRef.current.value = '';
-                                        } catch (error) {
-                                          console.error('Failed to fetch stop:', error);
+                                        } catch (err) {
+                                          console.error('Failed to fetch stop:', err);
                                           error('Failed to load stop data');
                                         }
                                       }}
@@ -2830,7 +2901,11 @@ function App() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-sm text-gray-600 dark:text-[#98989d] text-center py-4">No stops yet. Click on the map to add your first stop!</p>
+                        <div className="flex flex-col items-center py-6 text-center">
+                          <div className="text-3xl mb-2">📍</div>
+                          <p className="text-sm text-gray-600 dark:text-[#98989d]">No stops yet.</p>
+                          <p className="text-xs text-gray-400 dark:text-[#636366] mt-1">Click on the map to add your first stop</p>
+                        </div>
                       )}
                     </div>
 
@@ -2860,7 +2935,7 @@ function App() {
                   <div className={`space-y-3 transition-collapse overflow-hidden ${transportsOpen ? 'collapse-visible' : 'collapse-hidden'}`} aria-hidden={!transportsOpen}>
                     {selectedJourney.transports && selectedJourney.transports.length > 0 ? (
                       selectedJourney.transports.map((transport, index) => (
-                        <div key={transport.id ?? index} className="bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                        <div key={transport.id ?? index} className="stop-card animate-slide-up-in stagger-item bg-gray-50 dark:bg-[#1c1c1e] p-4 rounded-xl border border-gray-200 dark:border-[#38383a]">
                           <div className="flex items-start gap-3">
                             <div className="text-blue-600 dark:text-[#0a84ff] mt-1 flex-shrink-0">
                               {getTransportIcon(transport.type)}
@@ -3085,7 +3160,7 @@ function App() {
       {/* New Journey Modal */}
       {showNewJourneyForm && (
         <div className="gh-modal-overlay" onClick={() => setShowNewJourneyForm(false)}>
-          <div className="gh-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="gh-modal animate-bounce-in" onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-[#ffffff] mb-6">Create New Journey</h2>
               <div className="space-y-4">
@@ -3118,22 +3193,22 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Start Date *
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={newJourney.startDate as string}
-                      onChange={(e) => setNewJourney({ ...newJourney, startDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(val) => setNewJourney({ ...newJourney, startDate: val })}
+                      maxDate={newJourney.endDate as string}
+                      placeholder="Select start date"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       End Date *
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={newJourney.endDate as string}
-                      onChange={(e) => setNewJourney({ ...newJourney, endDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(val) => setNewJourney({ ...newJourney, endDate: val })}
+                      minDate={newJourney.startDate as string}
+                      placeholder="Select end date"
                     />
                   </div>
                 </div>
@@ -3212,22 +3287,22 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Start Date *
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateForInput(editingJourney.startDate)}
-                      onChange={(e) => setEditingJourney({ ...editingJourney, startDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(val) => setEditingJourney({ ...editingJourney, startDate: val })}
+                      maxDate={formatDateForInput(editingJourney.endDate)}
+                      placeholder="Select start date"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       End Date *
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateForInput(editingJourney.endDate)}
-                      onChange={(e) => setEditingJourney({ ...editingJourney, endDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(val) => setEditingJourney({ ...editingJourney, endDate: val })}
+                      minDate={formatDateForInput(editingJourney.startDate)}
+                      placeholder="Select end date"
                     />
                   </div>
                 </div>
@@ -3415,22 +3490,24 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={newStop.arrivalDate as string}
-                      onChange={(e) => setNewStop({ ...newStop, arrivalDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(v) => setNewStop({ ...newStop, arrivalDate: v })}
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      placeholder="Arrival date"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={newStop.departureDate as string}
-                      onChange={(e) => setNewStop({ ...newStop, departureDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(v) => setNewStop({ ...newStop, departureDate: v })}
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      placeholder="Departure date"
                     />
                   </div>
                 </div>
@@ -3497,19 +3574,6 @@ function App() {
                       onChange={(e) => setNewStop({ ...newStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
-                    {/* Live conversion to journey main currency */}
-                    {((newStop.accommodationPrice || 0) > 0) && (
-                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
-                        {(() => {
-                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
-                          const from = newStop.accommodationCurrency || mainCurr;
-                          if (from === mainCurr) return null;
-                          const conv = convertAmount(newStop.accommodationPrice || 0, from, mainCurr);
-                          if (conv == null) return <span>≈ conversion not available</span>;
-                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
-                        })()}
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -3585,7 +3649,7 @@ function App() {
                       </div>
                     );
                   })()}
-                <div className="bg-gray-50 dark:bg-[#1c1c1e] p-3 rounded-lg border border-gray-200 dark:border-[#38383a]">
+                <div className="mt-[15px] bg-gray-50 dark:bg-[#1c1c1e] p-3 rounded-lg border border-gray-200 dark:border-[#38383a]">
                   <p className="text-sm text-gray-600 dark:text-[#98989d]">
                     📍 Coordinates: {newStop.latitude?.toFixed(4)}, {newStop.longitude?.toFixed(4)}
                   </p>
@@ -3710,22 +3774,24 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateForInput(editingStop.arrivalDate)}
-                      onChange={(e) => setEditingStop({ ...editingStop, arrivalDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(v) => setEditingStop({ ...editingStop, arrivalDate: v })}
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      placeholder="Arrival date"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure Date
                     </label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formatDateForInput(editingStop.departureDate)}
-                      onChange={(e) => setEditingStop({ ...editingStop, departureDate: e.target.value })}
-                      className="gh-input"
+                      onChange={(v) => setEditingStop({ ...editingStop, departureDate: v })}
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      placeholder="Departure date"
                     />
                   </div>
                 </div>
@@ -3797,23 +3863,6 @@ function App() {
                       onChange={(e) => setEditingStop({ ...editingStop, accommodationPrice: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
-                    {((editingStop?.accommodationPrice || 0) > 0) && (
-                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
-                        {(() => {
-                          const mainCurr = editingJourney?.currency || selectedJourney?.currency || newJourney.currency || 'PLN';
-                          const from = editingStop?.accommodationCurrency || mainCurr;
-                          if (from === mainCurr) return null;
-                          const stored = getStoredConverted(editingStop, 'accommodation_price_converted', 'accommodation_price_converted_currency');
-                          if (stored) {
-                            const value = stored.currency === mainCurr ? stored.value : (convertAmount(stored.value, stored.currency, mainCurr) ?? stored.value);
-                            return <span>≈ {value.toFixed(2)} {mainCurr}</span>;
-                          }
-                          const conv = convertAmount(editingStop!.accommodationPrice || 0, from, mainCurr);
-                          if (conv == null) return <span>≈ conversion not available</span>;
-                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
-                        })()}
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -4008,51 +4057,33 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure *
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateInput
                       value={newTransport.departureDate as string}
-                      onChange={e => {
-                        let val = e.target.value;
-                        // Allow user to type with space instead of T
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
+                      onChange={v => {
+                        const updated = { ...newTransport, departureDate: v };
+                        // auto-reset arrival when it would end up before departure
+                        if (v && updated.arrivalDate && new Date(v) > new Date(updated.arrivalDate)) {
+                          updated.arrivalDate = v;
                         }
-                        setNewTransport({ ...newTransport, departureDate: val });
+                        setNewTransport(updated);
                       }}
-                      onBlur={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                          setNewTransport(prev => ({ ...prev, departureDate: val }));
-                        }
-                      }}
-                      className="gh-input"
-                      placeholder="YYYY-MM-DD HH:MM"
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      showTime
+                      placeholder="Departure"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival *
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateInput
                       value={newTransport.arrivalDate as string}
-                      onChange={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                        }
-                        setNewTransport({ ...newTransport, arrivalDate: val });
-                      }}
-                      onBlur={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                          setNewTransport(prev => ({ ...prev, arrivalDate: val }));
-                        }
-                      }}
-                      className="gh-input"
-                      placeholder="YYYY-MM-DD HH:MM"
+                      onChange={v => setNewTransport({ ...newTransport, arrivalDate: v })}
+                      minDate={newTransport.departureDate ? newTransport.departureDate as string : (selectedJourney ? toYMD(selectedJourney.startDate) : undefined)}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      showTime
+                      placeholder="Arrival"
                     />
                   </div>
                 </div>
@@ -4068,18 +4099,6 @@ function App() {
                       onChange={(e) => setNewTransport({ ...newTransport, price: parseFloat(e.target.value) || 0 })}
                       className="gh-input"
                     />
-                    {((newTransport.price || 0) > 0) && (
-                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-1">
-                        {(() => {
-                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
-                          const from = newTransport.currency || mainCurr;
-                          if (from === mainCurr) return null;
-                          const conv = convertAmount(newTransport.price || 0, from, mainCurr);
-                          if (conv == null) return <span>≈ conversion not available</span>;
-                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
-                        })()}
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
@@ -4258,50 +4277,33 @@ function App() {
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Departure *
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateInput
                       value={formatDateTimeForInput(editingTransport.departureDate)}
-                      onChange={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
+                      onChange={v => {
+                        const updated = { ...editingTransport, departureDate: v };
+                        // auto-reset arrival when it would end up before departure
+                        if (v && updated.arrivalDate && new Date(v) > new Date(updated.arrivalDate)) {
+                          updated.arrivalDate = v;
                         }
-                        setEditingTransport({ ...editingTransport, departureDate: val });
+                        setEditingTransport(updated);
                       }}
-                      onBlur={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                          if (editingTransport) setEditingTransport({ ...editingTransport, departureDate: val });
-                        }
-                      }}
-                      className="gh-input"
-                      placeholder="YYYY-MM-DD HH:MM"
+                      minDate={selectedJourney ? toYMD(selectedJourney.startDate) : undefined}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      showTime
+                      placeholder="Departure"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 dark:text-[#ffffff] mb-2">
                       Arrival *
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateInput
                       value={formatDateTimeForInput(editingTransport.arrivalDate)}
-                      onChange={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                        }
-                        setEditingTransport({ ...editingTransport, arrivalDate: val });
-                      }}
-                      onBlur={e => {
-                        let val = e.target.value;
-                        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-                          val = val.replace(' ', 'T');
-                          if (editingTransport) setEditingTransport({ ...editingTransport, arrivalDate: val });
-                        }
-                      }}
-                      className="gh-input"
-                      placeholder="YYYY-MM-DD HH:MM"
+                      onChange={v => setEditingTransport({ ...editingTransport, arrivalDate: v })}
+                      minDate={editingTransport.departureDate ? formatDateTimeForInput(editingTransport.departureDate) : (selectedJourney ? toYMD(selectedJourney.startDate) : undefined)}
+                      maxDate={selectedJourney ? toYMD(selectedJourney.endDate) : undefined}
+                      showTime
+                      placeholder="Arrival"
                     />
                   </div>
                 </div>
@@ -4502,18 +4504,6 @@ function App() {
                       <option value="GBP">GBP</option>
                       <option value="KRW">KRW</option>
                     </select>
-                    {((newAttraction.estimatedCost || 0) > 0) && (
-                      <p className="text-xs text-gray-500 dark:text-[#636366] mt-2">
-                        {(() => {
-                          const mainCurr = newJourney.currency || selectedJourney?.currency || 'PLN';
-                          const from = (newAttraction as any).currency || mainCurr;
-                          if (from === mainCurr) return null;
-                          const conv = convertAmount(newAttraction.estimatedCost || 0, from, mainCurr);
-                          if (conv == null) return <span>≈ conversion not available</span>;
-                          return <span>≈ {conv.toFixed(2)} {mainCurr}</span>;
-                        })()}
-                      </p>
-                    )}
                   </div>
                 </div>
 
