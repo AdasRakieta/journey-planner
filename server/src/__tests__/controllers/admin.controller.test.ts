@@ -50,7 +50,7 @@ describe('adminController approveRegistrationRequest (JSON fallback)', () => {
 
     const req: any = {
       params: { id: request.id.toString() },
-      user: { userId: 999 }, // dummy admin id
+      user: { userId: '999' }, // dummy admin id as string
     };
     const res = makeRes();
 
@@ -79,7 +79,7 @@ describe('adminController approveRegistrationRequest (JSON fallback)', () => {
       created_at: new Date().toISOString(),
     });
 
-    const req: any = { params: { id: request.id.toString() }, user: { userId: 1 } };
+    const req: any = { params: { id: request.id.toString() }, user: { userId: '1' } };
     const res = makeRes();
     await adminController.approveRegistrationRequest(req, res);
     const stored = await jsonStore.findByField('users', 'email', 'nopass@example.com');

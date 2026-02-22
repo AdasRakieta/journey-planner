@@ -6,7 +6,7 @@ let adminController: typeof import('../../controllers/adminController');
 
 // helper to create fake req/res
 function makeReq(body: any = {}, params: any = {}) {
-  return { body, params, user: { userId: 1 } } as any;
+  return { body, params, user: { userId: '1' } } as any;
 }
 function makeRes() {
   const res: any = {};
@@ -47,7 +47,6 @@ describe('end-to-end auth flow (JSON mode)', () => {
     let res = makeRes();
     await authController.registerRequest(req, res);
     expect(res.json).toHaveBeenCalled();
-    console.log('registerRequest response', res.json.mock.calls);
 
     // extract stored pending registration
     const pendings = await jsonStore.findByField('pending_registrations', 'email', email);

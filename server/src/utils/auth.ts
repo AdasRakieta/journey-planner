@@ -24,7 +24,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
 /**
  * Generate JWT access token
  */
-export function generateAccessToken(userId: number, email: string, role: string): string {
+export function generateAccessToken(userId: string, email: string, role: string): string {
   return jwt.sign(
     { userId, email, role },
     JWT_SECRET,
@@ -35,7 +35,7 @@ export function generateAccessToken(userId: number, email: string, role: string)
 /**
  * Generate JWT refresh token
  */
-export function generateRefreshToken(userId: number): string {
+export function generateRefreshToken(userId: string): string {
   return jwt.sign(
     { userId },
     JWT_SECRET,

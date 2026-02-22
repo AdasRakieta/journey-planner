@@ -17,8 +17,6 @@ async function ensureDataDir() {
 async function loadTable(table: string): Promise<any[]> {
   await ensureDataDir();
   const file = tableFile(table);
-  // debug log for path
-  console.log(`jsonStore.loadTable - table=${table} file=${file}`);
   try {
     const txt = await fs.readFile(file, 'utf8');
     return JSON.parse(txt || '[]');
@@ -54,7 +52,6 @@ export async function insert(table: string, row: any) {
   const id = row.id || randomUUID();
   const newRow = { id, ...row };
   all.push(newRow);
-  console.log(`jsonStore.insert - table=${table} rowsBefore=${all.length - 1} rowsAfter=${all.length}`);
   await saveTable(table, all);
   return newRow;
 }
