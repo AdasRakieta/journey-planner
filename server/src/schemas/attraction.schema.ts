@@ -28,7 +28,7 @@ const priorityTypes = ['must', 'should', 'could', 'skip'] as const;
  */
 export const createAttractionSchema = z.object({
   params: z.object({
-    stopId: z.string().regex(/^\d+$/, 'Stop ID must be a number'),
+    stopId: z.string().uuid('Stop ID must be a UUID'),
   }),
   body: z.object({
     name: z.string()
@@ -70,7 +70,7 @@ export const createAttractionSchema = z.object({
  */
 export const updateAttractionSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Attraction ID must be a number'),
+    id: z.string().uuid('Attraction ID must be a UUID'),
   }),
   body: z.object({
     name: z.string().min(1).max(255).optional(),
@@ -107,7 +107,7 @@ export const updateAttractionSchema = z.object({
  */
 export const getAttractionsByStopIdSchema = z.object({
   params: z.object({
-    stopId: z.string().regex(/^\d+$/, 'Stop ID must be a number'),
+    stopId: z.string().uuid('Stop ID must be a UUID'),
   }),
 });
 
@@ -116,6 +116,6 @@ export const getAttractionsByStopIdSchema = z.object({
  */
 export const deleteAttractionSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Attraction ID must be a number'),
+    id: z.string().uuid('Attraction ID must be a UUID'),
   }),
 });

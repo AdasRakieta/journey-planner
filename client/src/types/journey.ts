@@ -1,6 +1,6 @@
 export interface Stop {
-  id?: number;
-  journeyId?: number;
+  id?: string;
+  journeyId?: string;
   city: string;
   country: string;
   addressStreet?: string; // street name
@@ -23,7 +23,7 @@ export interface Stop {
 }
 
 export interface Transport {
-  id?: number;
+  id?: string;
   type: 'flight' | 'train' | 'bus' | 'car' | 'other';
   fromLocation: string;
   toLocation: string;
@@ -39,8 +39,8 @@ export interface Transport {
 }
 
 export interface Attraction {
-  id?: number;
-  stopId?: number;
+  id?: string;
+  stopId?: string;
   name: string;
   description?: string;
   estimatedCost?: number;
@@ -65,10 +65,10 @@ export interface Attraction {
 }
 
 export interface JourneyShare {
-  id: number;
-  journeyId: number;
-  sharedWithUserId?: number;
-  sharedByUserId: number;
+  id: string;
+  journeyId: string;
+  sharedWithUserId?: string;
+  sharedByUserId: string;
   status: 'pending' | 'accepted' | 'rejected';
   invitedEmail?: string;
   invitationToken?: string;
@@ -87,7 +87,7 @@ export interface JourneyShare {
 }
 
 export interface Journey {
-  id?: number;
+  id?: string;
   title: string;
   description?: string;
   startDate: Date | string;
@@ -98,7 +98,7 @@ export interface Journey {
   checklist?: ChecklistItem[];
   totalEstimatedCost?: number;
   currency: string;
-  createdBy?: number;
+  createdBy?: string;
   isShared?: boolean; // Flag indicating if journey is shared with current user
   createdAt?: Date | string;
   updatedAt?: Date | string;

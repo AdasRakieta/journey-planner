@@ -28,7 +28,7 @@ const transportTypes = ['flight', 'train', 'bus', 'car', 'other'] as const;
  */
 export const createTransportSchema = z.object({
   params: z.object({
-    journeyId: z.string().regex(/^\d+$/, 'Journey ID must be a number'),
+    journeyId: z.string().uuid('Journey ID must be a UUID'),
   }),
   body: z.object({
     type: z.enum(transportTypes, {
@@ -70,7 +70,7 @@ export const createTransportSchema = z.object({
  */
 export const updateTransportSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Transport ID must be a number'),
+    id: z.string().uuid('Transport ID must be a UUID'),
   }),
   body: z.object({
     type: z.enum(transportTypes).optional(),

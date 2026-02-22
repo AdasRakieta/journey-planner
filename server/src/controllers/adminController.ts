@@ -263,9 +263,16 @@ export async function getRegistrationRequests(req: Request, res: Response) {
  */
 export async function approveRegistrationRequest(req: Request, res: Response) {
   try {
-    const { id } = req.params;
-    const reqId = parseInt(id);
-    if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
+      const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'Request ID required' });
+
+    // Determine numeric id for DB mode, keep string for JSON fallback
+    let reqId: any = id;
+    if (DB_AVAILABLE) {
+      const num = parseInt(id);
+      if (isNaN(num)) return res.status(400).json({ error: 'Invalid request ID' });
+      reqId = num;
+    }
 
     // Find request
     if (DB_AVAILABLE) {

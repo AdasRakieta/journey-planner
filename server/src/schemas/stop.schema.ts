@@ -23,7 +23,7 @@ const dateStringSchema = z.string()
  */
 export const createStopSchema = z.object({
   params: z.object({
-    journeyId: z.string().regex(/^\d+$/, 'Journey ID must be a number'),
+    journeyId: z.string().uuid('Journey ID must be a UUID'),
   }),
   body: z.object({
     city: z.string()
@@ -73,7 +73,7 @@ export const createStopSchema = z.object({
  */
 export const updateStopSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Stop ID must be a number'),
+    id: z.string().uuid('Stop ID must be a UUID'),
   }),
   body: z.object({
     city: z.string().min(1).max(255).optional(),

@@ -356,9 +356,10 @@ export const deleteStop = async (req: Request, res: Response) => {
       // read stop to get journey_id
       const existing = await jsonStore.getById('stops', stopId);
       if (!existing) return res.status(404).json({ message: 'Stop not found' });
-      // cascade remove attachments and attractions for this stop in json store
+      // cascade remove attractions and attachments for this stop in json store
       await Promise.all([
         ...((await jsonStore.findByField('attractions','stop_id',stopId))||[]).map((a:any)=>jsonStore.deleteById('attractions',a.id)),
+        ...((await jsonStore.findByField('attachments','stop_id',stopId))||[]).map((att:any)=>jsonStore.deleteById('attachments',att.id)),
       ]);
       const ok = await jsonStore.deleteById('stops', stopId);
       if (!ok) return res.status(404).json({ message: 'Stop not found' });

@@ -49,16 +49,22 @@ Attachment.init(
     journeyId: {
       type: DataTypes.UUID,
       allowNull: true,
+      references: { model: 'journeys', key: 'id' },
+      onDelete: 'CASCADE',
       field: 'journey_id',
     },
     stopId: {
       type: DataTypes.UUID,
       allowNull: true,
+      references: { model: 'stops', key: 'id' },
+      onDelete: 'CASCADE',
       field: 'stop_id',
     },
     transportId: {
       type: DataTypes.UUID,
       allowNull: true,
+      references: { model: 'transports', key: 'id' },
+      onDelete: 'CASCADE',
       field: 'transport_id',
     },
     filename: {

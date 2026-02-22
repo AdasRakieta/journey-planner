@@ -1,7 +1,7 @@
 [
   {
-    "id": 1,
-    "journey_id": 1,
+    "id": "a1f3e4d6-7c8b-4a9b-8d2e-1f0a12345678",
+    "journey_id": "e7fe9af0-5d6a-4c34-9b24-6c3a8b4b2d1f",
     "city": "Paris",
     "country": "France",
     "latitude": 48.856613,
@@ -16,8 +16,8 @@
     "is_paid": false
   },
   {
-    "id": 2,
-    "journey_id": 1,
+    "id": "b2c4d6e8-9f0a-4b1c-8d2e-3f4a56789012",
+    "journey_id": "e7fe9af0-5d6a-4c34-9b24-6c3a8b4b2d1f",
     "city": "Rome",
     "country": "Italy",
     "latitude": 41.902782,

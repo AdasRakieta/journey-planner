@@ -586,15 +586,23 @@ export const updateJourney = async (req: Request, res: Response) => {
 
 export const deleteJourney = async (req: Request, res: Response) => {
   try {
-    const journeyId = parseInt(req.params.id);
+    const journeyId = req.params.id as string;
     if (!DB_AVAILABLE) {
       // cascade delete related data in JSON store
+      // first gather transports and related attachments to cleanup
+      const transports = await jsonStore.findByField('transports','journey_id',journeyId);
+      const transportAttachmentDeletes: Promise<boolean>[] = [];
+      for (const t of transports) {
+        const tas = await jsonStore.findByField('transport_attachments','transport_id',t.id);
+        transportAttachmentDeletes.push(...tas.map((ta:any)=>jsonStore.deleteById('transport_attachments', ta.id)));
+      }
       await Promise.all([
         ...(await jsonStore.findByField('stops','journey_id',journeyId)).map((s:any)=>jsonStore.deleteById('stops',s.id)),
-        ...(await jsonStore.findByField('transports','journey_id',journeyId)).map((t:any)=>jsonStore.deleteById('transports',t.id)),
+        ...transports.map((t:any)=>jsonStore.deleteById('transports',t.id)),
         ...(await jsonStore.findByField('attractions','journey_id',journeyId)).map((a:any)=>jsonStore.deleteById('attractions',a.id)),
         ...(await jsonStore.findByField('journey_shares','journey_id',journeyId)).map((js:any)=>jsonStore.deleteById('journey_shares',js.id)),
-        ...(await jsonStore.findByField('attachments','journey_id',journeyId)).map((att:any)=>jsonStore.deleteById('attachments',att.id))
+        ...(await jsonStore.findByField('attachments','journey_id',journeyId)).map((att:any)=>jsonStore.deleteById('attachments',att.id)),
+        ...transportAttachmentDeletes
       ]);
       const ok = await jsonStore.deleteById('journeys', journeyId);
       if (!ok) return res.status(404).json({ message: 'Not found' });
@@ -613,7 +621,7 @@ export const deleteJourney = async (req: Request, res: Response) => {
 
 export const calculateTotalCost = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = req.params.id as string;
     if (!DB_AVAILABLE) {
       const journey = await jsonStore.getById('journeys', id);
       if (!journey) return res.status(404).json({ message: 'Journey not found' });

@@ -31,7 +31,7 @@ export const journeyService = {
     return Array.isArray(result) ? result : result.data || [];
   },
 
-  async getJourneyById(id: number): Promise<Journey> {
+  async getJourneyById(id: string): Promise<Journey> {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/journeys/${id}`, {
       headers: {
@@ -52,7 +52,7 @@ export const journeyService = {
     return response.json();
   },
 
-  async updateJourney(id: number, journey: Partial<Journey>): Promise<Journey> {
+  async updateJourney(id: string, journey: Partial<Journey>): Promise<Journey> {
     const response = await fetch(`${API_URL}/journeys/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -62,7 +62,7 @@ export const journeyService = {
     return response.json();
   },
 
-  async deleteJourney(id: number): Promise<void> {
+  async deleteJourney(id: string): Promise<void> {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/journeys/${id}`, {
       method: 'DELETE',
@@ -73,7 +73,7 @@ export const journeyService = {
     if (!response.ok) throw new Error('Failed to delete journey');
   },
 
-  async calculateTotalCost(id: number): Promise<{ totalCost: number; currency: string }> {
+  async calculateTotalCost(id: string): Promise<{ totalCost: number; currency: string }> {
     const response = await fetch(`${API_URL}/journeys/${id}/calculate-cost`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -111,7 +111,7 @@ export const journeyService = {
 
 // Stop Service
 export const stopService = {
-  async getStopsByJourneyId(journeyId: number) {
+  async getStopsByJourneyId(journeyId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
       headers: {
@@ -121,7 +121,7 @@ export const stopService = {
     if (!response.ok) throw new Error('Failed to fetch stops');
     return response.json();
   },
-  async getStopsByJourneyIdPaged(journeyId: number, page: number = 1, pageSize: number = 25, q: string = '') {
+  async getStopsByJourneyIdPaged(journeyId: string, page: number = 1, pageSize: number = 25, q: string = '') {
     const token = localStorage.getItem('accessToken');
     const params = new URLSearchParams();
     params.set('page', String(page));
@@ -136,7 +136,7 @@ export const stopService = {
     return response.json();
   },
 
-  async createStop(journeyId: number, stop: any) {
+  async createStop(journeyId: string, stop: any) {
       const response = await fetch(`${API_URL}/stops/journey/${journeyId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -146,7 +146,7 @@ export const stopService = {
     return response.json();
   },
 
-  async updateStop(stopId: number, stop: any) {
+  async updateStop(stopId: string, stop: any) {
       const response = await fetch(`${API_URL}/stops/${stopId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -156,7 +156,7 @@ export const stopService = {
     return response.json();
   },
 
-  async getStopById(stopId: number) {
+  async getStopById(stopId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/stops/${stopId}`, {
       headers: {
@@ -167,7 +167,7 @@ export const stopService = {
     return response.json();
   },
 
-  async deleteStop(stopId: number) {
+  async deleteStop(stopId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/stops/${stopId}`, {
       method: 'DELETE',
@@ -188,7 +188,7 @@ export const stopService = {
     return response.json();
   },
 
-  async updatePaymentStatus(stopId: number, isPaid: boolean) {
+  async updatePaymentStatus(stopId: string, isPaid: boolean) {
     const response = await fetch(`${API_URL}/stops/${stopId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -201,7 +201,7 @@ export const stopService = {
 
 // Attraction Service
 export const attractionService = {
-  async getAttractionsByStopId(stopId: number) {
+  async getAttractionsByStopId(stopId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/attractions/stop/${stopId}`, {
       headers: {
@@ -212,7 +212,7 @@ export const attractionService = {
     return response.json();
   },
 
-  async createAttraction(stopId: number, attraction: any) {
+  async createAttraction(stopId: string, attraction: any) {
       const response = await fetch(`${API_URL}/attractions/stop/${stopId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -261,7 +261,7 @@ export const attractionService = {
   },
 
   // Reorder attractions within a stop
-  async reorderAttractions(stopId: number, orderedIds: number[]) {
+  async reorderAttractions(stopId: string, orderedIds: string[]) {
     const response = await fetch(`${API_URL}/attractions/stop/${stopId}/reorder`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
@@ -272,7 +272,7 @@ export const attractionService = {
   },
 
   // Move attraction to another stop
-  async moveAttraction(attractionId: number, newStopId: number, orderIndex?: number) {
+  async moveAttraction(attractionId: string, newStopId: string, orderIndex?: number) {
     const response = await fetch(`${API_URL}/attractions/${attractionId}/move`, {
       method: 'PATCH',
       headers: getAuthHeaders(),
@@ -324,7 +324,7 @@ export const attractionService = {
 
 // Transport Service
 export const transportService = {
-  async getTransportsByJourneyId(journeyId: number) {
+  async getTransportsByJourneyId(journeyId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/transports/journey/${journeyId}`, {
       headers: {
@@ -335,7 +335,7 @@ export const transportService = {
     return response.json();
   },
 
-  async createTransport(journeyId: number, transport: any) {
+  async createTransport(journeyId: string, transport: any) {
       const response = await fetch(`${API_URL}/transports/journey/${journeyId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -345,7 +345,7 @@ export const transportService = {
     return response.json();
   },
 
-  async updateTransport(transportId: number, transport: any) {
+  async updateTransport(transportId: string, transport: any) {
       const response = await fetch(`${API_URL}/transports/${transportId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -355,7 +355,7 @@ export const transportService = {
     return response.json();
   },
 
-  async deleteTransport(transportId: number) {
+  async deleteTransport(transportId: string) {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_URL}/transports/${transportId}`, {
       method: 'DELETE',

@@ -22,7 +22,9 @@ describe('end-to-end auth flow (JSON mode)', () => {
     // import db first and force JSON mode
     db = await import('../../config/db');
     Object.defineProperty(db, 'DB_AVAILABLE', { get: () => false });
-    // now import controllers which will see modified db
+    // debug check
+    console.log('db.DB_AVAILABLE after override', db.DB_AVAILABLE);
+    console.log('descriptor', Object.getOwnPropertyDescriptor(db, 'DB_AVAILABLE'));    // now import controllers which will see modified db
     authController = await import('../../controllers/authController');
     adminController = await import('../../controllers/adminController');
 
@@ -45,6 +47,7 @@ describe('end-to-end auth flow (JSON mode)', () => {
     let res = makeRes();
     await authController.registerRequest(req, res);
     expect(res.json).toHaveBeenCalled();
+    console.log('registerRequest response', res.json.mock.calls);
 
     // extract stored pending registration
     const pendings = await jsonStore.findByField('pending_registrations', 'email', email);

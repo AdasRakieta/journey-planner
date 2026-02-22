@@ -51,7 +51,7 @@ export const createJourneySchema = z.object({
  */
 export const updateJourneySchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Journey ID must be a number'),
+    id: z.string().uuid('Journey ID must be a UUID'),
   }),
   body: z.object({
     title: z.string()
@@ -96,7 +96,7 @@ export const getJourneysSchema = z.object({
  */
 export const getJourneyByIdSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Journey ID must be a number'),
+    id: z.string().uuid('Journey ID must be a UUID'),
   }),
 });
 
@@ -105,6 +105,6 @@ export const getJourneyByIdSchema = z.object({
  */
 export const deleteJourneySchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, 'Journey ID must be a number'),
+    id: z.string().uuid('Journey ID must be a UUID'),
   }),
 });
