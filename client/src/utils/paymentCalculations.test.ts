@@ -19,28 +19,28 @@ const noStops: Stop[] = [];
 const noTransports: Transport[] = [];
 
 const singleStop: Stop[] = [
-  { id: 1, accommodationPrice: 200, isPaid: false, attractions: [] },
+  { id: '1', accommodationPrice: 200, isPaid: false, attractions: [] },
 ];
 
 const stopWithAttractions: Stop[] = [
   {
-    id: 2,
+    id: '2',
     accommodationPrice: 150,
     isPaid: true,
     attractions: [
-      { id: 10, estimatedCost: 30, isPaid: true },
-      { id: 11, estimatedCost: 20, isPaid: false },
+      { id: '10', estimatedCost: 30, isPaid: true },
+      { id: '11', estimatedCost: 20, isPaid: false },
     ],
   },
 ];
 
 const paidStop: Stop[] = [
-  { id: 3, accommodationPrice: 100, isPaid: true, attractions: [] },
+  { id: '3', accommodationPrice: 100, isPaid: true, attractions: [] },
 ];
 
 const transports: Transport[] = [
-  { id: 1, price: 80, isPaid: true },
-  { id: 2, price: 50, isPaid: false },
+  { id: '1', price: 80, isPaid: true },
+  { id: '2', price: 50, isPaid: false },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ describe('calculateTotalCost', () => {
   });
 
   it('obsługuje noclegi bez wartości (undefined)', () => {
-    const stops: Stop[] = [{ id: 1, isPaid: false, attractions: [] }];
+    const stops: Stop[] = [{ id: '1', isPaid: false, attractions: [] }];
     expect(calculateTotalCost(stops, noTransports)).toBe(0);
   });
 
@@ -131,9 +131,9 @@ describe('calculatePaidAmount', () => {
 describe('calculateAmountDue', () => {
   it('zwraca 0 gdy wszystko opłacone', () => {
     const fullPaidStops: Stop[] = [
-      { id: 1, accommodationPrice: 50, isPaid: true, attractions: [] },
+      { id: '1', accommodationPrice: 50, isPaid: true, attractions: [] },
     ];
-    const fullPaidTransports: Transport[] = [{ id: 1, price: 50, isPaid: true }];
+    const fullPaidTransports: Transport[] = [{ id: '1', price: 50, isPaid: true }];
     expect(calculateAmountDue(fullPaidStops, fullPaidTransports)).toBe(0);
   });
 
@@ -144,7 +144,7 @@ describe('calculateAmountDue', () => {
 
   it('nigdy nie zwraca wartości ujemnej (max 0)', () => {
     // Edge-case: paid > total nie powinien się zdarzyć, ale zabezpieczamy
-    const stops: Stop[] = [{ id: 1, accommodationPrice: 0, isPaid: true, attractions: [] }];
+    const stops: Stop[] = [{ id: '1', accommodationPrice: 0, isPaid: true, attractions: [] }];
     expect(calculateAmountDue(stops, noTransports)).toBeGreaterThanOrEqual(0);
   });
 });
@@ -180,9 +180,9 @@ describe('getPaymentSummary', () => {
 
   it('percentPaid jest zaokrąglony do liczby całkowitej', () => {
     // 1/3 ≈ 33.33% -> 33
-    const stops: Stop[] = [{ id: 1, accommodationPrice: 30, isPaid: false, attractions: [] }];
+    const stops: Stop[] = [{ id: '1', accommodationPrice: 30, isPaid: false, attractions: [] }];
     const trans: Transport[] = [
-      { id: 1, price: 10, isPaid: true },  // płatne 10
+      { id: '1', price: 10, isPaid: true },  // płatne 10
     ];
     const summary = getPaymentSummary(stops, trans);
     // total=40, paid=10, percent=25

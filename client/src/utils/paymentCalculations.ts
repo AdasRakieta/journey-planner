@@ -1,26 +1,26 @@
 // Helper functions for payment calculations
 
 export interface CostItem {
-  id?: number;
+  id?: string;
   cost: number;
   isPaid?: boolean;
 }
 
 export interface Stop {
-  id?: number;
+  id?: string;
   accommodationPrice?: number;
   isPaid?: boolean;
   attractions?: Attraction[];
 }
 
 export interface Transport {
-  id?: number;
+  id?: string;
   price: number;
   isPaid?: boolean;
 }
 
 export interface Attraction {
-  id?: number;
+  id?: string;
   estimatedCost?: number;
   isPaid?: boolean;
 }

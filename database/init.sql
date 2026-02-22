@@ -8,9 +8,13 @@
 
 -- Connect to journey_planner database before running the following
 
+-- UUID support
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; -- generates uuid_generate_v4()
+
+
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
@@ -26,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Journeys table
 CREATE TABLE IF NOT EXISTS journeys (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(255) NOT NULL,
     description TEXT,
     start_date TIMESTAMP NOT NULL,
@@ -40,8 +44,8 @@ CREATE TABLE IF NOT EXISTS journeys (
 
 -- Stops table
 CREATE TABLE IF NOT EXISTS stops (
-    id SERIAL PRIMARY KEY,
-    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    journey_id UUID NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
     city VARCHAR(255) NOT NULL,
     country VARCHAR(255) NOT NULL,
     latitude DECIMAL(10, 8) NOT NULL,
@@ -61,8 +65,8 @@ CREATE TABLE IF NOT EXISTS stops (
 
 -- Transports table
 CREATE TABLE IF NOT EXISTS transports (
-    id SERIAL PRIMARY KEY,
-    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    journey_id UUID NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL CHECK (type IN ('flight', 'train', 'bus', 'car', 'other')),
     from_location VARCHAR(255) NOT NULL,
     to_location VARCHAR(255) NOT NULL,
@@ -79,8 +83,8 @@ CREATE TABLE IF NOT EXISTS transports (
 
 -- Attractions table
 CREATE TABLE IF NOT EXISTS attractions (
-    id SERIAL PRIMARY KEY,
-    stop_id INTEGER NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    stop_id UUID NOT NULL REFERENCES stops(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     estimated_cost DECIMAL(10, 2),
@@ -105,10 +109,10 @@ CREATE TABLE IF NOT EXISTS attractions (
 -- Journey shares (sharing/collaboration on journeys)
 -- Journey shares (new schema compatible with controllers)
 CREATE TABLE IF NOT EXISTS journey_shares (
-    id SERIAL PRIMARY KEY,
-    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    journey_id UUID NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
     -- Legacy column kept for backward compatibility
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     -- New columns used by API
     shared_with_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     shared_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -125,8 +129,8 @@ CREATE TABLE IF NOT EXISTS journey_shares (
 
 -- Ensure columns exist if table was created with legacy schema
 ALTER TABLE journey_shares
-    ADD COLUMN IF NOT EXISTS shared_with_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    ADD COLUMN IF NOT EXISTS shared_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS shared_with_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS shared_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS role VARCHAR(16);
 ALTER TABLE journey_shares
     ALTER COLUMN role SET DEFAULT 'edit',
@@ -142,8 +146,8 @@ ALTER TABLE journey_shares
 
 -- Journey checklist items (per-journey todo/checklist)
 CREATE TABLE IF NOT EXISTS journey_checklist (
-    id SERIAL PRIMARY KEY,
-    journey_id INTEGER NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    journey_id UUID NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
     item TEXT NOT NULL,
     is_done BOOLEAN DEFAULT FALSE,
     sort_order INTEGER DEFAULT 0,
@@ -152,14 +156,14 @@ CREATE TABLE IF NOT EXISTS journey_checklist (
 
 -- Transport attachments table
 CREATE TABLE IF NOT EXISTS transport_attachments (
-    id SERIAL PRIMARY KEY,
-    transport_id INTEGER NOT NULL REFERENCES transports(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transport_id UUID NOT NULL REFERENCES transports(id) ON DELETE CASCADE,
     filename VARCHAR(255) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     file_path TEXT NOT NULL,
     file_size INTEGER NOT NULL,
     mime_type VARCHAR(100) NOT NULL,
-    uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

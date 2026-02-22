@@ -246,7 +246,7 @@ const ImportMapModal: React.FC<Props> = ({ isOpen, onClose, onImportComplete, se
     for (let i = 0; i < parsedFeatures.length; i++) {
       const pf = parsedFeatures[i];
       const assign = assignments[i];
-      let targetStopId: number | null = null;
+      let targetStopId: string | null = null;
       if (assign === 'new') {
         // construct payload with as many fields as possible
         const payload: any = {

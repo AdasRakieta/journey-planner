@@ -176,12 +176,12 @@ export class Stop extends Model<StopAttributes, StopCreationAttributes> implemen
 Stop.init(
   {
     id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
     journeyId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       references: {
         model: 'journeys',
         key: 'id',
@@ -274,12 +274,12 @@ export class Transport extends Model<TransportAttributes, TransportCreationAttri
 Transport.init(
   {
     id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
     journeyId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       references: {
         model: 'journeys',
         key: 'id',

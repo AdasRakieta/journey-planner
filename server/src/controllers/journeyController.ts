@@ -1067,7 +1067,7 @@ export const acceptInvitation = async (req: Request, res: Response) => {
 // Reject journey invitation
 export const rejectInvitation = async (req: Request, res: Response) => {
   try {
-    const invitationId = parseInt(req.params.id);
+    const invitationId = req.params.id as string;
     const userId = req.user?.userId;
 
     if (!userId) {

@@ -124,7 +124,7 @@ describe('Bezpieczeństwo – Manipulacja tokenami JWT', () => {
     // Importujemy jwt ręcznie żeby podpisać innym kluczem
     const jwt = require('jsonwebtoken');
     const maliciousToken = jwt.sign(
-      { userId: 1, email: 'admin@hack.com', role: 'admin' },
+      { userId: '1', email: 'admin@hack.com', role: 'admin' },
       'wrong-secret-key'
     );
     expect(() => verifyToken(maliciousToken)).toThrow();
@@ -133,7 +133,7 @@ describe('Bezpieczeństwo – Manipulacja tokenami JWT', () => {
   it('odrzuca token z wygasłym czasem ekspiracji', () => {
     const jwt = require('jsonwebtoken');
     const expiredToken = jwt.sign(
-      { userId: 1, email: 'user@test.com', role: 'user' },
+      { userId: '1', email: 'user@test.com', role: 'user' },
       process.env.JWT_SECRET,
       { expiresIn: '-1s' } // wygasł 1 sekundę temu
     );
@@ -141,7 +141,7 @@ describe('Bezpieczeństwo – Manipulacja tokenami JWT', () => {
   });
 
   it('odrzuca token z manipulowaną rolą (zmiana payload bez resygnowania)', () => {
-    const token = generateAccessToken(1, 'user@test.com', 'user');
+    const token = generateAccessToken('1', 'user@test.com', 'user');
     const parts = token.split('.');
     // Podmień payload na admin
     const adminPayload = Buffer.from(
@@ -170,7 +170,7 @@ describe('Bezpieczeństwo – Manipulacja tokenami JWT', () => {
   });
 
   it('prawidłowy token przechodzi weryfikację', () => {
-    const token = generateAccessToken(5, 'legit@test.com', 'user');
+    const token = generateAccessToken('5', 'legit@test.com', 'user');
     const decoded = verifyToken(token);
     expect(decoded.userId).toBe(5);
     expect(decoded.role).toBe('user');

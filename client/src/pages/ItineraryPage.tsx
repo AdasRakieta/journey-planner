@@ -442,13 +442,13 @@ const StopSection: React.FC<{
   onPriorityChange: (attractionId: number, priority: PriorityType) => void;
   onDragStart: (e: React.DragEvent, attraction: Attraction) => void;
   onDragEnd: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, stopId: number, index: number, targetDate?: string | null) => void;
+  onDrop: (e: React.DragEvent, stopId: string, index: number, targetDate?: string | null) => void;
   onDragOver: (e: React.DragEvent) => void;
   draggingAttraction: Attraction | null;
-  dragOverStopId: number | null;
-  onOptimize: (stopId: number) => void;
-  onShowMap: (stopId: number) => void;
-  onAddAttraction?: (stopId: number) => void;
+  dragOverStopId: string | null;
+  onOptimize: (stopId: string) => void;
+  onShowMap: (stopId: string) => void;
+  onAddAttraction?: (stopId: string) => void;
   onEditAttraction?: (attraction: Attraction) => void;
   onDeleteAttraction?: (id: number) => void;
 }> = ({
@@ -1188,11 +1188,11 @@ const ItineraryPage: React.FC = () => {
     setDragOverStopId(null);
   }, []);
 
-  const handleDragOver = useCallback((stopId: number) => {
+  const handleDragOver = useCallback((stopId: string) => {
     setDragOverStopId(stopId);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent, targetStopId: number, targetIndex: number, targetDate?: string | null) => {
+  const handleDrop = useCallback((e: React.DragEvent, targetStopId: string, targetIndex: number, targetDate?: string | null) => {
     e.preventDefault();
     
     if (!draggingAttraction) return;
@@ -1269,7 +1269,7 @@ const ItineraryPage: React.FC = () => {
         id: number;
         orderIndex: number;
         priority: PriorityType;
-        stopId: number;
+        stopId: string;
       }> = [];
       
       for (const [stopId, attractions] of Object.entries(attractionsByStop)) {
@@ -1303,7 +1303,7 @@ const ItineraryPage: React.FC = () => {
   };
 
   // Toggle stop expansion
-  const toggleStop = (stopId: number) => {
+  const toggleStop = (stopId: string) => {
     setExpandedStops(prev => {
       const next = new Set(prev);
       if (next.has(stopId)) {
@@ -1322,7 +1322,7 @@ const ItineraryPage: React.FC = () => {
   };
   
   // Optimize route for a stop
-  const handleOptimizeRoute = (stopId: number) => {
+  const handleOptimizeRoute = (stopId: string) => {
     const stop = stops.find(s => s.id === stopId);
     if (!stop) return;
     

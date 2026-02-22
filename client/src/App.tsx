@@ -176,7 +176,7 @@ function App() {
   };
 
   // Find journey id for a stop id from local state cache
-  const journeyIdFromStop = (stopId: number): number | null => {
+  const journeyIdFromStop = (stopId: string): string | null => {
     const j = journeys.find(j => (j.stops || []).some(s => s.id === stopId));
     return j ? (j.id ?? null) : null;
   };
@@ -350,7 +350,7 @@ function App() {
     return () => { mounted = false; };
   }, [selectedJourney?.id]);
 
-  const toggleStopAttachments = (stopId: number) => setOpenStopAttachments(prev => ({ ...prev, [stopId]: !prev[stopId] }));
+  const toggleStopAttachments = (stopId: string) => setOpenStopAttachments(prev => ({ ...prev, [stopId]: !prev[stopId] }));
   const toggleTransportAttachments = (transportId: number) => setOpenTransportAttachments(prev => ({ ...prev, [transportId]: !prev[transportId] }));
 
   const renderAttachmentRow = (att: any) => (
@@ -1486,7 +1486,7 @@ function App() {
     }
   };
 
-  const handleDeleteStop = async (stopId: number) => {
+  const handleDeleteStop = async (stopId: string) => {
     if (!selectedJourney) return;
 
     const confirmed = await confirmHook.confirm({
@@ -1517,7 +1517,7 @@ function App() {
     }
   };
 
-  const handleDeleteAttraction = async (stopId: number, attractionId: number) => {
+  const handleDeleteAttraction = async (stopId: string, attractionId: string) => {
     if (!selectedJourney) return;
 
     const confirmed = await confirmHook.confirm({
@@ -1817,7 +1817,7 @@ function App() {
   };
 
   // Payment status handlers
-  const handleToggleStopPayment = async (stopId: number, currentStatus: boolean) => {
+  const handleToggleStopPayment = async (stopId: string, currentStatus: boolean) => {
     if (!selectedJourney) return;
     
     try {
@@ -1863,7 +1863,7 @@ function App() {
     }
   };
 
-  const handleToggleAttractionPayment = async (stopId: number, attractionId: number, currentStatus: boolean) => {
+  const handleToggleAttractionPayment = async (stopId: string, attractionId: string, currentStatus: boolean) => {
     if (!selectedJourney) return;
     
     try {

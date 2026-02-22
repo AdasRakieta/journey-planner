@@ -64,22 +64,22 @@ describe('comparePassword', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('generateAccessToken / verifyToken', () => {
   it('generuje token JWT z poprawnymi claimami', () => {
-    const token = generateAccessToken(42, 'user@example.com', 'user');
+    const token = generateAccessToken('42', 'user@example.com', 'user');
     expect(token).toBeTruthy();
     const decoded = verifyToken(token);
-    expect(decoded.userId).toBe(42);
+    expect(decoded.userId).toBe('42');
     expect(decoded.email).toBe('user@example.com');
     expect(decoded.role).toBe('user');
   });
 
   it('generuje token dla roli admin', () => {
-    const token = generateAccessToken(1, 'admin@example.com', 'admin');
+    const token = generateAccessToken('1', 'admin@example.com', 'admin');
     const decoded = verifyToken(token);
     expect(decoded.role).toBe('admin');
   });
 
   it('rzuca błąd dla zmodyfikowanego tokenu (tampered)', () => {
-    const token = generateAccessToken(1, 'test@test.com', 'user');
+    const token = generateAccessToken('1', 'test@test.com', 'user');
     const parts = token.split('.');
     // Zmodyfikuj payload (base64)
     const tamperedPayload = Buffer.from('{"userId":99,"email":"hacker@evil.com","role":"admin"}').toString('base64url');
@@ -96,7 +96,7 @@ describe('generateAccessToken / verifyToken', () => {
   });
 
   it('rzuca błąd dla tokenu bez podpisu', () => {
-    const token = generateAccessToken(1, 'test@test.com', 'user');
+    const token = generateAccessToken('1', 'test@test.com', 'user');
     const [header, payload] = token.split('.');
     expect(() => verifyToken(`${header}.${payload}.`)).toThrow();
   });
@@ -107,14 +107,14 @@ describe('generateAccessToken / verifyToken', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('generateRefreshToken', () => {
   it('generuje prawidłowy JWT refresh token', () => {
-    const token = generateRefreshToken(10);
+    const token = generateRefreshToken('10');
     expect(token).toBeTruthy();
     const decoded = verifyToken(token);
-    expect(decoded.userId).toBe(10);
+    expect(decoded.userId).toBe('10');
   });
 
   it('dwa tokeny dla tego samego userId są różne (iat)', () => {
-    const t1 = generateRefreshToken(5);
+    const t1 = generateRefreshToken('5');
     // Wystarczy mały delay lub losowość – sprawdzamy że to string JWT
     expect(t1.split('.')).toHaveLength(3);
   });

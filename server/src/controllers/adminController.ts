@@ -89,9 +89,9 @@ export async function getAllUsers(req: Request, res: Response) {
 export async function deleteUser(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = id; // using UUID string
 
-    if (isNaN(userId)) {
+    if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
@@ -125,9 +125,9 @@ export async function changeUserRole(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    const userId = parseInt(id);
+    const userId = id; // UUID string
 
-    if (isNaN(userId)) {
+    if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
@@ -162,9 +162,9 @@ export async function changeUserRole(req: Request, res: Response) {
 export async function toggleUserActive(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = id; // UUID string
 
-    if (isNaN(userId)) {
+    if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
@@ -216,9 +216,9 @@ export async function getPendingInvitations(req: Request, res: Response) {
 export async function cancelInvitation(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const invitationId = parseInt(id);
+    const invitationId = id; // string
 
-    if (isNaN(invitationId)) {
+    if (!invitationId || typeof invitationId !== 'string') {
       return res.status(400).json({ error: 'Invalid invitation ID' });
     }
 

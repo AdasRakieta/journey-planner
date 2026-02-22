@@ -78,7 +78,7 @@ describe('authenticateToken', () => {
   });
 
   it('wywołuje next() i ustawia req.user dla prawidłowego tokenu', () => {
-    const token = generateAccessToken(7, 'alice@test.com', 'user');
+    const token = generateAccessToken('7', 'alice@test.com', 'user');
     const req = createMockReq({ headers: { authorization: `Bearer ${token}` } });
     const res = createMockRes();
     const next = createMockNext();
@@ -87,14 +87,14 @@ describe('authenticateToken', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(req.user).toBeDefined();
-    expect(req.user?.userId).toBe(7);
+    expect(req.user?.userId).toBe('7');
     expect(req.user?.email).toBe('alice@test.com');
     expect(req.user?.role).toBe('user');
     expect(res.status).not.toHaveBeenCalled();
   });
 
   it('wywołuje next() dla tokenu admina i ustawia role=admin', () => {
-    const token = generateAccessToken(1, 'admin@test.com', 'admin');
+    const token = generateAccessToken('1', 'admin@test.com', 'admin');
     const req = createMockReq({ headers: { authorization: `Bearer ${token}` } });
     const res = createMockRes();
     const next = createMockNext();
@@ -106,7 +106,7 @@ describe('authenticateToken', () => {
   });
 
   it('zwraca 403 dla tokenu z błędnym podpisem (tampered)', () => {
-    const token = generateAccessToken(1, 'test@test.com', 'user');
+    const token = generateAccessToken('1', 'test@test.com', 'user');
     const parts = token.split('.');
     const badToken = `${parts[0]}.${parts[1]}.bad_signature`;
     const req = createMockReq({ headers: { authorization: `Bearer ${badToken}` } });

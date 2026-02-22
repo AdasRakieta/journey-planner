@@ -219,7 +219,7 @@ export const createStop = async (req: Request, res: Response) => {
 // Update stop
 export const updateStop = async (req: Request, res: Response) => {
   try {
-    const stopId = parseInt(req.params.id);
+    const stopId = req.params.id as string;
     // Support partial update for payment status toggle
     if (req.body.isPaid !== undefined && Object.keys(req.body).length === 1) {
       console.log(`✅ Updating stop ${stopId} payment status to:`, req.body.isPaid);
