@@ -266,13 +266,8 @@ export async function approveRegistrationRequest(req: Request, res: Response) {
       const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'Request ID required' });
 
-    // Determine numeric id for DB mode, keep string for JSON fallback
-    let reqId: any = id;
-    if (DB_AVAILABLE) {
-      const num = parseInt(id);
-      if (isNaN(num)) return res.status(400).json({ error: 'Invalid request ID' });
-      reqId = num;
-    }
+    // use string UUID for request id in both JSON and DB modes
+    const reqId = id;
 
     // Find request
     if (DB_AVAILABLE) {
@@ -421,8 +416,8 @@ export async function approveRegistrationRequest(req: Request, res: Response) {
 export async function rejectRegistrationRequest(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const reqId = parseInt(id);
-    if (isNaN(reqId)) return res.status(400).json({ error: 'Invalid request ID' });
+    const reqId = id; // uuid string
+    if (!reqId || typeof reqId !== 'string') return res.status(400).json({ error: 'Invalid request ID' });
 
     if (DB_AVAILABLE) {
       const r = await query('SELECT * FROM registration_requests WHERE id = $1', [reqId]);

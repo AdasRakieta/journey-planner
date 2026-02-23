@@ -551,7 +551,7 @@ export const journeyShareService = {
     const authToken = localStorage.getItem('accessToken');
     const body = isToken 
       ? { token: tokenOrId }
-      : { invitationId: parseInt(tokenOrId) };
+      : { invitationId: tokenOrId };
     
     const response = await fetch(`${API_URL}/journeys/invitations/accept`, {
       method: 'POST',

@@ -15,8 +15,7 @@ function makeRes() {
 
 describe('cascade deletion (JSON fallback)', () => {
   beforeEach(async () => {
-    // force JSON mode
-    const orig = Object.getOwnPropertyDescriptor(db, 'DB_AVAILABLE');
+    // always run JSON mode for these tests
     Object.defineProperty(db, 'DB_AVAILABLE', { get: () => false });
 
     // clear relevant tables
@@ -27,7 +26,6 @@ describe('cascade deletion (JSON fallback)', () => {
         await jsonStore.deleteById(t, r.id);
       }
     }
-    if (orig) Object.defineProperty(db, 'DB_AVAILABLE', orig);
   });
 
   it('deleting a stop removes its attractions and attachments', async () => {
@@ -73,5 +71,20 @@ describe('cascade deletion (JSON fallback)', () => {
     expect((await jsonStore.getAll('journey_shares')).length).toBe(0);
     expect((await jsonStore.getAll('attachments')).length).toBe(0);
     expect((await jsonStore.getAll('transport_attachments')).length).toBe(0);
+  });
+
+  it('invokes DB delete query when running in DB mode', async () => {
+    const orig = Object.getOwnPropertyDescriptor(db, 'DB_AVAILABLE');
+    Object.defineProperty(db, 'DB_AVAILABLE', { get: () => true });
+    const spy = vi.spyOn(db, 'query').mockResolvedValue({ rows: [] } as any);
+
+    const fakeId = '550e8400-e29b-41d4-a716-446655440000';
+    const req: any = { params: { id: fakeId }, app: { get: () => ({ emit: vi.fn() }) } };
+    const res = makeRes();
+    await journeyController.deleteJourney(req as Request, res as Response);
+
+    expect(spy).toHaveBeenCalledWith('DELETE FROM journeys WHERE id = $1', [fakeId]);
+    spy.mockRestore();
+    if (orig) Object.defineProperty(db, 'DB_AVAILABLE', orig);
   });
 });

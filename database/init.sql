@@ -198,7 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_invitation_tokens_email ON invitation_tokens(emai
 
 -- Registration requests queue (pending approvals)
 CREATE TABLE IF NOT EXISTS registration_requests (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) NOT NULL,
     name VARCHAR(255),
     provider VARCHAR(50),

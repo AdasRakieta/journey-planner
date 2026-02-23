@@ -819,7 +819,7 @@ const ItineraryPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [journey, setJourney] = useState<Journey | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
-  const [attractionsByStop, setAttractionsByStop] = useState<Record<number, Attraction[]>>({});
+  const [attractionsByStop, setAttractionsByStop] = useState<Record<string, Attraction[]>>({});
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
   const [hasChanges, setHasChanges] = useState(false);
   
@@ -838,12 +838,12 @@ const ItineraryPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'map' | 'daily'>('list');
   
   // Selected stop for map view
-  const [selectedStopForMap, setSelectedStopForMap] = useState<number | null>(null);
+  const [selectedStopForMap, setSelectedStopForMap] = useState<string | null>(null);
   
   // Attraction management modals
   const [showAddAttractionModal, setShowAddAttractionModal] = useState(false);
   const [showEditAttractionModal, setShowEditAttractionModal] = useState(false);
-  const [selectedStopForAttraction, setSelectedStopForAttraction] = useState<number | null>(null);
+  const [selectedStopForAttraction, setSelectedStopForAttraction] = useState<string | null>(null);
   const [editingAttraction, setEditingAttraction] = useState<Attraction | null>(null);
   const [geocodingEditAttraction, setGeocodingEditAttraction] = useState(false);
   const [geocodingNewAttraction, setGeocodingNewAttraction] = useState(false);
@@ -869,7 +869,7 @@ const ItineraryPage: React.FC = () => {
     setLoading(true);
     try {
       console.log('📡 ItineraryPage: Loading journey data from API...');
-      const journeyData = await journeyService.getJourneyById(parseInt(id));
+      const journeyData = await journeyService.getJourneyById(id);
       console.log('📥 ItineraryPage: Received journey data:', journeyData);
       console.log('📥 ItineraryPage: Stop dates:', journeyData.stops?.map((s: Stop) => ({
         id: s.id,
@@ -887,7 +887,7 @@ const ItineraryPage: React.FC = () => {
       }));
       
       // Load attractions for each stop
-      const attractionsMap: Record<number, Attraction[]> = {};
+      const attractionsMap: Record<string, Attraction[]> = {};
       for (const stop of stopsData) {
         if (stop.id) {
           const attractions = stop.attractions || [];
@@ -974,7 +974,7 @@ const ItineraryPage: React.FC = () => {
     setAttractionsByStop(prev => {
       const updated = { ...prev };
       for (const stopId of Object.keys(updated)) {
-        updated[parseInt(stopId)] = updated[parseInt(stopId)].map(attr =>
+        updated[stopId] = updated[stopId].map(attr =>
           attr.id === attractionId ? { ...attr, priority } : attr
         );
       }
@@ -988,7 +988,7 @@ const ItineraryPage: React.FC = () => {
     setAttractionsByStop(prev => {
       const updated = { ...prev };
       for (const stopId of Object.keys(updated)) {
-        updated[parseInt(stopId)] = updated[parseInt(stopId)].map(attr =>
+        updated[stopId] = updated[stopId].map(attr =>
           attr.id === attractionId ? { ...attr, plannedDate: plannedDate || undefined } : attr
         );
       }

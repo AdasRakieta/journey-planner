@@ -174,7 +174,7 @@ export const exportJourneys = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
     const idParam = req.query.id as string | undefined;
-    const exportSingleId = idParam ? parseInt(idParam) : null;
+    const exportSingleId = idParam || null; // UUID string
 
     if (!DB_AVAILABLE) {
       const journeysAll = await jsonStore.getAll('journeys');
